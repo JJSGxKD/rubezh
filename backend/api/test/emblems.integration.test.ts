@@ -56,7 +56,7 @@ const live = DATABASE_URL !== "" && REDIS_URL !== "";
 const DAY = 86_400_000;
 const STAMP = String(Date.now());
 
-/** 25 отобранных достижений и редкость их знака — таблица из задачи и «Следопыт» (T-0261). */
+/** 32 отобранных достижения и редкость их знака: 24 из T-0235, 7 из T-0322 (достижения v2) и «Следопыт» (T-0261). */
 const MERIT_TIERS: Readonly<Record<string, string>> = {
   ach_kills_100k: "legendary",
   ach_time_100h: "legendary",
@@ -82,15 +82,24 @@ const MERIT_TIERS: Readonly<Record<string, string>> = {
   ach_weapon_hearth: "uncommon",
   ach_weapon_storm: "uncommon",
   ach_weapon_sting: "uncommon",
+  // T-0322: испытание, «Коллекционер», «Мастер Метеора» и верхние ступени стихийников
+  ach_no_hit_10: "legendary",
+  ach_collector: "epic",
+  ach_weapon_meteor: "uncommon",
+  ach_fire_10k: "epic",
+  ach_cold_10k: "epic",
+  ach_lightning_10k: "epic",
+  ach_poison_10k: "epic",
   ach_secrets_all: "epic",
 };
 
-/** Семь статусных и сезонных знаков: [id, название, вид, категория, редкость, подсказка]. */
+/** Восемь статусных и сезонных знаков: [id, название, вид, категория, редкость, подсказка]. */
 const SPECIAL: readonly (readonly [string, string, string, string, string, string])[] = [
   ["emb_vip", "VIP", "status", "status", "legendary", "Оформить VIP"],
   ["emb_tester", "Тестер", "status", "status", "rare", "Играть в закрытом тесте"],
   ["emb_supporter", "Меценат", "status", "status", "epic", "Поддержать проект"],
   ["emb_team", "Команда", "status", "status", "team", "Работать в команде игры"],
+  ["emb_partner", "Партнёр", "status", "status", "partner", "Быть партнёром игры"],
   ["emb_season_champion", "Чемпион", "season", "season", "mythic", "Занять первое место в недельном сезоне"],
   ["emb_season_top10", "Топ-10", "season", "season", "legendary", "Войти в десятку недельного сезона"],
   ["emb_season_top100", "Топ-100", "season", "season", "epic", "Войти в сотню недельного сезона"],
@@ -134,6 +143,25 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
 
   async function grantRole(accountId: string, role: string): Promise<void> {
     await prisma.$executeRaw`INSERT INTO account_role (account_id, role) VALUES (${accountId}::uuid, ${role}::"Role")`;
+  }
+
+  /** Карточки партнёров, заведённые тестом: убираются в конце, чтобы не мешать соседним файлам. */
+  const partnerIds: string[] = [];
+
+  /** Карточка партнёра, связанная с аккаунтом; роль `partner` — отдельным `grantRole`: закрытый кабинет роли не имеет. */
+  async function linkPartner(accountId: string, status = "active"): Promise<string> {
+    const partnerId = randomUUID();
+    partnerIds.push(partnerId);
+    await prisma.$executeRaw`
+      INSERT INTO partner (partner_id, name, created_by, created_at, updated_at, status, account_id)
+      VALUES (${partnerId}::uuid, ${`Знаки ${partnerId.slice(0, 8)}`}, ${randomUUID()}::uuid, now(), now(), ${status}, ${accountId}::uuid)`;
+    return partnerId;
+  }
+
+  /** Партнёр с открытым кабинетом: роль и карточка в нужном статусе. */
+  async function openPartner(accountId: string, status = "active"): Promise<string> {
+    await grantRole(accountId, "partner");
+    return await linkPartner(accountId, status);
   }
 
   /** VIP через настоящий журнал периодов: оплата `paidAt`, период `periodSec`. */
@@ -237,6 +265,7 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
   });
 
   afterAll(async () => {
+    if (partnerIds.length > 0) await prisma.$executeRaw`DELETE FROM partner WHERE partner_id = ANY(${partnerIds}::uuid[])`;
     await prisma.$disconnect();
     await closeRedis(redis);
   });
@@ -251,16 +280,16 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
   });
 
   describe("миграция", () => {
-    it("у 25 отобранных достижений редкость знака по таблице; других, кроме семи новых, знаков нет", async () => {
+    it("у 32 отобранных достижений редкость знака по таблице; других, кроме восьми новых, знаков нет", async () => {
       const rows = await prisma.$queryRaw<{ task_id: string; emblem_tier: string }[]>`
         SELECT task_id, emblem_tier FROM task_def WHERE emblem_tier IS NOT NULL AND task_id NOT LIKE 'it\_%' ORDER BY task_id`;
       const merit = rows.filter((row) => !row.task_id.startsWith("emb_"));
       expect(Object.fromEntries(merit.map((row) => [row.task_id, row.emblem_tier]))).toEqual(MERIT_TIERS);
-      expect(merit.length).toBe(25);
-      expect(rows.length).toBe(25 + SPECIAL.length);
+      expect(merit.length).toBe(32);
+      expect(rows.length).toBe(32 + SPECIAL.length);
     });
 
-    it("семь новых строк: вид, категория, редкость, подсказка, цель 1, награда 0, порядок после существующих достижений", async () => {
+    it("восемь новых строк: вид, категория, редкость, подсказка, цель 1, награда 0, порядок после существующих достижений", async () => {
       const rows = await prisma.$queryRaw<
         { task_id: string; title: string; period: string; kind: string; category: string; emblem_tier: string; hint: string; target: number; coins: number; gems: number; shards: number; pass_points: number; prestige: number; hidden: boolean; active: boolean; sort: number }[]
       >`SELECT task_id, title, period::text, kind, category, emblem_tier, hint, target, coins, gems, shards, pass_points, prestige, hidden, active, sort FROM task_def WHERE task_id LIKE 'emb\_%'`;
@@ -298,6 +327,8 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
         await expect(insert({ period: "daily", tier: "rare" })).rejects.toThrow();
         await expect(insert({ period: "weekly", tier: "team" })).rejects.toThrow();
         await expect(insert({ category: "combat", tier: "gold" })).rejects.toThrow();
+        await expect(insert({ category: "combat", tier: "partners" })).rejects.toThrow();
+        await expect(insert({ category: "combat", tier: "Partner" })).rejects.toThrow();
         await expect(insert({ category: "pvp" })).rejects.toThrow();
         await expect(insert({ coins: 0 })).rejects.toThrow();
         await expect(insert({ kind: "kills", category: "combat", coins: 0 })).rejects.toThrow();
@@ -311,6 +342,11 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
         await expect(insert({ category: "combat", tier: "epic" })).resolves.toBe(1);
         await prisma.$executeRaw`DELETE FROM task_def WHERE task_id = ${taskId}`;
         await expect(insert({ category: "combat", tier: "team" })).resolves.toBe(1);
+        await prisma.$executeRaw`DELETE FROM task_def WHERE task_id = ${taskId}`;
+        // редкость `partner` — отдельный тон знака «Партнёр»: проходит и у знака статуса, и у достижения
+        await expect(insert({ category: "combat", tier: "partner" })).resolves.toBe(1);
+        await prisma.$executeRaw`DELETE FROM task_def WHERE task_id = ${taskId}`;
+        await expect(insert({ kind: "status", category: "status", tier: "partner", coins: 0 })).resolves.toBe(1);
         await prisma.$executeRaw`DELETE FROM task_def WHERE task_id = ${taskId}`;
         await expect(insert({ kind: "status", category: "status", tier: "rare", coins: 0 })).resolves.toBe(1);
         await prisma.$executeRaw`DELETE FROM task_def WHERE task_id = ${taskId}`;
@@ -368,6 +404,115 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
       const staff = await account();
       await grantRole(staff, "analyst");
       expect(await shownOf(staff)).toBe("emb_team");
+    });
+
+    it("активный партнёр с открытым кабинетом носит «Партнёр» по умолчанию, «Команды» у него нет", async () => {
+      const me = await account();
+      await openPartner(me);
+      const marks = await emblems.of([me]);
+      expect(marks.get(me)).toStrictEqual({ emblem: { id: "emb_partner", title: "Партнёр", tier: "partner", category: "status" } });
+      const view = await emblems.listFor(me);
+      expect(view).toMatchObject({ shown: "emb_partner", auto: true });
+      expect(view.items.filter((item) => item.held).map((item) => item.id)).toEqual(["emb_partner"]);
+      expect(view.items.find((item) => item.id === "emb_team")?.held).toBe(false);
+      expect(view.items.find((item) => item.id === "emb_partner")).toMatchObject({ held: true, category: "status", tier: "partner", title: "Партнёр", hint: "Быть партнёром игры" });
+    });
+
+    it("карточка не активна — знака нет: заявка, приостановлен, отклонён", async () => {
+      for (const status of ["applied", "paused", "rejected"]) {
+        const me = await account();
+        await openPartner(me, status);
+        expect(await shownOf(me), status).toBeNull();
+        expect((await emblems.listFor(me)).items.find((item) => item.id === "emb_partner")?.held, status).toBe(false);
+        await expect(emblems.choose(me, "emb_partner"), status).rejects.toBeInstanceOf(EmblemNotHeldError);
+      }
+    });
+
+    it("карточка активна, а кабинет закрыт (роли нет) — знака нет", async () => {
+      const me = await account();
+      await linkPartner(me);
+      expect(await shownOf(me)).toBeNull();
+      expect((await emblems.listFor(me)).items.some((item) => item.held)).toBe(false);
+    });
+
+    it("роль есть, а карточки у аккаунта нет — знака нет; карточка чужого аккаунта его не даёт", async () => {
+      const me = await account();
+      await grantRole(me, "partner");
+      const other = await account();
+      await linkPartner(other);
+      expect(await shownOf(me)).toBeNull();
+      expect(await shownOf(other)).toBeNull();
+    });
+
+    it("знак уходит сам, когда условие перестало держаться, и возвращается вместе с ним", async () => {
+      const me = await account();
+      const partnerId = await openPartner(me);
+      expect(await shownOf(me)).toBe("emb_partner");
+
+      await prisma.$executeRaw`UPDATE partner SET status = 'paused' WHERE partner_id = ${partnerId}::uuid`;
+      expect(await shownOf(me)).toBeNull();
+      await prisma.$executeRaw`UPDATE partner SET status = 'active' WHERE partner_id = ${partnerId}::uuid`;
+      expect(await shownOf(me)).toBe("emb_partner");
+
+      // кабинет закрыт: роль снята, связь остаётся
+      await prisma.$executeRaw`DELETE FROM account_role WHERE account_id = ${me}::uuid AND role = 'partner'::"Role"`;
+      expect(await shownOf(me)).toBeNull();
+      await grantRole(me, "partner");
+      expect(await shownOf(me)).toBe("emb_partner");
+
+      // карточку отвязали от аккаунта
+      await prisma.$executeRaw`UPDATE partner SET account_id = NULL WHERE partner_id = ${partnerId}::uuid`;
+      expect(await shownOf(me)).toBeNull();
+    });
+
+    it("выбранный «Партнёр» после приостановки сменяется знаком по умолчанию, выбор остаётся в базе и возвращается", async () => {
+      const me = await account();
+      await makeTester(me);
+      const partnerId = await openPartner(me);
+      expect(await emblems.choose(me, "emb_tester")).toEqual({ shown: "emb_tester", auto: false });
+      expect(await emblems.choose(me, "emb_partner")).toEqual({ shown: "emb_partner", auto: false });
+
+      await prisma.$executeRaw`UPDATE partner SET status = 'paused' WHERE partner_id = ${partnerId}::uuid`;
+      expect(await shownOf(me)).toBe("emb_tester");
+      const [row] = await prisma.$queryRaw<{ shown_emblem_id: string | null }[]>`SELECT shown_emblem_id FROM account WHERE account_id = ${me}::uuid`;
+      expect(row?.shown_emblem_id).toBe("emb_partner");
+
+      await prisma.$executeRaw`UPDATE partner SET status = 'active' WHERE partner_id = ${partnerId}::uuid`;
+      expect(await shownOf(me)).toBe("emb_partner");
+    });
+
+    it("«Партнёр» важнее VIP по умолчанию, но выбранный VIP сильнее порядка", async () => {
+      const me = await account();
+      await openPartner(me);
+      await giveVip(me, new Date(Date.now() - DAY), 30 * 86_400);
+      expect(await shownOf(me)).toBe("emb_partner");
+      expect(await emblems.choose(me, "emb_vip")).toEqual({ shown: "emb_vip", auto: false });
+      expect(await shownOf(me)).toBe("emb_vip");
+      expect(await emblems.choose(me, null)).toEqual({ shown: "emb_partner", auto: true });
+    });
+
+    it("сотрудник команды и партнёр в одном аккаунте — по умолчанию «Команда», «Партнёр» тоже держится и выбирается", async () => {
+      const me = await account();
+      await grantRole(me, "moderator");
+      await openPartner(me);
+      expect(await shownOf(me)).toBe("emb_team");
+      const view = await emblems.listFor(me);
+      expect(view.items.filter((item) => item.held).map((item) => item.id).sort()).toEqual(["emb_partner", "emb_team"]);
+      expect(await emblems.choose(me, "emb_partner")).toEqual({ shown: "emb_partner", auto: false });
+    });
+
+    it("на список из партнёров и обычных игроков — по-прежнему четыре запроса", async () => {
+      const ids: string[] = [];
+      for (let index = 0; index < 20; index++) {
+        const id = await account();
+        if (index % 2 === 0) await openPartner(id);
+        ids.push(id);
+      }
+      queries = 0;
+      const marks = await emblems.of(ids);
+      expect(queries).toBe(4);
+      expect(marks.get(ids[0] ?? "")?.emblem?.id).toBe("emb_partner");
+      expect(marks.get(ids[1] ?? "")).toStrictEqual({});
     });
 
     it("выбранный «Последний рубеж» — он, с категорией merit; сменить обратно на «по умолчанию» можно", async () => {
@@ -488,12 +633,12 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
   });
 
   describe("знаки игрока: GET /achievements/emblems", () => {
-    it("в каталоге 32 знака: статусные и сезонные, затем заслуги; держимые отмечены, shown и auto — по умолчанию", async () => {
+    it("в каталоге 40 знаков: статусные и сезонные, затем заслуги; держимые отмечены, shown и auto — по умолчанию", async () => {
       const me = await account();
       await makeTester(me);
       await complete(me, "ach_runs_200", "ach_weapon_spark");
       const view = await emblems.listFor(me);
-      expect(view.items.length).toBe(25 + SPECIAL.length);
+      expect(view.items.length).toBe(32 + SPECIAL.length);
       expect(view.shown).toBe("emb_tester");
       expect(view.auto).toBe(true);
       const held = view.items.filter((item) => item.held).map((item) => item.id).sort();
@@ -663,14 +808,20 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
       const expiredVip = await account();
       const staff = await account();
       const partner = await account();
+      const activePartner = await account();
+      const pausedPartner = await account();
+      const closedCabinet = await account();
       const champion = await account();
       const small = await account();
-      for (const id of [tester, vipPlayer, expiredVip, staff, partner, champion, small]) await finishedRun(id);
+      for (const id of [tester, vipPlayer, expiredVip, staff, partner, activePartner, pausedPartner, closedCabinet, champion, small]) await finishedRun(id);
       await makeTester(tester);
       await giveVip(vipPlayer, new Date(Date.now() - DAY), 30 * 86_400);
       await giveVip(expiredVip, new Date(Date.now() - 90 * DAY), 30 * 86_400);
       await grantRole(staff, "moderator");
       await grantRole(partner, "partner");
+      await openPartner(activePartner);
+      await openPartner(pausedPartner, "paused");
+      await linkPartner(closedCabinet);
       const key = "2095-06-07";
       await closedSeason(key);
       await seasonResult(champion, key, 1, 30);
@@ -681,7 +832,7 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
       const rarity = await achievementsRepository.rarity();
 
       // Независимый подсчёт того же населения и тех же правил.
-      const [expected] = await prisma.$queryRaw<{ pop: number; tester: number; supporter: number; vip: number; team: number; champion: number; top10: number; top100: number }[]>`
+      const [expected] = await prisma.$queryRaw<{ pop: number; tester: number; supporter: number; vip: number; team: number; partner: number; champion: number; top10: number; top100: number }[]>`
         WITH pop AS (SELECT a.account_id FROM account a WHERE EXISTS (SELECT 1 FROM run r WHERE r.account_id = a.account_id AND r.status = 'finished'))
         SELECT
           (SELECT count(*) FROM pop)::int AS pop,
@@ -689,6 +840,7 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
           (SELECT count(*) FROM pop JOIN account a USING (account_id) WHERE a.supporter_at IS NOT NULL)::int AS supporter,
           (SELECT count(DISTINCT v.account_id) FROM pop JOIN vip_period v USING (account_id) WHERE v.ends_at > ${now}::timestamptz)::int AS vip,
           (SELECT count(DISTINCT r.account_id) FROM pop JOIN account_role r USING (account_id) WHERE r.role <> 'partner')::int AS team,
+          (SELECT count(DISTINCT p.account_id) FROM pop JOIN partner p USING (account_id) JOIN account_role r USING (account_id) WHERE r.role = 'partner' AND p.status = 'active')::int AS partner,
           (SELECT count(DISTINCT s.account_id) FROM pop JOIN season_result s USING (account_id) WHERE s.board_size >= 10 AND s.place <= 1)::int AS champion,
           (SELECT count(DISTINCT s.account_id) FROM pop JOIN season_result s USING (account_id) WHERE s.board_size >= 10 AND s.place <= 10)::int AS top10,
           (SELECT count(DISTINCT s.account_id) FROM pop JOIN season_result s USING (account_id) WHERE s.board_size >= 10 AND s.place <= 100)::int AS top100`;
@@ -698,13 +850,16 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
       expect(holders("emb_supporter")).toBe(expected?.supporter);
       expect(holders("emb_vip")).toBe(expected?.vip);
       expect(holders("emb_team")).toBe(expected?.team);
+      expect(holders("emb_partner")).toBe(expected?.partner);
       expect(holders("emb_season_champion")).toBe(expected?.champion);
       expect(holders("emb_season_top10")).toBe(expected?.top10);
       expect(holders("emb_season_top100")).toBe(expected?.top100);
-      // свои игроки в счёте: тестер, VIP, команда и чемпион — по одному, просроченный VIP, партнёр и малая доска — нет
+      // свои игроки в счёте: тестер, VIP, команда, активный партнёр и чемпион — по одному; просроченный VIP,
+      // партнёр без карточки, приостановленный, с закрытым кабинетом и малая доска — нет
       expect(holders("emb_tester") ?? 0).toBeGreaterThanOrEqual(1);
       expect(holders("emb_vip") ?? 0).toBeGreaterThanOrEqual(1);
       expect(holders("emb_team") ?? 0).toBeGreaterThanOrEqual(1);
+      expect(holders("emb_partner") ?? 0).toBeGreaterThanOrEqual(1);
       expect(holders("emb_season_champion") ?? 0).toBeGreaterThanOrEqual(1);
     });
 

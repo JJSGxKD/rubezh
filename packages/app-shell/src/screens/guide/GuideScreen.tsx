@@ -41,6 +41,8 @@ import {
   type EvolutionRecipe,
   type GuideEnemy,
 } from "./guide-data";
+import { codexOpenedSet } from "../../state/codex-api";
+import { CodexHeader, LockedEnemyCard, useCodex } from "./codex";
 import { ElementList, ElementTag, ResistLine, TrailLine } from "./elements";
 import { EnemyScene, GemRow, PickupIcon, StageMark, WeaponScene } from "./scenes";
 import { Secrets } from "./secrets";
@@ -234,15 +236,20 @@ function PickupRow(props: { id: "medkit" | "magnet" | "dynamite" | "freeze" | "c
 }
 
 export function Enemies(): ReactNode {
-  const regular = regularEnemies();
-  const elite = eliteEnemies();
+  // Кодекс (T-0127): пока ответа нет, а у гостя и при ошибке — открыто всё, как раньше.
+  const codex = useCodex();
+  const openedIds = codexOpenedSet(codex.state);
+  const regular = regularEnemies(openedIds);
+  const elite = eliteEnemies(openedIds);
+  const unkillable = unkillableEnemies(openedIds);
 
   return (
     <>
+      <CodexHeader codex={codex} />
       <p className="text-sm text-text-muted">{t("guide.enemies.intro")}</p>
       <SectionTitle>{t("guide.enemies.regular")}</SectionTitle>
       {regular.map((enemy, index) => (
-        <EnemyCard key={enemy.def.id} enemy={enemy} index={index} />
+        <EnemyEntry key={enemy.def.id} enemy={enemy} index={index} />
       ))}
       <p className="text-xs text-text-muted">{t("guide.enemies.basis")}</p>
 
@@ -277,21 +284,27 @@ export function Enemies(): ReactNode {
       <SectionTitle>{t("guide.enemies.elite")}</SectionTitle>
       <p className="text-sm text-text-muted">{t("guide.enemies.elite.text")}</p>
       {elite.map((enemy, index) => (
-        <EnemyCard key={enemy.def.id} enemy={enemy} index={index} />
+        <EnemyEntry key={enemy.def.id} enemy={enemy} index={index} />
       ))}
 
       <SectionTitle>{t("guide.unkillable.title")}</SectionTitle>
       <p className="text-sm text-text-muted">{t("guide.unkillable.text")}</p>
-      {unkillableEnemies().map((enemy, index) => (
+      {unkillable.map((enemy, index) => (
         <UnkillableCard key={enemy.def.id} enemy={enemy} index={index} />
       ))}
     </>
   );
 }
 
+/** Запись списка: открытая — карточкой, закрытая — силуэтом без названия. */
+function EnemyEntry(props: { enemy: GuideEnemy; index: number }): ReactNode {
+  return props.enemy.opened ? <EnemyCard enemy={props.enemy} index={props.index} /> : <LockedEnemyCard enemy={props.enemy} index={props.index} />;
+}
+
 /** Неубиваемый: без строки здоровья, урона и опыта — их у него нет; вместо них миф, время прихода и предвестие. */
 function UnkillableCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
   const { def } = props.enemy;
+  if (!props.enemy.opened) return <LockedEnemyCard enemy={props.enemy} index={props.index} />;
   const name = t(`enemy.${def.id}.name`);
   const { fromSec, chaseMinSec, chaseMaxSec } = stalkerGuide();
 
@@ -331,7 +344,7 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
           pattern={def.pattern}
           elite={elite}
           label={name}
-          {...(children[0] === undefined ? {} : { child: children[0].def.pattern })}
+          {...(children[0] === undefined || !children[0].opened ? {} : { child: children[0].def.pattern })}
         />
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -351,7 +364,7 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
               {/* Матрёшка рассыпается смесью — перечисляем всех, кто в ней. */}
               {t("guide.enemy.splits", {
                 children: children
-                  .map((child) => `${String(child.count)} × ${t(`enemy.${child.def.id}.name`)}`)
+                  .map((child) => `${String(child.count)} × ${t(child.opened ? `enemy.${child.def.id}.name` : "guide.codex.locked.name")}`)
                   .join(", "),
               })}
             </p>

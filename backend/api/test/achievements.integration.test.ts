@@ -26,6 +26,7 @@ import { RolesService, type AccountRef } from "../src/modules/roles/roles.servic
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 import { ELEMENTS, TASK_KIND_IDS, isEmblemKind, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
 import { PrismaWalletRepository } from "../src/modules/wallet/wallet.repository.js";
@@ -59,7 +60,7 @@ const HOUR = 3_600_000;
 const STAMP = String(Date.now());
 
 /** Строки статусных и сезонных знаков (T-0235): они тоже в витрине, но целей, наград и престижа у них нет. */
-const EMBLEM_ROWS = 7;
+const EMBLEM_ROWS = 8;
 
 /** Девять существующих достижений: цель и награда не меняются миграцией. */
 const OLD: Readonly<Record<string, { target: number; coins: number; gems: number; title: string }>> = {
@@ -190,8 +191,8 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
   });
 
   describe("каталог после миграции", () => {
-    it("ровно 66 достижений (48, 17 про боссов, элит, сундуки, кристаллы и эволюции и «Следопыт» про тайники), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
-      expect(catalog.length).toBe(66);
+    it("ровно 85 достижений (48, 17 про боссов, элит, сундуки, кристаллы и эволюции, 3 про кодекс врагов, 16 — достижения v2 и «Следопыт» про тайники), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
+      expect(catalog.length).toBe(85);
       expect(new Set(catalog.map((task) => task.taskId)).size).toBe(catalog.length);
       for (const task of catalog) {
         expect(["combat", "collection", "mastery", "friends"], task.taskId).toContain(task.category);
@@ -255,10 +256,13 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
 
     it("новые награждаются монетами, без самоцветов и осколков; вместе со старыми они не упираются в суточный потолок", () => {
       const added = catalog.filter((task) => OLD[task.taskId] === undefined);
-      expect(added.length).toBe(57); // 56 прежних новых и «Следопыт» (T-0261)
+      expect(added.length).toBe(76); // 56 прежних новых, три достижения кодекса (T-0127), 16 — v2 (T-0322) и «Следопыт» (T-0261)
       for (const task of added) expect(task, task.taskId).toMatchObject({ gems: 0, shards: 0, passPoints: 0 });
       for (const task of added) expect(task.coins, task.taskId).toBeGreaterThan(0);
-      expect(catalog.reduce((sum, task) => sum + task.coins, 0)).toBeLessThanOrEqual(20_000);
+      // Включённые достижения разом, вместе с v2 (T-0322) и кодексом (T-0127), — в пределах суточного
+      // потолка монет за достижения (`wallet-limits.ts`): честный игрок в него не упрётся.
+      const active = catalog.filter((task) => task.active);
+      expect(active.reduce((sum, task) => sum + task.coins, 0)).toBeLessThanOrEqual(WALLET_DAILY_CAPS.achievement_reward.coins ?? 0);
       expect(catalog.reduce((sum, task) => sum + task.gems, 0)).toBeLessThanOrEqual(200);
     });
 
@@ -430,7 +434,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
   });
 
   describe("состояние: друзья и уровень аккаунта", () => {
-    it("пять друзей — выполнены «Не один» и «Свои люди», остальные нет; друзей стало меньше — прогресс не убывает", async () => {
+    it("пять друзей — выполнены «Не один» и «Душа компании», остальные нет; друзей стало меньше — прогресс не убывает", async () => {
       const me = await player();
       const friends = await befriend(me.accountId, 5);
       const view = await service.view(me, NOON);
@@ -510,7 +514,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
         prestige: 15,
         favorites: [
           { id: "ach_friends_1", title: "Не один", category: "friends" },
-          { id: "ach_friends_5", title: "Свои люди", category: "friends" },
+          { id: "ach_friends_5", title: "Душа компании", category: "friends" },
         ],
       });
       expect(Object.keys(summary).sort()).toEqual(["favorites", "prestige"]);

@@ -157,6 +157,7 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "pass_progress",
   "pass_claim",
   "boost_credit",
+  "codex_entry",
   "secret_found",
   "purchase",
   "tester_compensation",
@@ -207,6 +208,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.taskChannelWatch.deleteMany({});
     case "AchievementFavorite":
       return await tx.achievementFavorite.deleteMany({});
+    case "CodexEntry":
+      return await tx.codexEntry.deleteMany({});
     case "SecretFound":
       return await tx.secretFound.deleteMany({});
     case "ShowcaseOffer":

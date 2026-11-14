@@ -51,6 +51,8 @@ erDiagram
         datetime supporter_at "nullable: знак «Меценат» (Р109, Р149) — когда подтверждён первый донат; снимается внешним возвратом, если других донатов нет"
         datetime prologue_done_at "nullable: пролог пройден (T-0279, Р151) — победа в нём; аккаунтам с забегами до выката миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты"
         string shown_emblem_id FK "nullable: знак у имени, который игрок выбрал носить (T-0235, Р149); пусто — по умолчанию. Держит ли он знак сейчас, сервер считает при чтении; вайп колонку не трогает"
+        string appearance_id "nullable: облик героя, который игрок выбрал (T-0237, Р150); пусто — keeper. Владение обликом не хранится: сервер считает его при чтении; вайп колонку не трогает"
+        boolean avatar_photo "в кружке аватара фото площадки, а не голова облика (T-0237, Р47); по умолчанию false"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
@@ -66,6 +68,7 @@ erDiagram
     LEDGER_OPERATION |o..o| LEDGER_ENTRY : "проведённая операция — проводка op:<id> по ключу источника, без внешнего ключа (Р220)"
     LEDGER_OPERATION ||--o| LEDGER_LOAN : "заём: условия появляются вместе с проводкой"
     LEDGER_ACCOUNT ||--o{ LEDGER_LOAN : "счёт-обязательство займа: у займов одного кредитора в одной валюте общий"
+    LEDGER_PERIOD |o..o{ LEDGER_ENTRY : "месяц запирает журнал: проводка с period закрытого месяца отклоняется; связь по значению period, без внешнего ключа (Р222)"
     ACCOUNT ||--o{ RUN : "играет"
     ACCOUNT ||--o{ PURCHASE : "оплачивает"
     RUN |o--o{ PURCHASE : "продолжен за; вайп обнуляет ссылку"
@@ -142,6 +145,7 @@ erDiagram
     ACCOUNT ||--o{ ACHIEVEMENT_FAVORITE : "до трёх любимых достижений"
     TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
     TASK_DEF |o--o{ ACCOUNT : "знак у имени, который игрок носит (shown_emblem_id)"
+    ACCOUNT ||--o{ CODEX_ENTRY : "открытые записи кодекса врагов"
     ACCOUNT ||--o{ SECRET_FOUND : "найденные виды тайников рубежа"
     ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
     ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
@@ -710,10 +714,10 @@ erDiagram
     TASK_DEF {
         string task_id PK "правится из панели; не удаляется, а выключается"
         enum period "daily|weekly|achievement"
-        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; состояния игрока, которые забег не двигает, — friends, account_level; партнёрские — channel, link, bot; знаки без прогресса — status, season"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs, boss_kills, elite_kills, chests_opened, crystals_collected, evolution_runs, no_hit_sec, no_kill_sec, element_kills; состояния игрока, которые забег не двигает, — friends, account_level, weapon_masters (цель считается по числу «Мастеров оружия»); партнёрские — channel, link, bot; знаки без прогресса — status, season"
         json params "nullable: ровно у партнёрских — ссылка, площадка, у channel — канал"
         string tier "nullable: ступень пула ротации easy|medium|hard, только у daily и weekly (CHECK); null — в игре всегда"
-        json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
+        json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, element_kills, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
         int target "больше нуля"
         string title "nullable: текст по виду цели у клиента"
         int coins
@@ -729,7 +733,7 @@ erDiagram
         boolean hidden "скрытое, пока не выполнено; нужна подсказка hint (CHECK)"
         string hint "nullable, до 120 знаков: что видит игрок у закрытого скрытого"
         int prestige "очки престижа за выполненное достижение; у daily и weekly — ноль (CHECK)"
-        string emblem_tier "nullable: редкость знака у имени (T-0235) — common|uncommon|rare|epic|legendary|mythic или team; только у достижений (CHECK); null — знака нет"
+        string emblem_tier "nullable: редкость знака у имени (T-0235) — common|uncommon|rare|epic|legendary|mythic, team («Команда») или partner («Партнёр», T-0480); только у достижений (CHECK); null — знака нет"
         string customer "nullable, до 80 знаков: кто платит за партнёрское задание (Р138); null — задание своё; только у партнёрской цели (CHECK)"
         string pay_model "nullable: cpa — за выполнение, rs — доля дохода; null вместе с customer (CHECK)"
         int rate "nullable: у cpa — центы доллара за выполнение, 1–100 000; у rs — сотые доли процента, 1–10 000; вместе с pay_model (CHECK)"
@@ -1245,6 +1249,10 @@ erDiagram
         string task_id FK "выполненное игроком достижение; UNIQUE вместе с account_id"
     }
 
+    CODEX_ENTRY {
+        uuid account_id PK,FK "каскадом: удалённый аккаунт уносит записи"
+        string enemy_id PK "id врага из content/enemies.ts; внешнего ключа нет, список врагов — CODEX_ENEMY_IDS на сервере"
+        datetime first_seen_at "время записи забега, в котором враг встретился первым; не переписывается"
     SECRET_FOUND {
         uuid account_id PK,FK "каскадом: удалённый аккаунт уносит записи"
         string kind PK "вид тайника: shrine, hoard, stone, tree, rift, wisp; внешнего ключа нет, список видов — SECRETS_CODEX_KINDS на сервере"
@@ -1521,6 +1529,18 @@ erDiagram
         uuid operation_id UK,FK "Restrict: операция займа"
         datetime created_at
     }
+
+    LEDGER_PERIOD {
+        string period PK "ГГГГ-ММ по UTC, char(7); CHECK: формат. Месяц без строки — «открыт»"
+        enum status "open | review | closed; CHECK: у closed есть closed_at и snapshot"
+        datetime review_at "nullable: когда владелец поставил на сверку"
+        uuid review_by "nullable: без внешнего ключа, как в журнале"
+        datetime closed_at "nullable: когда закрыт"
+        uuid closed_by "nullable"
+        int reopened_count "сколько раз закрытие снимали; входит в ключи close:<месяц>:r<N>:…; CHECK: не меньше нуля"
+        json snapshot "nullable: ставки НПД, доли, займы, курсы по корзинам, чеки, весь водопад и рублёвые суммы; снимается вместе с закрытием"
+        datetime updated_at
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1661,6 +1681,16 @@ erDiagram
   а не «ушёл». Оплачиваемое выполнение — `paidRetention(окно, holdDays)` в
   `channel-watch-rules.ts`. Вайп стирает таблицу вместе с прогрессом
   заданий.
+- **`CODEX_ENTRY` — кодекс врагов** (`39-retention-mechanics.md` К2,
+  `35-stage4-plan.md` Р102, T-0127): по строке на пару «аккаунт — враг»,
+  открытая запись не закрывается и не переписывается (`ON CONFLICT DO NOTHING`).
+  Запись открывает слушатель записи забега (`RunsHooks`) — один раз на забег и
+  только для забегов, засчитываемых заданиям; врагов он берёт из итога забега
+  (`enemiesSeen` и ключи `topKills`) и фильтрует по таблице сервера. Награда — три
+  достижения лестницы `codex` в `TASK_DEF` (30 / 60 / 100%): вид `codex_percent`,
+  как у `friends` и `account_level`, — состояние с действием «максимум», процент
+  дописывает модуль кодекса при записи и при ответе `GET /api/v1/codex`. Вайп
+  стирает записи вместе с прогрессом заданий.
 - **`SECRET_FOUND` — кодекс тайников** (`35-stage4-plan.md` Р153,
   `design/art/meta-v2.md` §5.3, T-0261): по строке на пару «аккаунт — вид
   тайника», найденный вид не закрывается и не переписывается (`ON CONFLICT DO
@@ -1695,13 +1725,13 @@ erDiagram
   транзакцией под блокировкой строки аккаунта. Вайп стирает избранное
   вместе с прогрессом заданий, редкость не трогает.
 - **Знаки у имени — `TASK_DEF.emblem_tier`, `ACCOUNT.shown_emblem_id`**
-  (`35-stage4-plan.md` Р149, T-0235): знак — достижение, которое носят, поэтому
+  (`35-stage4-plan.md` Р149, T-0235, T-0480): знак — достижение, которое носят, поэтому
   отдельного каталога нет. У 24 отобранных достижений (верхние ступени лестниц,
   скрытые, «Мастера оружия») есть редкость знака; она стоит в каталоге и не
-  плавает вместе с «есть у N%». Статусные и сезонные знаки — семь строк того же
+  плавает вместе с «есть у N%». Статусные и сезонные знаки — восемь строк того же
   `TASK_DEF` с периодом `achievement`, видами `status` и `season` и такими же
   категориями (`emb_vip`, `emb_tester`, `emb_supporter`, `emb_team`,
-  `emb_season_champion`, `emb_season_top10`, `emb_season_top100`): цель 1,
+  `emb_partner`, `emb_season_champion`, `emb_season_top10`, `emb_season_top100`): цель 1,
   награды нет, прогресса в `TASK_PROGRESS` у них не бывает, `claim` для них — 404,
   в списке заданий их нет. Заказчика (`customer`, `pay_model`, `rate`,
   `hold_days`, Р138) у знаков нет: схема строки каталога и `CHECK
@@ -1709,11 +1739,14 @@ erDiagram
   Держит ли игрок такой знак, сервер вычисляет при чтении: VIP — по самому
   позднему `VIP_PERIOD.ends_at`, «Тестер» и «Меценат» — по
   `ACCOUNT.tester_at` и `supporter_at`, «Команда» — по любой строке
-  `ACCOUNT_ROLE`, кроме внешней роли `partner`, сезонные — по лучшему месту в
+  `ACCOUNT_ROLE`, кроме внешней роли `partner`, «Партнёр» — по роли `partner` и
+  карточке `PARTNER` с этим `account_id` в статусе `active` (приостановили, отклонили
+  или закрыли кабинет — знак уходит сам; редкость знака — отдельный тон `partner`,
+  как `team` у «Команды»), сезонные — по лучшему месту в
   `SEASON_RESULT` на таблице не меньше `MIN_BOARD`; номер сезона — сколько
   закрытых `SEASON` не позже последнего, где порог взят. Истёкший VIP знака не
   держит, и снимать ничего не нужно. Выбранный знак в `shown_emblem_id`: если он
-  больше не держится, показывается знак по умолчанию (Команда → VIP →
+  больше не держится, показывается знак по умолчанию (Команда → Партнёр → VIP →
   Меценат → Тестер). Знак на список аккаунтов готовит `EmblemsService.of` —
   четыре запроса (аккаунт, VIP, сезоны, достижения), сколько бы строк ни было.
   Строки рейтинга, таблицы сезона и друзей берут знак не у достижений, а у общего
@@ -1724,6 +1757,21 @@ erDiagram
   «Есть у N%» у статусных и сезонных знаков считает тот же проход редкости теми
   же правилами в той же транзакции. Вайп колонку не трогает, но выбранное
   перестаёт действовать само: прогресса, который его держал, уже нет.
+- **Облики героя — `ACCOUNT.appearance_id`, `ACCOUNT.avatar_photo`**
+  (`35-stage4-plan.md` Р150, T-0237): каталог из десяти обликов лежит в коде
+  (`appearance/appearance-catalog.ts`), а не в базе, — облик это ещё и кадры атласа, и
+  рисунок приходит релизом. Владение не хранится, а вычисляется при чтении по состоянию
+  аккаунта: уровень (`ACCOUNT_PROGRESS.level`), VIP (самый поздний `VIP_PERIOD.ends_at`),
+  выполненное достижение «Гроза элит» (`TASK_PROGRESS`), забранная верхняя ступень очков недели
+  (`TASK_POINTS_CLAIM`, период `weekly`), лучшее место в сезоне (`SEASON_RESULT` на таблице не
+  меньше `MIN_BOARD`; VIP и место читаются методами репозитория знаков, T-0235). Выбранный облик в
+  `appearance_id`: если им больше не владеют (истёк VIP), в ответах действует `keeper`, а выбор
+  хранится и возвращается вместе с владением. `avatar_photo` — выбор «голова облика или фото» в
+  кружке аватара. Облик на список аккаунтов готовит `AppearanceService.of` — пять запросов (аккаунт
+  с уровнем, достижения, ступень недели, VIP, сезоны), сколько бы строк ни было; строки рейтинга,
+  таблицы сезона и друзей берут его у общего порта `PublicIdentity` вторым источником
+  (`appearance`) рядом со знаком, сбой одного источника не стирает метки другого. Вайп колонки не
+  трогает: прогресса, который держал облик, уже нет, а выбор перестаёт действовать сам.
 - **`PASS_PROGRESS`, `PASS_SEASON`, `PASS_CLAIM`, `BOOST_CREDIT`, `PASS_CLOSE` — батл-пасс**
   (`35-stage4-plan.md` Р46, §3.15, T-0311): месяц — календарный по Москве
   (UTC+3 без летнего времени), ключ `ГГГГ-ММ`; граница — 1-е число 00:00 МСК.
@@ -2162,6 +2210,25 @@ erDiagram
   операция финансов, исправление и операция без оценки ждут владельца в статусе
   `pending`, решение пишется в `decided_by/at` и `decision_note`. `receipt_image` —
   снимок чека. При вайпе обе таблицы остаются.
+- **`LEDGER_PERIOD` — месяцы учёта** (Р222, T-0468; `37-accounting.md` §13).
+  Месяц по UTC: открыт → на сверке → закрыт; открытому строка не нужна. Закрытие
+  идёт одной транзакцией под блокировкой строки месяца (`SELECT … FOR UPDATE`):
+  снимок, проводки закрытия (`close:<месяц>:r<N>:tax` и
+  `close:<месяц>:r<N>:payout:<аккаунт>`, дата — день закрытия, месяц
+  проводки — закрываемый) и статус `closed` ложатся вместе или не ложатся
+  вовсе, а из двух одновременных закрытий записывается одно. Перед записью
+  транзакция сверяет отпечаток журнала месяца (число проводок и время
+  последней) с тем, по которому считался снимок: если проводка успела
+  появиться, закрытие отказывает, а не считает по устаревшему. Закрытый месяц
+  запирает журнал: вставка проводки читает статус месяца проводки (`period`, а
+  не месяц даты) под `FOR SHARE` в своей же транзакции и отвечает 409
+  `ledger_period_closed`; `FOR SHARE` конфликтует с `FOR UPDATE` закрытия, поэтому
+  проводка не ложится в месяц, закрытый между проверкой и записью. Снятие
+  закрытия — та же блокировка: сторно проводок закрытия этого раза под ключами
+  `reopen:<месяц>:r<N>:…`, `reopened_count + 1`, статус `review`, снимок
+  убирается. Номер раза в ключах и отдельный префикс `reopen:` — поэтому
+  повторное закрытие не конфликтует со сторнированным первым. При вайпе таблица
+  остаётся.
 - **`LEDGER_TEMPLATE` — шаблоны повторяющихся расходов** (Р220, T-0463;
   `37-accounting.md` §8). Шаблон хранит статью, место, обычную сумму и график
   (каждый месяц или месяц года) и **сам ничего не проводит**: «Расходы месяца»
@@ -2757,7 +2824,8 @@ flowchart LR
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
         NOTIF["notifications<br/>лента уведомлений: пишут модули,<br/>чистка старше 90 дней, реализовано"]
-        NOTIFBOT["notifications-bot<br/>дубль в бота по выбору игрока:<br/>очередь, потолок вида, реализовано"]
+        NOTIFBOT["notifications-bot<br/>дубль в бота по выбору игрока:<br/>очередь, потолок вида, тихие часы с Р199, реализовано"]
+        BOTMSGS["bot-messages<br/>правила сообщений бота: звук и тихие часы,<br/>событие bot_message_sent, сборка оформленного<br/>сообщения из RichDocument, реализовано"]
         BADGES["badges<br/>знаки меню одним ответом:<br/>счётчики соседей, реализовано"]
         HISTORY["history<br/>история имущества: чтение<br/>журналов кошелька, предметов<br/>и покупок, реализовано"]
         DAILY["daily<br/>награда дня: неделя без сброса,<br/>ступени, множитель уровня, реализовано"]
@@ -2778,6 +2846,8 @@ flowchart LR
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
         EXTIDENT["external-identity<br/>связь аккаунта с MAX и VK для заданий:<br/>одноразовые коды в Redis, пары в базе,<br/>порт ExternalLinkStarters, реализовано"]
         ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, знаки у имени: каталог,<br/>выбор знака и знак на список аккаунтов, реализовано"]
+        CODEX["codex<br/>кодекс врагов: записи по итогу забега,<br/>процент в достижения лестницы codex,<br/>ответ для гайдбука, реализовано"]
+        APPEAR["appearance<br/>облики героя: каталог из десяти в коде,<br/>владение по состоянию аккаунта при чтении,<br/>выбор облика и кружка аватара, облик в строках<br/>списков через порт PublicIdentity, реализовано"]
         SECRETSCODEX["secrets-codex<br/>кодекс тайников: виды по итогу забега,<br/>число видов в достижение «Следопыт»,<br/>ответ для гайдбука, реализовано"]
         REMINDERS["reminders<br/>напоминания бота: проход раз в 10 минут<br/>под локом, курсор по игрокам, снимок таблицы<br/>недели, суточный отчёт, реализовано"]
     end
@@ -3040,9 +3110,19 @@ flowchart LR
     RUNS -. "записанный забег, RunsHooks: какие тайники нашёл игрок" .-> SECRETSCODEX
     SECRETSCODEX -. "число видов «максимум», награда в заданиях, T-0261" .-> TASKS
     ACHIEV -- "знаки у имени: account, vip_period, account_role, season_result, season; выбор — account.shown_emblem_id, T-0235" --> PG
+    CADDY -- "/api/v1/codex" --> CODEX
+    CODEX -- "codex_entry" --> PG
+    RUNS -. "записанный забег, RunsHooks: кого встретил игрок" .-> CODEX
+    CODEX -. "процент кодекса «максимум», награда в заданиях, T-0127" .-> TASKS
     ACHIEV -. "порт PublicIdentity (common): знак у имени для строк рейтинга, T-0240" .-> RUNS
     ACHIEV -. "порт PublicIdentity: знак у имени для строк таблицы сезона" .-> SEASONS
     ACHIEV -. "порт PublicIdentity: знак у имени для строк друзей" .-> FRIENDS
+    CADDY -- "/api/v1/appearance" --> APPEAR
+    APPEAR -- "облики: account (выбор), account_progress (уровень), task_progress, task_points_claim; VIP и место в сезоне — методы репозитория знаков, T-0237" --> PG
+    APPEAR -. "каталог достижений: название «Грозы элит»" .-> TASKS
+    APPEAR -. "порт PublicIdentity (источник appearance): облик и аватар для строк рейтинга" .-> RUNS
+    APPEAR -. "порт PublicIdentity: облик и аватар для строк таблицы сезона" .-> SEASONS
+    APPEAR -. "порт PublicIdentity: облик и аватар для строк друзей" .-> FRIENDS
     CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
     TESTNOTICE -- "test_notice" --> PG
     ADMINAPI -. "принял ли предупреждение" .-> TESTNOTICE
@@ -3066,6 +3146,9 @@ flowchart LR
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET
     NOTIFBOT -. "порт Messengers: sendMessage" .-> TGADP
+    NOTIFBOT -. "звук и тихие часы дубля, событие отправки" .-> BOTMSGS
+    BOTMSGS -- "bot-loud:аккаунт:день, INCR + EXPIRE" --> REDIS
+    BOTMSGS -. "серверное событие bot_message_sent" .-> EVENTS
     REMINDERS -. "season_overtaken, season_closing, daily_reward_ready: notify" .-> NOTIF
     REMINDERS -- "награда дня, рейтинговые забеги, account_messaging, итог суток" --> PG
     REMINDERS -- "лок прохода, курсоры, снимок, окна потолка" --> REDIS

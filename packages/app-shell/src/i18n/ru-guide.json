@@ -138,5 +138,16 @@
   "secret.tree.lore": "Старое дерево помнит первых хранителей. В его тени раны затягиваются.",
   "secret.rift.lore": "Здесь Навь подошла слишком близко. Шагни — и она шагнёт навстречу.",
   "secret.stone.lore": "Камень ставили дозорные: коснись — и увидишь, что они отметили.",
-  "secret.wisp.lore": "Огонёк знает дорогу. Иди за ним — он не обманет."
+  "secret.wisp.lore": "Огонёк знает дорогу. Иди за ним — он не обманет.",
+  "guide.codex.title": "Кодекс врагов",
+  "guide.codex.progress": "Открыто {opened} из {total}",
+  "guide.codex.locked.name": "Неизвестный враг",
+  "guide.codex.locked.hint": "Встреть его в забеге — и запись откроется.",
+  "guide.codex.group.regular": "Обычный",
+  "guide.codex.group.elite": "Элита",
+  "guide.codex.group.boss": "Босс",
+  "guide.codex.reward": "За полный кодекс: {coins} {coins, plural, one {монета} few {монеты} many {монет} other {монеты}} и {prestige} {prestige, plural, one {очко} few {очка} many {очков} other {очка}} престижа",
+  "guide.codex.claim": "Забрать награду",
+  "guide.codex.claimed": "Награда получена",
+  "guide.codex.error": "Не удалось загрузить кодекс — враги показаны без отметок."
 }

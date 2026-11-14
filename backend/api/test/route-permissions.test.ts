@@ -98,16 +98,24 @@ describe("права на маршрутах", () => {
     expect(unguarded).toEqual([]);
   });
 
-  it("учёт в панели: чтение закрыто ledger.view, правка мест, статей и операций и шаблонов — finance.entry.create (T-0457, T-0460, T-0461, T-0463, Р219, Р220)", () => {
+  it("учёт в панели: чтение закрыто ledger.view, правка мест, статей, операций и шаблонов — finance.entry.create, закрытие месяцев — finance.period.close (T-0457, T-0460, T-0461, T-0463, T-0468, Р219, Р220, Р222)", () => {
     const ledgerRoutes = routes.filter((route) => route.controller === "AdminLedgerController");
-    const reading = ["articles", "balances", "journal", "listOperations", "listTemplates", "operation", "places"];
+    const reading = ["articles", "balances", "journal", "listOperations", "listPeriods", "listTemplates", "operation", "period", "places"];
+    // сверка, закрытие и снятие закрытия месяца — право только владельца
+    const closing = ["closePeriod", "reopenPeriod", "reviewPeriod"];
     const writing = ["archiveArticle", "archivePlace", "archiveTemplate", "createArticle", "createOperation", "createPlace", "createTemplate", "discardOperation", "draftPeriod", "renameArticle", "submitOperation", "updateOperation", "updatePlace", "updateTemplate"];
     // Второй ключ (T-0462): решение по операции, ждущей владельца, — отдельное право, только у владельца
     const deciding = ["approveOperation", "rejectOperation"];
 
-    expect(ledgerRoutes.map((route) => route.method).sort()).toEqual([...reading, ...writing, ...deciding].sort());
+    expect(ledgerRoutes.map((route) => route.method).sort()).toEqual([...reading, ...closing, ...writing, ...deciding].sort());
     for (const route of ledgerRoutes) {
-      const expected = reading.includes(route.method) ? "ledger.view" : deciding.includes(route.method) ? "finance.operation.approve" : "finance.entry.create";
+      const expected = reading.includes(route.method)
+        ? "ledger.view"
+        : closing.includes(route.method)
+          ? "finance.period.close"
+          : deciding.includes(route.method)
+            ? "finance.operation.approve"
+            : "finance.entry.create";
       expect(Reflect.getMetadata(PERMISSION_METADATA, route.handler), route.method).toBe(expected);
     }
   });
