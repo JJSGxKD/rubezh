@@ -104,10 +104,18 @@ describe("права на маршрутах", () => {
     // сверка, закрытие и снятие закрытия месяца — право только владельца
     const closing = ["closePeriod", "reopenPeriod", "reviewPeriod"];
     const writing = ["archiveArticle", "archivePlace", "archiveTemplate", "createArticle", "createOperation", "createPlace", "createTemplate", "discardOperation", "draftPeriod", "renameArticle", "submitOperation", "updateOperation", "updatePlace", "updateTemplate"];
+    // Второй ключ (T-0462): решение по операции, ждущей владельца, — отдельное право, только у владельца
+    const deciding = ["approveOperation", "rejectOperation"];
 
-    expect(ledgerRoutes.map((route) => route.method).sort()).toEqual([...reading, ...closing, ...writing].sort());
+    expect(ledgerRoutes.map((route) => route.method).sort()).toEqual([...reading, ...closing, ...writing, ...deciding].sort());
     for (const route of ledgerRoutes) {
-      const expected = reading.includes(route.method) ? "ledger.view" : closing.includes(route.method) ? "finance.period.close" : "finance.entry.create";
+      const expected = reading.includes(route.method)
+        ? "ledger.view"
+        : closing.includes(route.method)
+          ? "finance.period.close"
+          : deciding.includes(route.method)
+            ? "finance.operation.approve"
+            : "finance.entry.create";
       expect(Reflect.getMetadata(PERMISSION_METADATA, route.handler), route.method).toBe(expected);
     }
   });

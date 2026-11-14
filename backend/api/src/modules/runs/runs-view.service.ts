@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { DomainError } from "../../common/domain-error.js";
+import { emblemOf, PublicIdentity, type PublicEmblem, type PublicMark } from "../../common/public-identity.js";
 import { LEADERBOARD_STORE, type Board, type LeaderboardStore } from "./leaderboard.store.js";
 import { PrologueService } from "./prologue.service.js";
 import { RatingRestrictions } from "./rating-restrictions.js";
@@ -63,6 +64,8 @@ export interface LeaderboardView {
     tester?: true;
     /** знак «Меценат» (Р109); поля нет — не поддержал */
     supporter?: true;
+    /** знак у имени (T-0240): выбранный игроком или по умолчанию; поля нет — знака нет или источник знаков недоступен */
+    emblem?: PublicEmblem;
     /** очки эффективности лучшего забега — по ним ранжируется доска */
     points: number;
     /** время того же забега — подпись к очкам */
@@ -153,6 +156,8 @@ export class RunsViewService {
     private readonly prestige: RunPrestige,
     // Нет сервиса пролога (старый состав модуля) — разделы открыты.
     @Optional() private readonly prologue?: PrologueService,
+    // Нет порта знаков (старый состав модуля) — строки без знака.
+    @Optional() private readonly identity?: PublicIdentity,
   ) {}
 
   async leaderboardFor(accountId: string, difficulty: Difficulty): Promise<LeaderboardView> {
@@ -172,7 +177,13 @@ export class RunsViewService {
     const ids = top.map((entry) => entry.accountId);
     // Свой забег подписи (время, стиль) берётся тем же запросом, если игрока нет в первой странице.
     const withMe = rank !== null && !ids.includes(accountId) ? [...ids, accountId] : ids;
-    const [rows, prestige] = await Promise.all([this.runs.bestRuns(withMe, difficulty, this.rating.since()), this.prestige.of(hold === "silent" && !ids.includes(accountId) ? [...ids, accountId] : ids)]);
+    const shown = hold === "silent" && !ids.includes(accountId) ? [...ids, accountId] : ids;
+    // Знак — одним вызовом порта на всю таблицу, как престиж.
+    const [rows, prestige, marks] = await Promise.all([
+      this.runs.bestRuns(withMe, difficulty, this.rating.since()),
+      this.prestige.of(shown),
+      this.identity?.of(shown) ?? Promise.resolve(new Map<string, PublicMark>()),
+    ]);
     const details = new Map(rows.map((row) => [row.accountId, row]));
 
     const view: LeaderboardView = {
@@ -192,6 +203,7 @@ export class RunsViewService {
             photoUrl: row.photoUrl,
             ...(row.tester ? { tester: true as const } : {}),
             ...(row.supporter ? { supporter: true as const } : {}),
+            ...emblemOf(marks.get(entry.accountId)),
             points: entry.score,
             survivalSec: row.survivalSec,
             style: row.style,
@@ -207,14 +219,14 @@ export class RunsViewService {
       me: rank === null || best === null ? null : { rank, points: best, survivalSec: details.get(accountId)?.survivalSec ?? 0, style: details.get(accountId)?.style ?? null },
       totalPlayers: total,
     };
-    return hold === "silent" ? await this.fromShadow(accountId, difficulty, view, board, prestige.get(accountId) ?? 0) : view;
+    return hold === "silent" ? await this.fromShadow(accountId, difficulty, view, board, prestige.get(accountId) ?? 0, marks.get(accountId)) : view;
   }
 
   /**
    * Доска глазами игрока в тени: он — на месте, которое занял бы лучшим
    * забегом, включая сданные в тени, а те, кто ниже, сдвинуты на строку.
    */
-  private async fromShadow(accountId: string, difficulty: Difficulty, view: LeaderboardView, board: Board, ownPrestige: number): Promise<LeaderboardView> {
+  private async fromShadow(accountId: string, difficulty: Difficulty, view: LeaderboardView, board: Board, ownPrestige: number, ownMark: PublicMark | undefined): Promise<LeaderboardView> {
     const mine = await this.runs.bestRunOf(accountId, difficulty, true, this.rating.since());
     // До обхода игрок мог остаться в доске гонкой с наложением — себя он видит один раз.
     const others = view.entries.filter((entry) => !entry.isMe);
@@ -229,6 +241,7 @@ export class RunsViewService {
       photoUrl: mine.photoUrl,
       ...(mine.tester ? { tester: true as const } : {}),
       ...(mine.supporter ? { supporter: true as const } : {}),
+      ...emblemOf(ownMark),
       points: mine.points,
       survivalSec: mine.survivalSec,
       style: mine.style,

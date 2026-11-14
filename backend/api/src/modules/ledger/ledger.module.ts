@@ -1,10 +1,14 @@
 import { Module } from "@nestjs/common";
+import { AuthModule } from "../auth/auth.module.js";
 import { FxModule } from "../fx/fx.module.js";
+import { MediaModule } from "../media/media.module.js";
 import { LedgerSyncJob, LedgerSyncPass } from "./ledger-sync.job.js";
 import { LEDGER_CHART_REPOSITORY, PrismaLedgerChartRepository } from "./ledger-chart.repository.js";
 import { LedgerChartService } from "./ledger-chart.service.js";
 import { LEDGER_REPOSITORY, PrismaLedgerRepository } from "./ledger.repository.js";
 import { LedgerService } from "./ledger.service.js";
+import { OperationApprovals } from "./operations/approval.js";
+import { OperationsNotifier } from "./operations/operations-notify.js";
 import { OPERATIONS_REPOSITORY, PrismaOperationsRepository } from "./operations/operations.repository.js";
 import { OperationsService } from "./operations/operations.service.js";
 import { PAYMENT_POSTINGS_REPOSITORY, PrismaPaymentPostingsRepository } from "./payment-postings.repository.js";
@@ -24,19 +28,24 @@ import { TemplatesService } from "./templates/templates.service.js";
  * с журналом и досоздаёт оплату, выход из холда и возврат; модуль платежей не трогает, только читает его таблицу.
  * Ручные операции (Р220, T-0461) — `OperationsService`: человек описывает событие, сервер собирает проводку;
  * размер операции оценивается по курсам, поэтому нужен модуль курсов. Шаблоны повторяющихся расходов (Р220, T-0463) —
- * `TemplatesService`: «Расходы месяца» создаёт по ним черновики операций, проводит их человек.
+ * `TemplatesService`: «Расходы месяца» создаёт по ним черновики операций, проводит их человек. Второй ключ
+ * (Р220, T-0462) — `OperationApprovals`: крупная операция финансов ждёт владельца, карточку в поток «Бухгалтерия»
+ * шлёт `OperationsNotifier` через порт мессенджера, снимок чека лежит в хранилище картинок (`MediaModule`),
+ * имя автора в карточке берётся из аккаунтов (`AuthModule`).
  * Месяцы учёта (Р222, T-0468) — `PeriodsService`: сверка, закрытие с водопадом, снятие закрытия; закрытый месяц
  * запирает журнал замком в транзакции вставки проводки (`PrismaLedgerRepository.insertEntry`), а выплаты по месяцу
  * (T-0469) подключаются хуками `PERIOD_HOOKS`.
  */
 @Module({
-  imports: [FxModule],
+  imports: [FxModule, MediaModule, AuthModule],
   providers: [
     LedgerService,
     LedgerChartService,
     OperationsService,
     PeriodsService,
     TemplatesService,
+    OperationApprovals,
+    OperationsNotifier,
     LedgerSyncPass,
     LedgerSyncJob,
     { provide: LEDGER_REPOSITORY, useClass: PrismaLedgerRepository },

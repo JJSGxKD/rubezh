@@ -3,8 +3,8 @@ id: T-0240
 title: Знак у имени в строках рейтинга, сезона и друзей — порт PublicIdentity
 epic: E16
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0235, T-0161, T-0111]
@@ -23,6 +23,7 @@ shared:
   - backend/api/src/modules/friends/friends.module.ts
   - packages/shared-types/src/index.ts
   - docs/21-diagrams.md
+  - docs/39-retention-mechanics.md
 runner: any
 executor: sonnet-5.5
 effort: high

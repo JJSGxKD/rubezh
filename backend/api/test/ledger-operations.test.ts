@@ -34,6 +34,8 @@ import type {
   StoredOperationEntry,
 } from "../src/modules/ledger/operations/operations.repository.js";
 import { OperationsService, type OperationActor } from "../src/modules/ledger/operations/operations.service.js";
+import type { OperationApprovals } from "../src/modules/ledger/operations/approval.js";
+import type { MediaService } from "../src/modules/media/media.service.js";
 import type { FxService } from "../src/modules/fx/fx.service.js";
 import type { AuditEntry } from "../src/modules/roles/roles.repository.js";
 import type { RolesService } from "../src/modules/roles/roles.service.js";
@@ -652,6 +654,7 @@ class MemoryOperations implements OperationsRepository {
       input: operation.input,
       note: operation.note,
       link: operation.link,
+      receiptImage: operation.receiptImage,
       amountUsd: operation.amountUsd,
       sourceKey: null,
       createdBy: operation.createdBy,
@@ -693,6 +696,15 @@ class MemoryOperations implements OperationsRepository {
 
   async entryExists(sourceKey: string): Promise<boolean> {
     return this.ledger.entries.has(sourceKey);
+  }
+
+  // Второй ключ (T-0462) проверяет `ledger-approval.test.ts`: здесь все операции проводятся сразу.
+  async markPending(): Promise<boolean> {
+    return false;
+  }
+
+  async reject(): Promise<boolean> {
+    return false;
   }
 
   async markPosted(operationId: string, sourceKey: string, loan: NewLoan | null): Promise<PostedOutcome> {
@@ -775,7 +787,10 @@ function harness(): Harness {
       return fx.rates;
     },
   };
-  const service = new OperationsService(repository, ledger as unknown as LedgerService, new FakeChart(accounts) as unknown as LedgerChartService, fxService as unknown as FxService, roles as unknown as RolesService);
+  // Второй ключ и снимок чека (T-0462) проверяет `ledger-approval.test.ts`: здесь операции проводятся сразу.
+  const approvals = { required: async () => false } as unknown as OperationApprovals;
+  const media = { require: async () => undefined } as unknown as MediaService;
+  const service = new OperationsService(repository, ledger as unknown as LedgerService, new FakeChart(accounts) as unknown as LedgerChartService, fxService as unknown as FxService, roles as unknown as RolesService, approvals, media);
   return { service, repository, ledger, accounts, audit, fx };
 }
 
@@ -900,7 +915,7 @@ describe("OperationsService: черновик и проведение", () => {
   it("неверная операция при create — 400 ledger_operation_invalid с текстом проблем, ничего не записано", async () => {
     const { service, repository, audit } = harness();
 
-    const error = await domainError(service.create(OWNER, { ...VPS, from: "bank.net", at: "2026-11-14" }));
+    const error = await domainError(service.create(OWNER, { ...VPS, from: "bank.net", at: "2099-01-01" }));
 
     expect(error).toMatchObject({ code: "ledger_operation_invalid", status: 400 });
     expect(error.message).toContain("«bank.net» нет");
