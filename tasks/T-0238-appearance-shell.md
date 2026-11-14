@@ -3,8 +3,8 @@ id: T-0238
 title: Облики — экран «Облик» из арсенала и профиля, портрет в арсенале, голова облика в аватаре
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0237, T-0230, T-0236]
