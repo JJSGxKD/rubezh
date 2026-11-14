@@ -27,7 +27,7 @@ const NOW = new Date("2026-10-04T12:00:00.000Z");
 const HOUR = 3_600_000;
 
 function item(patch: Partial<ShopItemView> = {}): ShopItemView {
-  return { sku: "gems_s", kind: "gems", contents: [], stars: 50, fullStars: null, promo: null, chargedStars: 50, once: false, owned: false, badge: null, valuePct: null, ...patch };
+  return { sku: "gems_s", kind: "gems", contents: [], stars: 50, fullStars: null, promo: null, chargedStars: 50, once: false, owned: false, badge: null, valuePct: null, appearance: null, until: null, ...patch };
 }
 
 function task(patch: Partial<TaskView> = {}): TaskView {

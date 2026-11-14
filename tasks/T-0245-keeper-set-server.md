@@ -28,6 +28,7 @@ shared:
   - backend/api/src/modules/appearance/appearance.service.ts
   - backend/api/src/modules/shop/shop-overrides.ts
   - backend/api/test/appearance-rules.test.ts
+  - backend/api/test/home.test.ts
   - backend/api/test/appearance.integration.test.ts
   - backend/api/test/shop.test.ts
   - backend/api/test/wipe-plan.test.ts
