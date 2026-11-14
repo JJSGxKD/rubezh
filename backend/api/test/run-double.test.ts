@@ -123,7 +123,7 @@ describe("можно ли удвоить", () => {
       status: "available",
       coins: 90,
       until: at(RUN_DOUBLE_WINDOW_MIN).toISOString(),
-      ad: { available: true, readyAt: null, pass: null },
+      ad: { available: true, readyAt: null, pass: null, capped: false },
     });
     expect(await service.view({ accountId: ME, platform: "vk" }, "run-1", at(5))).toMatchObject({ status: "available", ad: { available: false } });
   });

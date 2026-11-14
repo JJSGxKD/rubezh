@@ -3,8 +3,8 @@ id: T-0241
 title: Дневной кап роликов на все места — реклама не становится работой
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0199]
@@ -23,6 +23,10 @@ shared:
   - apps/admin/src/ui/help.ts
   - docs/07-monetization-and-ads.md
   - docs/30-configuration-map.md
+  - backend/api/test/helpers/memory-ads.ts
+  - backend/api/test/home.test.ts
+  - backend/api/test/run-double.test.ts
+  - backend/api/test/wheel.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

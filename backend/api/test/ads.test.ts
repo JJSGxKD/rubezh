@@ -816,8 +816,8 @@ describe("реклама без ролика (VIP)", () => {
 
   it("экран хозяина места знает, что ролик не нужен; у межстраничной пропуска нет", async () => {
     const { service } = withPass([]);
-    expect(await service.readiness(TELEGRAM, "wheel_spin", NOON)).toEqual({ available: true, readyAt: null, pass: "vip" });
-    expect(await service.readiness(TELEGRAM, "interstitial", NOON)).toEqual({ available: false, readyAt: null, pass: null });
+    expect(await service.readiness(TELEGRAM, "wheel_spin", NOON)).toEqual({ available: true, readyAt: null, pass: "vip", capped: false });
+    expect(await service.readiness(TELEGRAM, "interstitial", NOON)).toEqual({ available: false, readyAt: null, pass: null, capped: false });
   });
 
   it("VIP кончился — снова сети по кругу, а награда без ролика в истории круг не ломает", async () => {
