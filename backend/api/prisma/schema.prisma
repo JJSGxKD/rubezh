@@ -271,6 +271,7 @@ model Account {
   taskChannelWatch TaskChannelWatch[]
   sharesHeld       StakeholderShare[]   @relation("StakeholderShares")
   sharesSet        StakeholderShare[]   @relation("StakeholderSharesSet")
+  appearanceGrants AppearanceGrant[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -675,6 +676,7 @@ model Purchase {
   vipPeriod       VipPeriod?
   adConversions   AdConversion[]
   compensation    PurchaseCompensation?
+  grants          AppearanceGrant[]
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).
@@ -3414,4 +3416,34 @@ model LedgerTemplate {
   @@index([articleId])
   @@index([placeAccountId])
   @@map("ledger_template")
+}
+
+// Выданные облики (docs/35-stage4-plan.md Р155, tasks/T-0245). Большинство обликов сервер
+// считает при чтении по состоянию аккаунта — уровню, VIP, достижению (`appearance/`), и в базе
+// их нет. Облик, который выдан разово — куплен в наборе, а дальше подарен или получен в
+// пассе, — состоянием не вычислить: он хранится строкой. Облик `dawn` в наборе хранителя
+// (`shop/keeper-set.ts`) — первый.
+//
+// Ключ `(account_id, appearance_id)`: облик у аккаунта один, повтор выдачи — `ON CONFLICT DO
+// NOTHING`. `source` — как облик получен (`purchase`; остальные источники приходят со своими
+// задачами). У `purchase` ссылка на покупку обязательна, и возврат снимает облик ровно по ней.
+// На покупку ссылка `Restrict`: журнал покупок не стирается никогда, а выданное за них не
+// должно остаться без следа.
+model AppearanceGrant {
+  accountId    String   @map("account_id") @db.Uuid
+  /// id облика из каталога (`appearance-catalog.ts`)
+  appearanceId String   @map("appearance_id") @db.VarChar(24)
+  /// как получен: `purchase` — набор магазина
+  source       String   @db.VarChar(16)
+  /// покупка, за которую выдан облик; у `purchase` обязательна
+  purchaseId   String?  @map("purchase_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz(3)
+
+  account  Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchase Purchase? @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+
+  @@id([accountId, appearanceId])
+  // Возврат снимает облик по покупке.
+  @@index([purchaseId])
+  @@map("appearance_grant")
 }
