@@ -886,6 +886,7 @@
   --widget-tasks-track: color-mix(in oklab, var(--color-success) 18%, var(--color-surface-sunken));
   --widget-record-tone: var(--color-passive);
   --widget-friends-tone: var(--color-gem-light);
+  --widget-pass-tone: var(--color-passive);
 
   /* Насколько тон окрашивает подложку: ждущий — едва, готовый к забору — заметно. */
   --widget-tint: 7%;
@@ -919,6 +920,16 @@
 
 @utility widget-friends {
   --widget-tone: var(--widget-friends-tone);
+}
+
+@utility widget-pass {
+  --widget-tone: var(--widget-pass-tone);
+}
+
+/* Лента батл-пасса (tasks/T-0314, design/art/mockups/pass-v2.html): ячейка ступени — 76 px по ширине. */
+:root {
+  --pass-cell-w: 4.75rem;
+  --pass-cell-h: 7.25rem;
 }
 
 @utility widget-surface {

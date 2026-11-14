@@ -3,8 +3,8 @@ id: T-0314
 title: Батл-пасс — экран: две ленты по 30 ступеням, текущая ступень и очки до следующей, забор, что даёт VIP; вкладка в «Заданиях» и виджет на главной
 epic: E16
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-59 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0312]
@@ -24,6 +24,12 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - packages/app-shell/src/index.tsx
+  - packages/app-shell/src/screens/home-showcase.tsx
+  - packages/app-shell/src/screens/meta/notifications.tsx
+  - packages/app-shell/src/design-system/tokens.css
+  - packages/app-shell/test/notifications.test.ts
+  - apps/web-telegram/vite.config.ts
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -155,9 +161,9 @@ batch: 8
 
 ## Критерии приёмки
 
-- [ ] Вкладка «Пасс» в «Заданиях»: две ленты, текущая ступень, забор и «Забрать всё», VIP под замком с числом наград.
-- [ ] Виджет на главной; уведомление закрытия ведёт на пасс.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Вкладка «Пасс» в «Заданиях»: две ленты, текущая ступень, забор и «Забрать всё», VIP под замком с числом наград.
+- [x] Виджет на главной; уведомление закрытия ведёт на пасс.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

@@ -349,11 +349,12 @@ describe("извинение команды в ленте: компенсаци�
 describe("пасс месяца закрыт: строка ленты (T-0312)", () => {
   const row = (data: Record<string, unknown>, kind = "pass_closed") => describeNotification({ id: "n7", kind, data, createdAt: "2026-11-01T00:01:00.000Z", read: false });
 
-  it("текст бота дословно, значок «подарок», никуда не ведёт: экран пасса — T-0314", () => {
+  it("текст бота дословно, значок «подарок», касание открывает вкладку «Пасс» (T-0314)", () => {
     const described = row({ month: "2026-10", rewards: 5 });
 
     expect(described?.text).toBe("Пасс октября закрыт: 5 наград зачислено на счёт.");
-    expect(described?.target).toBeNull();
+    expect(described?.target).toBe("tasks");
+    expect(described?.pass).toBe(true);
     expect(described?.over).toBeUndefined();
     expect((described?.icon as { type: unknown }).type).toBe(Gift);
   });
