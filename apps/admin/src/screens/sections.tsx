@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { lazy, Suspense, type ReactNode } from "react";
 import { AdsScreen } from "./ads/AdsScreen";
 import { BalanceScreen } from "./balance/BalanceScreen";

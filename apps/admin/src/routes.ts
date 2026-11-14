@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { Activity, Award, FlaskConical, BookOpen, BookText, Briefcase, BriefcaseBusiness, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, PieChart, Radio, Receipt, Send, ScrollText, ShieldAlert, ShieldX, Scale, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
 
 /**

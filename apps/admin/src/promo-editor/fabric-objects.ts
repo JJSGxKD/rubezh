@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { FORMATS, type PromoDoc } from "@bh/promo-kit";
 import { FabricImage, Rect, Textbox, cache, type FabricObject, type StaticCanvas } from "fabric";
 import rune from "../../../../packages/app-shell/src/design-system/brand/rune.svg?raw";
