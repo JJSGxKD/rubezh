@@ -4,7 +4,7 @@ title: «Бухгалтерия → Места и статьи» и «Шабло
 epic: E15
 priority: P2
 status: done
-owner: claude-lead-1 / sonnet-5.5 / medium
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0460, T-0463, T-0459]
