@@ -2391,15 +2391,17 @@ model OutboundServiceMode {
 /// кеш навсегда. Строка не меняется никогда. Формат, размер и стороны держат
 /// `CHECK` в миграции и `media/image-rules.ts`.
 model MediaImage {
-  imageId     String   @id @map("image_id") @db.VarChar(64)
-  contentType String   @map("content_type") @db.VarChar(32)
-  width       Int
-  height      Int
-  sizeBytes   Int      @map("size_bytes")
-  data        Bytes
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  imageId        String   @id @map("image_id") @db.VarChar(64)
+  contentType    String   @map("content_type") @db.VarChar(32)
+  width          Int
+  height         Int
+  sizeBytes      Int      @map("size_bytes")
+  data           Bytes
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   /// кто загрузил; без внешнего ключа — картинка переживает аккаунт
-  createdBy   String?  @map("created_by") @db.Uuid
+  createdBy      String?  @map("created_by") @db.Uuid
+  /// право на показ закрытой картинки (`ledger.view` у снимка чека, T-0462); пусто — открыта игроку и панели
+  viewPermission String?  @map("view_permission") @db.VarChar(64)
 
   tasks      TaskDef[]
   homeSlides HomeSlide[]
@@ -3328,6 +3330,8 @@ model LedgerOperation {
   /// причина или описание, 3…500 знаков; становится описанием проводки
   note           String                @db.VarChar(500)
   link           String?               @db.VarChar(500)
+  /// снимок чека: id картинки профиля `finance_receipt` в хранилище картинок панели (T-0462); без внешнего ключа, как и всё в учёте
+  receiptImage   String?               @map("receipt_image") @db.Char(64)
   /// оценка размера в долларах по курсу на момент ввода: для порога второго ключа и списка; нет курса — пусто
   amountUsd      Decimal?              @map("amount_usd") @db.Decimal(18, 2)
   /// ключ проводки `op:<id>` — появляется, когда операция проведена

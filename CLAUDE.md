@@ -881,7 +881,9 @@ export const SECRETS: SecretsDef = {
 
 - в PowerShell 5.1 **нет `&&`** — разделять `;`, условное продолжение это
   `A; if ($?) { B }`;
-- вместо `cp` / `rm -rf` — `Copy-Item` / `Remove-Item -Recurse -Force`;
+- вместо `cp` — `Copy-Item`; вместо `rm -rf` — `cmd /c rmdir /s /q <путь>`, а
+  рабочие копии — `git worktree remove --force <путь>`: `Remove-Item -Recurse`
+  идёт по junction'ам pnpm и стирает лишнее, поэтому хук его не пропускает;
 - `nvm-windows` не читает `.nvmrc`, версию Node называем явно;
 - CI и **прод-сервер — Ubuntu Server LTS**: скрипты в `.github/workflows` и в
   контейнерах пишутся под bash.
@@ -904,6 +906,13 @@ export const SECRETS: SecretsDef = {
 Переводы строк нормализуются `.gitattributes` (всё хранится с LF): скрипт с
 CRLF внутри Linux-контейнера падает с `bad interpreter`.
 
+**Правила выше — не только текст: часть проверяют хуки Claude Code**
+(`.claude/settings.json`, `scripts/hooks/`, Р224). До выполнения они не
+пропускают `npm install`, `git push --force`, `Remove-Item -Recurse`, запись в
+`.env` и `.claude/launch.json`, тесты на Redis 14 и базе `bullet_heaven`,
+`npx` непроверенных пакетов; после правки `*.ts` показывают ошибки eslint,
+чистоты симуляции и границ слоёв (`tasks/README.md`, «Окружение исполнителя»).
+
 ## Сборка и проверка перед PR
 
 ```bash
@@ -924,6 +933,22 @@ pnpm budget
 сначала смотрят, чем за рост заплатили (`docs/27-design-system-and-app-shell.md` §3.4).
 
 Все пять команд уже настроены, и этот раздел не должен расходиться с `ci.yml`.
+
+**Отчёт о проверке пишет скрипт, а не агент** (`docs/35-stage4-plan.md`, Р224):
+
+```bash
+pnpm verify --write var/verify.md
+```
+
+`pnpm verify` сам прогоняет гейт по затронутым пакетам (дифф с `origin/dev`:
+`typecheck`, eslint файлов диффа, тесты затронутых пакетов и их потребителей,
+`build` и `budget` для оболочки и панели), проверку зон задачи и
+`pnpm docs:check`, а в конце печатает таблицу с головой коммита. Блок
+`## Проверено (pnpm verify)` вставляется в описание PR как есть; красный
+шаг — чинить, а не отмечать. Отчёт устаревает с первым коммитом после него:
+голова в шапке этого не прячет. Полный `pnpm test` на общей машине слишком долог
+и остаётся за CI; интеграцию с базой скрипт гоняет только по `--db` и только на
+`rubezh_test`, иначе пишет «проверит CI».
 
 Битые ссылки в документации ловит `pnpm docs:check` — он же входит в
 `pnpm test`. Но ссылки — только половина: документ, гайдбук, README и этот

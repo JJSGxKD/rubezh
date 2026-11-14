@@ -23,6 +23,7 @@ import type { ChatTarget } from "../src/platforms/ports/chat-target.js";
 import { Messengers, type Messenger, type OutgoingMessage, type SendOutcome } from "../src/platforms/ports/messenger.js";
 import { panelSettings } from "./helpers/settings.js";
 import { redisDatabase } from "./helpers/redis-database.js";
+import { retryOnConflict } from "./helpers/retry-conflict.js";
 
 /**
  * Напоминания на живых Postgres и Redis (docs/17-testing-strategy.md §4.2;
@@ -96,7 +97,8 @@ describe.skipIf(!live)("напоминания на живых Postgres и Redis
   afterAll(async () => {
     await redis.del(LOCK_KEY);
     for (let start = 0; start < created.length; start += 500) {
-      await prisma.account.deleteMany({ where: { accountId: { in: created.slice(start, start + 500) } } });
+      const chunk = created.slice(start, start + 500);
+      await retryOnConflict(() => prisma.account.deleteMany({ where: { accountId: { in: chunk } } }));
     }
     await prisma.$disconnect();
     await closeRedis(redis);

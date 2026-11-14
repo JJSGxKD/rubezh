@@ -3,8 +3,8 @@ id: T-0473
 title: Хуки-ограждения Claude Code — запреты до выполнения и быстрые проверки после правки
 epic: E0
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
@@ -14,6 +14,7 @@ zones:
   - scripts/test/claude-hooks.test.ts
 shared:
   - tasks/README.md
+  - scripts/test/layer-boundaries.test.ts
   - CLAUDE.md
   - AGENTS.md
 runner: local
