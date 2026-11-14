@@ -27,7 +27,7 @@ executor: sonnet-5.5
 effort: extra
 release: patch
 design: null
-batch: 8
+batch: 4
 ---
 
 # T-0318. sim-worker — очередь повтора забега: та же симуляция по записи, снимку контента и снаряжению, исход и тик расхождения

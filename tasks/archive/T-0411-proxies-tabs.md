@@ -20,7 +20,7 @@ effort: medium
 release: minor
 merge: self
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0411. Раздел «Прокси» — вкладки с адресом вместо одной ленты

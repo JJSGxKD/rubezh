@@ -31,7 +31,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/identity-v2.html
-batch: 4
+batch: 5
 ---
 
 # T-0247. Карточка игрока — сервер: публичный id, ответ карточки, заявка в друзья по публичному id

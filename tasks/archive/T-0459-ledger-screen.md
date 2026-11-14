@@ -28,7 +28,7 @@ effort: medium
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0459. Раздел «Бухгалтерия» в панели — остатки по местам хранения и журнал проводок

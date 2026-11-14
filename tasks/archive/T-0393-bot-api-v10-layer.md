@@ -33,7 +33,7 @@ effort: high
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0393. Слой Bot API 10.x — оформленные и эфемерные сообщения, темы, виджеты и приём widget_query

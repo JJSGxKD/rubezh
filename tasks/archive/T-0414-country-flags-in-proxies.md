@@ -24,7 +24,7 @@ effort: medium
 release: minor
 merge: self
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0414. Флаги стран у узлов Xray и ручных прокси

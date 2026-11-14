@@ -24,7 +24,7 @@ effort: high
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0467. Курс на дату из истории курсов — для оценки проводок при закрытии месяца

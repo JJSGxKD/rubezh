@@ -44,7 +44,7 @@ effort: high
 release: minor
 merge: lead
 design: design/art/concepts/stalker/README.md
-batch: 5
+batch: 4
 ---
 
 # T-0421. Паттерн неубиваемого преследователя — толчки вместо урона, тяжёлое касание

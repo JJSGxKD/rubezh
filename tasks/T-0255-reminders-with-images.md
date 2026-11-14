@@ -29,7 +29,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/bot-images-v2.html
-batch: 4
+batch: 5
 ---
 
 # T-0255. Напоминания бота картинкой — «тебя обогнали», сезон закрывается, награда дня ждёт, колесо снова крутится

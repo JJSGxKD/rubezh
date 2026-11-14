@@ -23,7 +23,7 @@ effort: high
 release: patch
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0477. Конвейер тимлида в репозитории — поезд мерджей, статус, ожидание работы и сценарий

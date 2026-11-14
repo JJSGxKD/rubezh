@@ -36,7 +36,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0387. Ядро Xray — свежая версия и способы подключения, которые выдают поставщики

@@ -29,7 +29,7 @@ effort: medium
 release: minor
 merge: lead
 design: design/art/concepts/stalker/README.md
-batch: 5
+batch: 4
 ---
 
 # T-0427. Карачун в гайдбуке и аналитике — «его нельзя убить — уходи», событие stalker_ended

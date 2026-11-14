@@ -28,7 +28,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0123. Модификаторы забега: выбор в листе «Перед забегом»

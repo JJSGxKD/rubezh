@@ -20,7 +20,7 @@ effort: medium
 release: patch
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0478. Метрики конвейера — с первого ревью, круги доработки, провалы поезда по причинам

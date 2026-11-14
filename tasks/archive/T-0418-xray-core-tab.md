@@ -25,7 +25,7 @@ effort: medium
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0418. Вкладка «Ядро Xray» — версия, свежий выпуск, совместимость и кнопка «Обновить»

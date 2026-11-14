@@ -37,7 +37,7 @@ effort: extra
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0457. Журнал учёта в базе — план счетов, запись проводок, остатки и журнал для панели

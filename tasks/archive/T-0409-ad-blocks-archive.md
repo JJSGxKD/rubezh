@@ -43,7 +43,7 @@ effort: extra
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0409. Архив рекламных блоков — «В архив» выключает блок и убирает его из списка

@@ -21,7 +21,7 @@ effort: medium
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0465. «Бухгалтерия → Места и статьи» и «Шаблоны» в панели

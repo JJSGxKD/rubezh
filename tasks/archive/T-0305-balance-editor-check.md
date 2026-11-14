@@ -23,7 +23,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/mockups/admin-balance.html
-batch: 7
+batch: 4
 ---
 
 # T-0305. Панель «Баланс» — «Проверить»: проверки контента и симуляция черновика против версии в игре полосами с коридорами, рельсы шагов

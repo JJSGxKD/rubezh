@@ -32,7 +32,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: design/art/meta-v2.md
-batch: 4
+batch: 5
 ---
 
 # T-0245. «Набор хранителя» — сервер: 48 часов после первой победы над Рубежом, окрас и самоцветы

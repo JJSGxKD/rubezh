@@ -22,7 +22,7 @@ effort: medium
 release: patch
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0422. Боты калибровки уходят от неубиваемого преследователя

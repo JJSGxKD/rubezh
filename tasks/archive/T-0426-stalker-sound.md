@@ -26,7 +26,7 @@ effort: medium
 release: minor
 merge: lead
 design: design/art/concepts/stalker/README.md
-batch: 5
+batch: 4
 ---
 
 # T-0426. Звук и вибрация Карачуна — холодный выдох предвестия, тяжёлое касание

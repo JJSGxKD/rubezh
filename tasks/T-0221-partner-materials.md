@@ -35,7 +35,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0221. Материалы для партнёров — баннеры, тексты постов и правила в кабинете

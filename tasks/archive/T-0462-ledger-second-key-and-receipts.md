@@ -43,7 +43,7 @@ effort: high
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0462. Второй ключ на крупные операции финансов, уведомление и картинка чека

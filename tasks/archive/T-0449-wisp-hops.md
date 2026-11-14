@@ -33,7 +33,7 @@ effort: high
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0449. Огонёк ведёт шагами с отклонением и гаснет, когда вести некуда

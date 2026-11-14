@@ -23,7 +23,7 @@ effort: medium
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0454. Раздел «Участники» в панели — доли и их история

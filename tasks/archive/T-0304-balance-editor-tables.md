@@ -24,7 +24,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/admin-balance.html
-batch: 7
+batch: 4
 ---
 
 # T-0304. Панель «Баланс» — таблицы контента по разделам, правка ячейки с прежним числом, ошибка формы строкой под записью, список правок черновика

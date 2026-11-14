@@ -32,7 +32,7 @@ effort: high
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0460. Места хранения и статьи учёта — сервер

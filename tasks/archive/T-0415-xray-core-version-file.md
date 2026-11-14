@@ -25,7 +25,7 @@ effort: medium
 release: patch
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0415. Ядро Xray сообщает свою версию, диапазон совместимости — в proxy-kit

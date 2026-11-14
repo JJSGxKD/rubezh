@@ -34,7 +34,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0244. Клиент наградной рекламы — «Удвоить за ролик» в награде дня, самоцветы за ролик в магазине, сообщение о капе

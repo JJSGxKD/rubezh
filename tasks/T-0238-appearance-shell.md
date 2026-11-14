@@ -37,7 +37,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/identity-v2.html
-batch: 4
+batch: 5
 ---
 
 # T-0238. Облики — экран «Облик» из арсенала и профиля, портрет в арсенале, голова облика в аватаре

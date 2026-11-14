@@ -40,7 +40,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/meta-v2.md
-batch: 6
+batch: 4
 ---
 
 # T-0282. Болотник — враг, оставляющий ядовитые лужи: поле `trail` у врага, лужи в мире, облик на земле

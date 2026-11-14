@@ -29,7 +29,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0129. Испытание дня: движок — фиксированный seed и набор на старте забега

@@ -34,7 +34,7 @@ effort: extra
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0468. Месяцы учёта — сверка с блокерами, закрытие с водопадом, снятие закрытия

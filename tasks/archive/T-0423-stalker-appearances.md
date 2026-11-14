@@ -35,7 +35,7 @@ effort: high
 release: minor
 merge: lead
 design: design/art/concepts/stalker/README.md
-batch: 5
+batch: 4
 ---
 
 # T-0423. Появления Карачуна — предвестие, погоня, растворение, свой поток случайности

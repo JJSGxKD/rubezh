@@ -29,7 +29,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/bot-images-v2.html
-batch: 4
+batch: 5
 ---
 
 # T-0253. Приглашение и итог забега картинкой — «Поделиться» несёт облик и рекорд

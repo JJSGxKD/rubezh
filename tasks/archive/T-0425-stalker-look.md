@@ -34,7 +34,7 @@ effort: high
 release: minor
 merge: lead
 design: design/art/concepts/stalker/README.md
-batch: 5
+batch: 4
 ---
 
 # T-0425. Облик Карачуна на канве — знак неубиваемого, предвестие инеем, растворение

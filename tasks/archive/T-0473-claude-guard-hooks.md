@@ -23,7 +23,7 @@ effort: high
 release: patch
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0473. Хуки-ограждения Claude Code — запреты до выполнения и быстрые проверки после правки

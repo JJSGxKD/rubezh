@@ -20,7 +20,7 @@ effort: medium
 release: patch
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0476. Определения агентов команды — модель, усилие и инструменты в файле, а не в промпте

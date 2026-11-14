@@ -28,7 +28,7 @@ effort: extra
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0458. Проводки из платежей — оплата, выход из холда, возврат; досоздание за прошлое

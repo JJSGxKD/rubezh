@@ -20,7 +20,7 @@ effort: medium
 release: minor
 merge: lead
 design: design/art/characters.md
-batch: 4
+batch: 5
 ---
 
 # T-0353. Герой в четыре стороны в забеге — спереди при ходе вниз, спиной при ходе вверх
