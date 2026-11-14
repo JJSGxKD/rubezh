@@ -26,6 +26,7 @@ import { RolesService, type AccountRef } from "../src/modules/roles/roles.servic
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 import { ELEMENTS, TASK_KIND_IDS, isEmblemKind, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
 import { PrismaWalletRepository } from "../src/modules/wallet/wallet.repository.js";
@@ -258,10 +259,10 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
       expect(added.length).toBe(75); // 56 прежних новых, три достижения кодекса (T-0127) и 16 — v2 (T-0322)
       for (const task of added) expect(task, task.taskId).toMatchObject({ gems: 0, shards: 0, passPoints: 0 });
       for (const task of added) expect(task.coins, task.taskId).toBeGreaterThan(0);
-      // Достижения v2 (T-0322) в сумму не входят: вместе с ними монет 29 350 против потолка 20 000 в сутки
-      // (`wallet-limits.ts`) — вопрос владельцу в PR; забрать всё за один день всё равно нельзя.
-      const v2 = new Set(["ach_no_hit_10", "ach_pacifist", "ach_collector", "ach_weapon_meteor", ...["fire", "cold", "lightning", "poison"].flatMap((element) => ["500", "2500", "10k"].map((suffix) => `ach_${element}_${suffix}`))]);
-      expect(catalog.filter((task) => !v2.has(task.taskId)).reduce((sum, task) => sum + task.coins, 0)).toBeLessThanOrEqual(20_000);
+      // Включённые достижения разом, вместе с v2 (T-0322) и кодексом (T-0127), — в пределах суточного
+      // потолка монет за достижения (`wallet-limits.ts`): честный игрок в него не упрётся.
+      const active = catalog.filter((task) => task.active);
+      expect(active.reduce((sum, task) => sum + task.coins, 0)).toBeLessThanOrEqual(WALLET_DAILY_CAPS.achievement_reward.coins ?? 0);
       expect(catalog.reduce((sum, task) => sum + task.gems, 0)).toBeLessThanOrEqual(200);
     });
 
