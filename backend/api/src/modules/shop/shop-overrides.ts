@@ -28,7 +28,9 @@ export const skuOverrideSchema = z
   .object({
     stars: shopSkuSchema.shape.stars,
     baseRub: shopSkuSchema.shape.baseRub,
-    contents: shopSkuSchema.shape.contents,
+    // Только число самоцветов: окрас в составе (T-0245) правкой с подтверждением не меняется — иначе заявкой
+    // любому товару можно было бы приписать чужой облик.
+    contents: z.object({ gems: shopSkuSchema.shape.contents.shape.gems }).strict(),
     badge: z.enum(["hit"]).nullable(),
     sort: shopSkuSchema.shape.sort,
   })
@@ -54,7 +56,8 @@ function gemsTexts(sku: ShopSku, gems: number): Pick<ShopSku, "title" | "descrip
   const count = `${String(gems)} ${GEMS(gems)}`;
   return {
     title: sku.kind === "gems" ? count : sku.title,
-    description: `${count} на счёт${sku.once ? " — один раз на аккаунт" : ""}.`,
+    // Окрас в составе остаётся в тексте: счёт обязан называть всё, что игрок получит.
+    description: `${count} на счёт${sku.contents.appearance === undefined ? "" : " и окрас героя в подарок"}${sku.once ? " — один раз на аккаунт" : ""}.`,
   };
 }
 

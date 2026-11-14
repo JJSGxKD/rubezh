@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { APPEARANCES, DEFAULT_APPEARANCE, appearanceById, type AppearanceArchetype, type AppearanceRarity, type AppearanceSource } from "./appearance-catalog.js";
+import { APPEARANCES, DEFAULT_APPEARANCE, appearanceById, type AppearanceArchetype, type AppearanceDef, type AppearanceRarity, type AppearanceSource } from "./appearance-catalog.js";
 
 /**
  * Облики, правила без базы (docs/35-stage4-plan.md Р150, tasks/T-0237): какими обликами
- * владеет игрок и какой из них действует. Владение не хранится, а вычисляется при чтении по
- * состоянию аккаунта: истёкший VIP Князя не снимает, а вернувшийся возвращает.
+ * владеет игрок и какой из них действует. Владение вычисляется при чтении по состоянию
+ * аккаунта: истёкший VIP Князя не снимает, а вернувшийся возвращает. Хранится только то, что
+ * состоянием не вычислить, — облик, выданный разово (`appearance_grant`, tasks/T-0245).
  */
 
 /** Что сервер знает об аккаунте, чтобы решить, какими обликами он владеет. */
@@ -18,16 +19,19 @@ export interface AppearanceState {
   doneAchievements: ReadonlySet<string>;
   /** хоть раз забрана верхняя ступень очков недели */
   weeklyTopClaimed: boolean;
+  /** облики, выданные разово (`appearance_grant`): считаются только у обликов с источником «покупка» */
+  grants: ReadonlySet<string>;
 }
 
 /** Облики, которыми владеет аккаунт. */
 export function heldAppearances(state: AppearanceState): Set<string> {
   const held = new Set<string>();
-  for (const def of APPEARANCES) if (isHeld(def.source, state)) held.add(def.id);
+  for (const def of APPEARANCES) if (isHeld(def, state)) held.add(def.id);
   return held;
 }
 
-function isHeld(source: AppearanceSource, state: AppearanceState): boolean {
+function isHeld(def: AppearanceDef, state: AppearanceState): boolean {
+  const { source } = def;
   switch (source.kind) {
     case "start":
       return true;
@@ -42,6 +46,9 @@ function isHeld(source: AppearanceSource, state: AppearanceState): boolean {
       return false;
     case "vip":
       return state.vipActive;
+    case "purchase":
+      // Только строка выдачи: чужая строка с id облика другого источника (Князь, Навий страж) его не даёт.
+      return state.grants.has(def.id);
     case "season": {
       // Места, которого не бывает, облик не даёт: данные базы читаются как есть, а не доверием к ним.
       const place = state.bestSeasonPlace;
