@@ -38,7 +38,9 @@ export function adminContentSecurityPolicy(mode: PolicyMode, previewOrigin: stri
     // Ширина полос прогресса в карточке задаётся атрибутом style; внедрение
     // стиля — куда меньшая дыра, чем внедрение скрипта, а скрипты закрыты.
     "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", ...AVATAR_ORIGINS],
+    // `blob:` — своё фото партнёра в редакторе промо (tasks/T-0274): файл читается в браузере и на сервер
+    // не уходит, его адрес — `URL.createObjectURL`. Скрипты и фреймы `blob:` по-прежнему не получают.
+    "img-src": ["'self'", "data:", "blob:", ...AVATAR_ORIGINS],
     "font-src": ["'self'"],
     // Websocket горячей перезагрузки — только на dev-сервере.
     "connect-src": dev ? ["'self'", "ws:", "wss:"] : ["'self'"],

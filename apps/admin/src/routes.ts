@@ -1,4 +1,5 @@
-import { Activity, Award, BookOpen, BookText, Briefcase, BriefcaseBusiness, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, PieChart, Radio, Receipt, Send, ScrollText, ShieldAlert, ShieldX, Scale, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
+/// <reference types="vite/client" />
+import { Activity, Award, FlaskConical, BookOpen, BookText, Briefcase, BriefcaseBusiness, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, PieChart, Radio, Receipt, Send, ScrollText, ShieldAlert, ShieldX, Scale, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -117,6 +118,10 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
       { id: "audit", title: "Аудит", hint: "Кто что изменил в панели и когда", permission: "audit.view", icon: ScrollText },
     ],
   },
+  // Витрины компонентов (редактор промо, tasks/T-0274) — только на dev-сервере; в тестах и сборке раздела нет.
+  ...(import.meta.env.DEV && import.meta.env.MODE !== "test"
+    ? [{ title: "Разработка", sections: [{ id: "dev", title: "Витрины", hint: "Компоненты панели отдельно от экранов — только при разработке", permission: "content.view", icon: FlaskConical }] }]
+    : []),
 ];
 
 /** Все разделы подряд, в порядке меню. */
