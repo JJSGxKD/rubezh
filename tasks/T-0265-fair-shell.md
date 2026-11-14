@@ -24,7 +24,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/meta-v2.md
-batch: 4
+batch: 5
 ---
 
 # T-0265. Ярмарка — клиент: раздел в магазине с портретами, ценой и «уйдёт через N дней»

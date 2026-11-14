@@ -37,12 +37,12 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/identity-v2.html
-batch: 4
+batch: 5
 ---
 
 # T-0238. Облики — экран «Облик» из арсенала и профиля, портрет в арсенале, голова облика в аватаре
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0238.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](T-0237-appearance-server.md) [![T-0230](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0230.json&label=T-0230)](archive/T-0230-draft-art-testers-flag.md) [![T-0236](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0236.json&label=T-0236)](T-0236-emblems-shell.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0238.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](archive/T-0237-appearance-server.md) [![T-0230](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0230.json&label=T-0230)](archive/T-0230-draft-art-testers-flag.md) [![T-0236](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0236.json&label=T-0236)](archive/T-0236-emblems-shell.md)
 
 ## Зачем
 

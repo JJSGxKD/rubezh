@@ -26,7 +26,7 @@ batch: 5
 
 # T-0471. «Мой проект» — отчёт закрытого месяца и подтверждение участником
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0471.json)](README.md#значки-статуса) [![T-0469](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0469.json&label=T-0469)](T-0469-ledger-confirmations-payouts.md) [![T-0455](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0455.json&label=T-0455)](T-0455-my-project-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0471.json)](README.md#значки-статуса) [![T-0469](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0469.json&label=T-0469)](T-0469-ledger-confirmations-payouts.md) [![T-0455](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0455.json&label=T-0455)](archive/T-0455-my-project-screen.md)
 
 ## Зачем
 

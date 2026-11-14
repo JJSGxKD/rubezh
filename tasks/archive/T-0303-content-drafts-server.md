@@ -34,7 +34,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: design/art/mockups/admin-balance.html
-batch: 7
+batch: 4
 ---
 
 # T-0303. Контент на сервере — версии и черновики в базе, версия 0 из репозитория, правка черновика, проверка через sim-worker и разница с базой

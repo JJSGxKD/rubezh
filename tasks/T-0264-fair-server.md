@@ -32,7 +32,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/meta-v2.md
-batch: 4
+batch: 5
 ---
 
 # T-0264. Ярмарка — сервер: облики и окрасы за самоцветы на неделю по кругу
