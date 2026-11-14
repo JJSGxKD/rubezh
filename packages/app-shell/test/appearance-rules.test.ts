@@ -148,6 +148,13 @@ describe("названия и ассеты десяти обликов", () => {
     expect(appearanceNameKey("future")).toBeNull();
   });
 
+  it("редкость облика подписана словом мужского рода: все шесть ступеней есть в словаре", () => {
+    const dictionary: Record<string, string> = ru;
+    for (const rarity of ["common", "uncommon", "rare", "epic", "legendary", "mythic"]) {
+      expect(dictionary[`appearance.rarity.${rarity}`], rarity).toBeTypeOf("string");
+    }
+  });
+
   it("портрет, голова и карточка есть на диске для каждого облика", () => {
     for (const id of APPEARANCE_ORDER) {
       for (const url of [appearancePortraitUrl(id), appearanceHeadUrl(id), appearanceCardUrl(id)]) {

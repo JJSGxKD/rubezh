@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Check, Lock } from "lucide-react";
 import { Card, ContentColumn, ErrorState, Modal, Screen, Toggle } from "../../design-system/components";
-import { t } from "../../i18n";
+import { hasTranslation, t } from "../../i18n";
 import "../../i18n/appearance";
 import { appearanceFailure, createAppearanceApi, rememberOwnAppearance, type AppearanceChoice, type AppearanceItem, type AppearanceView } from "../../state/appearance-api";
 import { useNavigation } from "../../state/navigation";
@@ -217,7 +217,7 @@ function AppearanceCard(props: {
         props.onWear(item);
       }}
       className={[
-        "relative isolate flex min-h-11 w-full flex-col items-center gap-1.5 rounded-lg px-2 pt-3 pb-2.5 text-center ring-2",
+        "relative isolate flex h-full min-h-11 w-full flex-col items-center gap-1.5 rounded-lg px-2 pt-3 pb-2.5 text-center ring-2",
         "transition-transform duration-(--duration-fast) ease-base active:scale-[0.98] disabled:opacity-60",
         tone,
         state === "worn" ? "ring-accent" : "",
@@ -232,6 +232,12 @@ function AppearanceCard(props: {
   );
 }
 
+/** Редкость облика (мужского рода, не «Легендарное» предметов); незнакомая — как у предметов. */
+function rarityLabel(rarity: string): string {
+  const key = `appearance.rarity.${rarity}`;
+  return hasTranslation(key) ? t(key) : rarityName(rarity);
+}
+
 /** Лист закрытого облика: крупный портрет, редкость и откуда его взять. */
 export function LockedSheet(props: { item: AppearanceItem; onClose: () => void }): ReactNode {
   const { item } = props;
@@ -240,10 +246,10 @@ export function LockedSheet(props: { item: AppearanceItem; onClose: () => void }
     <Modal title={nameOf(item.id)} placement="bottom" onDismiss={props.onClose}>
       <div className="flex flex-col items-center gap-3 text-center">
         <div className={`relative isolate rounded-lg px-6 py-3 ring-2 ${toneOf(item.rarity).tile}`}>
-          <img src={appearanceCardUrl(item.id)} alt="" className="h-48 w-auto max-w-full opacity-35" />
+          <img src={appearanceCardUrl(item.id)} alt="" className="h-44 w-auto max-w-full opacity-35 short:h-28" />
         </div>
         <p className="text-xs font-semibold text-text-muted">
-          {rarityName(item.rarity)} · {t("appearance.locked")}
+          {rarityLabel(item.rarity)} · {t("appearance.locked")}
         </p>
         {source === null ? null : (
           <div>
