@@ -32,6 +32,7 @@ import { publicIdSource } from "./public-id-source.js";
  * знают. Клиент — T-0248.
  */
 @Module({
+  imports: [AuthModule, FriendsModule, RunsModule, SeasonsModule, ProgressModule, ItemsModule, AchievementsModule, VipModule, PublicIdentityModule],
   controllers: [PlayersController],
   providers: [
     PlayersService,
