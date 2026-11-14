@@ -3,8 +3,8 @@ id: T-0122
 title: Модификаторы забега: проверка и награда ×1,25 на сервере, без рейтинга
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-19
 size: M
 depends_on: [T-0119, T-0113, T-0191, T-0193, T-0196, T-0199]
@@ -21,6 +21,9 @@ shared:
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
+  - docs/32-balance.md
+  - backend/api/src/modules/runs/runs-hooks.ts
+  - backend/api/src/modules/admin-notify/run-review-card.ts
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
 runner: any

@@ -64,6 +64,12 @@ interface Row extends StoredRun {
 
 export class MemoryRunsRepository implements RunsRepository {
   readonly rows = new Map<string, Row>();
+  /** уровень аккаунта на сервере, как `account_progress.level`; нет записи — первый (T-0122) */
+  readonly levels = new Map<string, number>();
+
+  async accountLevel(accountId: string): Promise<number> {
+    return this.levels.get(accountId) ?? 1;
+  }
 
   async find(runId: string): Promise<StoredRun | null> {
     const row = this.rows.get(runId);
@@ -83,6 +89,7 @@ export class MemoryRunsRepository implements RunsRepository {
       rubezhReached: row.record?.rubezhReached ?? false,
       rubezhClearedSec: row.record?.rubezhClearedSec ?? null,
       score: row.record?.score ?? null,
+      modifierId: row.modifierId,
     };
   }
 
@@ -104,6 +111,7 @@ export class MemoryRunsRepository implements RunsRepository {
       rubezhReached: false,
       rubezhClearedSec: null,
       score: null,
+      modifierId: record.modifierId ?? null,
     });
     return "created";
   }
@@ -127,6 +135,7 @@ export class MemoryRunsRepository implements RunsRepository {
       rubezhReached: record.rubezhReached,
       rubezhClearedSec: record.rubezhClearedSec,
       score: record.score ?? null,
+      modifierId: record.modifierId ?? null,
       record,
     });
     return "finished";

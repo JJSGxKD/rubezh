@@ -194,6 +194,7 @@ erDiagram
         string[] verdict_reasons
         boolean rubezh_reached "страж рубежа пришёл (со слов итога); победу засчитывает вердикт ok"
         int rubezh_cleared_sec "nullable: секунда, на которой пал страж (T-0121)"
+        string modifier_id "nullable: hurry|inverse — модификатор забега (T-0122); с ним забег вне рейтинга, награда ×1,25"
         int points "nullable: очки эффективности (T-0293); null — пролог, обучение, сбой подсчёта"
         jsonb axes "nullable: индексы осей t, k, h, c, b с тремя знаками, 1 — ровно ожидаемое"
         string style "nullable: ключ сильнейшей оси: t, k, h, c или b"
