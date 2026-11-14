@@ -254,7 +254,8 @@ export class PrismaPeriodsRepository implements PeriodsRepository {
 
   /**
    * Черновики и операции на подтверждении месяца. Месяц операции — «за какой месяц» у поступления, а иначе месяц
-   * даты; черновик из шаблона расхода принадлежит месяцу шаблона.
+   * даты по UTC, как у проводки: время с поясом (`…T01:00+03:00`) на границе месяца относится к прошлому; черновик
+   * из шаблона расхода принадлежит месяцу шаблона.
    */
   private async openOperations(period: string): Promise<OpenOperation[]> {
     return z.array(operationRow).parse(
@@ -262,7 +263,11 @@ export class PrismaPeriodsRepository implements PeriodsRepository {
         SELECT operation_id::text AS "operationId", status::text AS "status"
         FROM ledger_operation
         WHERE status IN ('draft', 'pending')
-          AND (template_period = ${period} OR COALESCE(input->>'forMonth', SUBSTRING(input->>'at' FROM 1 FOR 7)) = ${period})
+          AND (template_period = ${period} OR COALESCE(
+            input->>'forMonth',
+            CASE WHEN length(input->>'at') = 10 THEN SUBSTRING(input->>'at' FROM 1 FOR 7)
+                 ELSE to_char((input->>'at')::timestamptz AT TIME ZONE 'UTC', 'YYYY-MM') END
+          ) = ${period})
         ORDER BY created_at, operation_id`,
     );
   }
