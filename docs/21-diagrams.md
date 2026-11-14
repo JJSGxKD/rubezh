@@ -2544,6 +2544,7 @@ flowchart TD
     API --> LG
     SH --> DT
     ADM --> DT
+    ADM --> PRK
 ```
 
 Стрелка из `apps/web-*` в `core-game` осталась одна и узкая: приложение берёт
