@@ -13,6 +13,7 @@ import { PrismaReferralsRepository } from "../src/modules/referrals/referrals.re
 import { PrismaRolesRepository } from "../src/modules/roles/roles.repository.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Партнёры на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -35,7 +36,7 @@ describe.skipIf(DATABASE_URL === "")("партнёры на живом Postgres"
   let accounts: PrismaAccountRepository;
 
   const uniqueCode = () => `P${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
-  const player = async () => (await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e12)), displayName: "Игрок", username: null, photoUrl: null }, NOW.getTime())).accountId;
+  const player = async () => (await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Игрок", username: null, photoUrl: null }, NOW.getTime())).accountId;
 
   async function partner(name = "Канал", terms: Partial<PartnerRow> = {}) {
     const partnerId = randomUUID();
@@ -44,7 +45,7 @@ describe.skipIf(DATABASE_URL === "")("партнёры на живом Postgres"
   }
 
   /** Свободный TG id: число до двадцати цифр, не повторяется между прогонами на общей базе. */
-  const freshTelegramId = () => String(Math.floor(Math.random() * 1e15) + 1e15);
+  const freshTelegramId = () => uniquePlatformUserId();
 
   async function campaign(partnerId: string | null, patch: Partial<NewPromoCampaign> = {}) {
     const display = uniqueCode();
@@ -297,7 +298,7 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра на жи�
   const staff: string[] = [];
 
   /** Числовой Telegram ID, которого нет ни у кого на общей базе. */
-  const freshTelegramId = () => String(Math.floor(Math.random() * 1e15) + 2e15);
+  const freshTelegramId = () => uniquePlatformUserId();
 
   async function player(telegramId = freshTelegramId(), platform: "telegram" | "vk" = "telegram"): Promise<AccountRef> {
     const account = await accounts.upsert({ platform, platformUserId: telegramId, displayName: "Игрок", username: null, photoUrl: null }, NOW.getTime());

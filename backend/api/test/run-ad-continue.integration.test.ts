@@ -18,6 +18,7 @@ import { PrismaRunsRepository } from "../src/modules/runs/runs.repository.js";
 import { FakeCreatives, MemoryAds, adBlock, interstitialGate } from "./helpers/memory-ads.js";
 import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Второй шанс за рекламу на настоящем Postgres (docs/35-stage4-plan.md
@@ -46,7 +47,7 @@ describe.skipIf(DATABASE_URL === "")("второй шанс за рекламу 
 
   async function startedRun(): Promise<{ accountId: string; runId: string }> {
     const account = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Стрелок", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Стрелок", username: null, photoUrl: null },
       Date.now(),
     );
     const runId = randomUUID();

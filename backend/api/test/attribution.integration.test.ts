@@ -10,6 +10,7 @@ import { RedisSessionDedupe } from "../src/modules/attribution/session-dedupe.js
 import { PrismaSessionsRepository, type SessionRecord } from "../src/modules/attribution/sessions.repository.js";
 import type { StartKind } from "../src/modules/attribution/start-param.js";
 import { redisDatabase } from "./helpers/redis-database.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Сессии и касания на настоящих Postgres и Redis (docs/17-testing-strategy.md
@@ -36,7 +37,7 @@ describe.skipIf(!live)("сессии и касания на живых Postgres 
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Путник", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Путник", username: null, photoUrl: null },
       Date.now(),
     );
     return created.accountId;

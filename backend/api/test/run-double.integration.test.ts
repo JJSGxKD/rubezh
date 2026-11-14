@@ -5,6 +5,7 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { PrismaProgressRepository } from "../src/modules/progress/progress.repository.js";
 import { PrismaRunDoubleRepository } from "../src/modules/progress/run-double.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Удвоение награды за забег на живом Postgres (docs/17-testing-strategy.md
@@ -25,7 +26,7 @@ describe.skipIf(DATABASE_URL === "")("удвоение награды на жи�
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(900_000_000 + Math.floor(Math.random() * 30_000_000)), displayName: "Удвоение", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Удвоение", username: null },
       Date.now(),
     );
     return created.accountId;

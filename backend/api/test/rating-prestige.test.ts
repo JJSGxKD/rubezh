@@ -15,6 +15,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Престиж в строках рейтинга (tasks/T-0107, docs/39-retention-mechanics.md К1).
@@ -70,7 +71,7 @@ afterEach(() => {
 });
 
 async function player(name: string, survivalSec: number): Promise<AccountRef> {
-  const account = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
+  const account = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
   const ref = { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
   await service.finish(ref, finish({ survivalSec }));
   return ref;

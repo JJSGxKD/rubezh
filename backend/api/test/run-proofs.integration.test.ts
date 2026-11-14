@@ -22,6 +22,7 @@ import { RunsService } from "../src/modules/runs/runs.service.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Приём записи забега для проверки на живых Postgres и Redis (tasks/T-0317,
@@ -108,7 +109,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("запись забе�
   });
 
   async function player(): Promise<{ accountId: string; headers: { authorization: string } }> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(880_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Запись", username: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Запись", username: null }, Date.now());
     const token = await signAccessToken({ accountId: created.accountId, platform: "telegram", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
     return { accountId: created.accountId, headers: { authorization: `Bearer ${token}` } };
   }

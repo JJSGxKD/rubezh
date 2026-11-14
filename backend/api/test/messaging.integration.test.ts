@@ -4,6 +4,7 @@ import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaMessagingRepository } from "../src/modules/messaging/messaging.repository.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * «Можно писать» на живом Postgres (адрес — TEST_DATABASE_URL, без него
@@ -32,7 +33,7 @@ describe.skipIf(DATABASE_URL === "")("«можно писать» на живо�
 
   it("побеждает более позднее событие, а не последнее пришедшее", async () => {
     const { accountId } = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(720_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Путник", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Путник", username: null },
       Date.now(),
     );
     await messaging.set(accountId, { canMessage: false, reason: "blocked", changedAt: new Date(T0 + HOUR) });

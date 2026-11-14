@@ -22,6 +22,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
 import { RunPrestige } from "../src/modules/runs/run-prestige.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Доски рейтинга по зрителю (T-0113, Р104): аккаунт со скрытым ограничением
@@ -70,7 +71,7 @@ function build() {
 type World = ReturnType<typeof build>;
 
 async function player(world: World, name: string): Promise<AccountRef> {
-  const account = await world.accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
+  const account = await world.accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
   return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
 }
 

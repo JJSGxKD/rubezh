@@ -33,6 +33,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { ALL_BOARDS } from "../src/modules/runs/leaderboard.store.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
 import { RunPrestige } from "../src/modules/runs/run-prestige.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Ограничение рейтинга (docs/35-stage4-plan.md WP44, О40): игрок пропадает
@@ -91,7 +92,7 @@ beforeEach(async () => {
 });
 
 async function player(name: string): Promise<AccountRef> {
-  const account = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
+  const account = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
   return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
 }
 

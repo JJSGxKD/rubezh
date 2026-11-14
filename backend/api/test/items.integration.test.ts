@@ -17,6 +17,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { PrismaNotificationsRepository } from "../src/modules/notifications/notifications.repository.js";
 import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Снаряжение на живом Postgres с настоящим кошельком (docs/17-testing-strategy.md
@@ -41,7 +42,7 @@ describe.skipIf(DATABASE_URL === "")("снаряжение на живом Postg
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(740_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Арсенал", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Арсенал", username: null },
       Date.now(),
     );
     return created.accountId;

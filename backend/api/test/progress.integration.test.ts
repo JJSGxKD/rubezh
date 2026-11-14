@@ -19,6 +19,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { PrismaNotificationsRepository } from "../src/modules/notifications/notifications.repository.js";
 import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Награды за забег на живом Postgres с настоящим кошельком
@@ -44,7 +45,7 @@ describe.skipIf(DATABASE_URL === "")("награды за забег на жив
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(730_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Награда", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Награда", username: null },
       Date.now(),
     );
     return created.accountId;

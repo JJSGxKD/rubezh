@@ -6,6 +6,7 @@ import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaPurchasesRepository, type InvoiceRecord } from "../src/modules/payments/purchases.repository.js";
 import { PrismaRunsRepository } from "../src/modules/runs/runs.repository.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Покупки на настоящем Postgres (docs/17-testing-strategy.md §4.2). Адрес —
@@ -27,7 +28,7 @@ describe.skipIf(DATABASE_URL === "")("покупки на живом Postgres", 
 
   async function startedRun(): Promise<{ accountId: string; runId: string }> {
     const account = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(800_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Стрелок", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Стрелок", username: null, photoUrl: null },
       Date.now(),
     );
     const runId = randomUUID();
@@ -141,7 +142,7 @@ describe.skipIf(DATABASE_URL === "")("покупки на живом Postgres", 
 
     async function owner(): Promise<string> {
       const account = await accounts.upsert(
-        { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Подписчик", username: null, photoUrl: null },
+        { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Подписчик", username: null, photoUrl: null },
         Date.now(),
       );
       return account.accountId;
@@ -296,7 +297,7 @@ describe.skipIf(DATABASE_URL === "")("покупки на живом Postgres", 
 
   it("довыдача: undelivered отдаёт только оплаченную, старую, не выданную и не возвращаемую покупку нужного товара", async () => {
     const account = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Покупатель", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Покупатель", username: null, photoUrl: null },
       Date.now(),
     );
     const now = Date.now();

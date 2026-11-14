@@ -15,6 +15,7 @@ import type { PartnerRow } from "../src/modules/partners/partner-rules.js";
 import { PrismaPartnersRepository } from "../src/modules/partners/partners.repository.js";
 import { PrismaReferralsRepository } from "../src/modules/referrals/referrals.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Привязка игрока по ссылке партнёра на живом Postgres (T-0067; адрес —
@@ -79,7 +80,7 @@ describe.skipIf(DATABASE_URL === "")("ссылки партнёра на жив�
 
   /** Аккаунт заведён `ageDays` суток назад. */
   async function account(ageDays = 0): Promise<string> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e12)), displayName: "Новичок", username: null, photoUrl: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Новичок", username: null, photoUrl: null }, Date.now());
     if (ageDays > 0) await prisma.$executeRaw`UPDATE account SET created_at = ${new Date(Date.now() - ageDays * DAY)} WHERE account_id = ${created.accountId}::uuid`;
     return created.accountId;
   }

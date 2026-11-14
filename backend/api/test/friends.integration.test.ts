@@ -5,6 +5,7 @@ import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { orderedPair, PrismaFriendsRepository } from "../src/modules/friends/friends.repository.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Дружба на живом Postgres (docs/35-stage4-plan.md, WP14): миграция с
@@ -21,7 +22,7 @@ describe.skipIf(DATABASE_URL === "")("дружба на живом Postgres", ()
   const marker = `fr${Date.now().toString(36)}`;
 
   async function account(): Promise<string> {
-    const platformUserId = String(930_000_000 + Math.floor(Math.random() * 60_000_000));
+    const platformUserId = uniquePlatformUserId();
     const created = await accounts.upsert({ platform: "telegram", platformUserId, displayName: `Друг ${marker}`, username: null, photoUrl: null }, Date.now());
     return created.accountId;
   }

@@ -11,6 +11,7 @@ import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillmen
 import type { PurchaseSupport } from "../src/modules/payments/purchase-support.js";
 import type { PurchaseProduct } from "../src/modules/payments/purchase-types.js";
 import type { AccountRef, RolesService } from "../src/modules/roles/roles.service.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Лента платежей на настоящем Postgres (tasks/T-0429, docs/17-testing-strategy.md
@@ -73,7 +74,7 @@ describe.skipIf(DATABASE_URL === "")("лента платежей на живо�
   beforeAll(async () => {
     prisma = createPrisma(loadAppConfig({ NODE_ENV: "test", DATABASE_URL } as NodeJS.ProcessEnv));
     const accounts = new PrismaAccountRepository(prisma);
-    const arrival = (platform: "telegram" | "vk", name: string) => ({ platform, platformUserId: String(800_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: name, username: null, photoUrl: null });
+    const arrival = (platform: "telegram" | "vk", name: string) => ({ platform, platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null });
     telegramAccount = (await accounts.upsert(arrival("telegram", "Стрелок"), Date.now())).accountId;
     vkAccount = (await accounts.upsert(arrival("vk", "Лучник"), Date.now())).accountId;
     await wipeWindow();

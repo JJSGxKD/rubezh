@@ -21,6 +21,7 @@ import type { ReviewRow } from "../src/modules/runs/runs.repository.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Вехи воронки на живом Postgres (docs/17-testing-strategy.md
@@ -43,7 +44,7 @@ describe.skipIf(DATABASE_URL === "")("вехи воронки на живом Po
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(710_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Путник", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Путник", username: null },
       Date.now(),
     );
     return created.accountId;
@@ -386,7 +387,7 @@ describe.skipIf(DATABASE_URL === "")("прямые ссылки и воронк�
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(710_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Путник", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Путник", username: null },
       Date.now(),
     );
     return created.accountId;
@@ -532,7 +533,7 @@ describe.skipIf(DATABASE_URL === "")("прямые ссылки и воронк�
     const partner = await setupPartner("Площадки");
     const bare = await account();
     await bind(bare, partner.partnerId, new Date(T0), { linkCode: partner.linkCode });
-    const max = await accounts.upsert({ platform: "max", platformUserId: String(Math.floor(Math.random() * 1e12)), displayName: "Из MAX", username: null, photoUrl: null }, Date.now());
+    const max = await accounts.upsert({ platform: "max", platformUserId: uniquePlatformUserId(), displayName: "Из MAX", username: null, photoUrl: null }, Date.now());
     await milestones(max.accountId, { enteredAt: true });
     await bind(max.accountId, partner.partnerId, new Date(T0), { linkCode: partner.linkCode });
 

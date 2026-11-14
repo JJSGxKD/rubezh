@@ -33,6 +33,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Кодекс тайников на живых Postgres и Redis (tasks/T-0261,
@@ -68,7 +69,7 @@ describe.skipIf(!live)("кодекс тайников на живых Postgres �
 
   async function player(): Promise<AccountRef> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(980_000_000 + Math.floor(Math.random() * 15_000_000)), displayName: "Следопыт", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Следопыт", username: null },
       Date.now(),
     );
     return { accountId: created.accountId, platform: "telegram", platformUserId: "1" };

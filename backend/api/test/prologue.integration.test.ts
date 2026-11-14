@@ -40,6 +40,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, ratingRestrictions } from "./helpers/memory-runs.js";
 import { panelSettings } from "./helpers/settings.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Пролог на живом Postgres (tasks/T-0279, Р151; docs/17-testing-strategy.md
@@ -89,7 +90,7 @@ describe.skipIf(DATABASE_URL === "")("пролог на живом Postgres", ()
 
   async function person(): Promise<AccountRef> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(790_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Новичок", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Новичок", username: null },
       Date.now(),
     );
     return { accountId: created.accountId, platform: "telegram", platformUserId: created.platformUserId };

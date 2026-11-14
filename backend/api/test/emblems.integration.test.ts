@@ -38,6 +38,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Знаки у имени на живых Postgres и Redis (tasks/T-0235, docs/35-stage4-plan.md
@@ -123,7 +124,7 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(940_000_000 + Math.floor(Math.random() * 15_000_000)), displayName: "Знаки", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Знаки", username: null },
       Date.now(),
     );
     return created.accountId;
