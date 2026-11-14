@@ -21,6 +21,7 @@ import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import type { LinkInput, LinkRecord, LinksRepository, LinkStats } from "../src/modules/links/links.repository.js";
 import { PartnerCabinet, campaignSlug, type PartnerPromos } from "../src/modules/partners/partner-cabinet.js";
+import { buildCabinetFunnel, type CabinetFunnelCounts, type CabinetFunnelRaw, type CabinetFunnelSource } from "../src/modules/partners/partner-cabinet-funnel.js";
 import { PartnerNotFoundError } from "../src/modules/partners/partner-errors.js";
 import { codeKey } from "../src/modules/promo-codes/promo-code-rules.js";
 import type { NewPromoCampaign } from "../src/modules/promo-codes/promo-codes.repository.js";
@@ -43,7 +44,8 @@ import { panelSettings } from "./helpers/settings.js";
 /**
  * Ссылки и промокоды кабинета партнёра (docs/35-stage4-plan.md Р136, tasks/T-0218): партнёр видит и заводит
  * только своё — ссылки в пределах лимита, промокоды копией своей кампании с новым словом, без права
- * `links.manage` и `promo.edit`. Права и чужой кабинет решает `PartnerCabinet.partnerOf` (T-0217).
+ * `links.manage` и `promo.edit`. Права и чужой кабинет решает `PartnerCabinet.partnerOf` (T-0217). Воронка кабинета
+ * (T-0219, Р136): числа только по своим игрокам, без ID и разрезов меньше порога группы.
  */
 
 const NOW = new Date(Date.UTC(2026, 9, 24, 9));
@@ -109,6 +111,16 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
   throw new Error("ожидался отказ");
 }
 
+/** Воронка кабинета в памяти: то, что в базе дал бы отчёт по привязкам; запоминает, чей партнёр спрошен. */
+class MemoryCabinetFunnel implements CabinetFunnelSource {
+  readonly raws = new Map<string, CabinetFunnelRaw>();
+  readonly asked: { partnerId: string; from: Date; to: Date }[] = [];
+  async report(partnerId: string, from: Date, to: Date): Promise<CabinetFunnelRaw> {
+    this.asked.push({ partnerId, from, to });
+    return this.raws.get(partnerId) ?? { clicks: 0, sources: [], days: [] };
+  }
+}
+
 function setup() {
   const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID, PUBLIC_WEB_URL: "https://rubezh.example" } as NodeJS.ProcessEnv);
   const accounts = new MemoryAccountRepository();
@@ -120,8 +132,9 @@ function setup() {
   const settings = panelSettings();
   const rolesService = new RolesService(config, roles, accounts);
   const partnerPromos: PartnerPromos = { ofPartner: async (partnerId) => (await promo.list(500)).filter((row) => row.partnerId === partnerId) };
-  const cabinet = new PartnerCabinet(rolesService, linked, partners, config, links, promo, partnerPromos, settings);
-  return { accounts, roles, promo, partners, linked, links, settings, cabinet };
+  const funnel = new MemoryCabinetFunnel();
+  const cabinet = new PartnerCabinet(rolesService, linked, partners, config, links, promo, partnerPromos, settings, funnel);
+  return { accounts, roles, promo, partners, linked, links, settings, funnel, cabinet };
 }
 type Ctx = ReturnType<typeof setup>;
 
@@ -448,6 +461,140 @@ describe("промокоды кабинета партнёра (T-0218, Р136)",
   });
 });
 
+/** Вехи группы: `accounts` игроков, остальное — как задано; не названное — нуль. */
+function counts(accounts: number, patch: Partial<CabinetFunnelCounts> = {}): CabinetFunnelCounts {
+  return { accounts, entered: accounts, appOpened: accounts, firstRunStarted: 0, firstRunFinished: 0, runs2: 0, runs5: 0, returnedD1: 0, returnedD7: 0, firstPurchase: 0, ...patch };
+}
+
+const FROM = new Date(Date.UTC(2026, 9, 1));
+const TO = new Date(Date.UTC(2026, 9, 31));
+
+function linkRow(ref: string, name: string, platform: string, group: CabinetFunnelCounts) {
+  return { via: "link" as const, ref, name, source: "channel", note: null, platform, counts: group };
+}
+
+describe("воронка кабинета: порог группы (T-0219, Р136)", () => {
+  it("разрезы с 9 и 10 игроками при N = 10: первый — строкой без чисел, второй — с числами", () => {
+    const raw: CabinetFunnelRaw = {
+      clicks: 1240,
+      sources: [linkRow("aaaa", "pyatyorka", "telegram", counts(9, { firstRunStarted: 7, returnedD7: 3, firstPurchase: 2 })), linkRow("bbbb", "desyatka", "telegram", counts(10, { firstRunStarted: 8, returnedD7: 4, firstPurchase: 1 }))],
+      days: [],
+    };
+
+    const funnel = buildCabinetFunnel(raw, { from: FROM, to: TO }, 10);
+
+    expect(funnel.minGroup).toBe(10);
+    expect(funnel.tooFew).toBe(false);
+    expect(funnel.total).toMatchObject({ accounts: 19, firstRunStarted: 15, returnedD7: 7, firstPurchase: 3 });
+    expect(funnel.sources).toEqual([
+      { via: "link", ref: "bbbb", name: "desyatka", source: "channel", note: null, counts: counts(10, { firstRunStarted: 8, returnedD7: 4, firstPurchase: 1 }) },
+      { via: "link", ref: "aaaa", name: "pyatyorka", source: "channel", note: null, counts: null },
+    ]);
+  });
+
+  it("итог меньше N: только строка о пороге — ни итога, ни разрезов, ни дней; переходы остаются (это счётчик ссылок)", () => {
+    const raw: CabinetFunnelRaw = {
+      clicks: 40,
+      sources: [linkRow("aaaa", "mala", "telegram", counts(6, { firstPurchase: 1 })), { via: "code", ref: "c1", name: "KOD", source: null, note: null, platform: "vk", counts: counts(3) }],
+      days: [{ day: "2026-10-05", counts: counts(9, { firstPurchase: 1 }) }],
+    };
+
+    const funnel = buildCabinetFunnel(raw, { from: FROM, to: TO }, 10);
+
+    expect(funnel).toMatchObject({ tooFew: true, total: null, sources: [], platforms: [], days: [], hiddenDays: 0, clicks: 40 });
+    expect(JSON.stringify(funnel)).not.toMatch(/mala|KOD|"accounts"|firstPurchase/);
+  });
+
+  it("итог ровно N: показывается; порог из настроек: при N = 5 группа из 9 — с числами", () => {
+    const raw: CabinetFunnelRaw = { clicks: 0, sources: [linkRow("aaaa", "x", "telegram", counts(10))], days: [] };
+    expect(buildCabinetFunnel(raw, { from: FROM, to: TO }, 10).total).toMatchObject({ accounts: 10 });
+    expect(buildCabinetFunnel({ ...raw, sources: [linkRow("aaaa", "x", "telegram", counts(9))] }, { from: FROM, to: TO }, 10).tooFew).toBe(true);
+    expect(buildCabinetFunnel({ ...raw, sources: [linkRow("aaaa", "x", "telegram", counts(9))] }, { from: FROM, to: TO }, 5).sources[0]?.counts).toMatchObject({ accounts: 9 });
+  });
+
+  it("площадки и дни — тот же порог: площадка и день с 9 игроками скрыты, с 10 видны; скрытые дни — числом дней, без чисел игроков", () => {
+    const raw: CabinetFunnelRaw = {
+      clicks: 0,
+      // Одна ссылка с двух площадок: 6 + 5 = 11 — ссылка видна, а площадка VK сама по себе — нет.
+      sources: [linkRow("aaaa", "obshchaya", "telegram", counts(6)), linkRow("aaaa", "obshchaya", "vk", counts(5)), linkRow("bbbb", "bolshaya", "telegram", counts(10))],
+      days: [
+        { day: "2026-10-03", counts: counts(9, { firstPurchase: 4 }) },
+        { day: "2026-10-02", counts: counts(10, { firstPurchase: 1 }) },
+        { day: "2026-10-01", counts: counts(2) },
+      ],
+    };
+
+    const funnel = buildCabinetFunnel(raw, { from: FROM, to: TO }, 10);
+
+    expect(funnel.sources.map((row) => [row.ref, row.counts?.accounts ?? null])).toEqual([
+      ["aaaa", 11],
+      ["bbbb", 10],
+    ]);
+    expect(funnel.platforms.map((row) => [row.platform, row.counts?.accounts ?? null])).toEqual([
+      ["telegram", 16],
+      ["vk", null],
+    ]);
+    expect(funnel.days).toEqual([{ day: "2026-10-02", counts: counts(10, { firstPurchase: 1 }) }]);
+    expect(funnel.hiddenDays).toBe(2);
+    expect(JSON.stringify(funnel)).not.toContain('"firstPurchase":4');
+  });
+
+  it("в ответе нет ни идентификаторов, ни имён игроков, ни сумм", () => {
+    const raw: CabinetFunnelRaw = { clicks: 5, sources: [linkRow("aaaa", "kanal", "telegram", counts(12, { firstPurchase: 2 }))], days: [{ day: "2026-10-02", counts: counts(12, { firstPurchase: 2 }) }] };
+    const text = JSON.stringify(buildCabinetFunnel(raw, { from: FROM, to: TO }, 10));
+    expect(text).not.toMatch(/accountId|account_id|displayName|username|amount|stars|revenue|price/i);
+  });
+});
+
+describe("воронка кабинета партнёра (T-0219, Р136)", () => {
+  const NOW_RANGE = { from: new Date(NOW.getTime() - 30 * DAY), to: NOW };
+
+  it("партнёр видит воронку только своего кабинета: отчёт спрашивается по его partnerId, порог берётся из настроек", async () => {
+    const ctx = setup();
+    const mine = await partnerWithCabinet(ctx, "900501");
+    const other = await partnerWithCabinet(ctx, "900502");
+    ctx.funnel.raws.set(mine.partnerId, { clicks: 1240, sources: [linkRow("mine", "moy-kanal", "telegram", counts(12, { firstRunStarted: 9 }))], days: [{ day: "2026-10-02", counts: counts(12) }] });
+    ctx.funnel.raws.set(other.partnerId, { clicks: 777, sources: [linkRow("alien", "chuzhoy", "telegram", counts(50))], days: [] });
+
+    const funnel = await ctx.cabinet.funnel(mine.actor, {}, NOW_RANGE, NOW);
+
+    expect(ctx.funnel.asked).toEqual([{ partnerId: mine.partnerId, ...NOW_RANGE }]);
+    expect(funnel).toMatchObject({ clicks: 1240, minGroup: 10, tooFew: false, total: { accounts: 12 } });
+    expect(JSON.stringify(funnel)).not.toMatch(/chuzhoy|alien|777/);
+
+    ctx.settings.set(SETTINGS.partnersCabinetMinGroup.key, 13);
+    expect((await ctx.cabinet.funnel(mine.actor, {}, NOW_RANGE, NOW)).tooFew).toBe(true);
+  });
+
+  it("глазами партнёра: владелец видит ту же воронку; партнёр чужой кабинет и аккаунт без карточки — отказ, отчёт не спрашивается", async () => {
+    const ctx = setup();
+    const { partnerId, actor } = await partnerWithCabinet(ctx, "900503");
+    const stranger = await partnerWithCabinet(ctx, "900504");
+    const admin = await person(ctx, "801", "admin");
+    const plain = await person(ctx, "802", "partner");
+    ctx.funnel.raws.set(partnerId, { clicks: 5, sources: [linkRow("mine", "kanal", "telegram", counts(15))], days: [] });
+
+    const own = await ctx.cabinet.funnel(actor, {}, NOW_RANGE, NOW);
+    const seen = await ctx.cabinet.funnel(admin, { partnerId }, NOW_RANGE, NOW);
+
+    expect(seen).toEqual(own);
+    expect(await codeOf(ctx.cabinet.funnel(stranger.actor, { partnerId }, NOW_RANGE, NOW))).toBe("forbidden");
+    expect(await codeOf(ctx.cabinet.funnel(plain, {}, NOW_RANGE, NOW))).toBe("forbidden");
+    expect(await codeOf(ctx.cabinet.funnel(admin, { partnerId: randomUUID() }, NOW_RANGE, NOW))).toBe("partner_not_found");
+    expect(ctx.funnel.asked.map((call) => call.partnerId)).toEqual([partnerId, partnerId]);
+  });
+
+  it("период: начало не раньше конца и не длиннее года — иначе отказ до обращения к отчёту", async () => {
+    const ctx = setup();
+    const { actor } = await partnerWithCabinet(ctx, "900505");
+
+    expect(await codeOf(ctx.cabinet.funnel(actor, {}, { from: NOW, to: NOW }, NOW))).toBe("validation_failed");
+    expect(await codeOf(ctx.cabinet.funnel(actor, {}, { from: NOW, to: new Date(NOW.getTime() - DAY) }, NOW))).toBe("validation_failed");
+    expect(await codeOf(ctx.cabinet.funnel(actor, {}, { from: new Date(NOW.getTime() - 400 * DAY), to: NOW }, NOW))).toBe("validation_failed");
+    expect(ctx.funnel.asked).toEqual([]);
+  });
+});
+
 describe("кабинет партнёра по HTTP панели (T-0218)", () => {
   let app: NestFastifyApplication | null = null;
   const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
@@ -457,12 +604,13 @@ describe("кабинет партнёра по HTTP панели (T-0218)", () =
     app = null;
   });
 
-  it("партнёр заводит ссылку и копию кода по HTTP; мусорные тела и лишние поля — 400, чужие кампании — 404, глазами партнёра — 403", async () => {
+  /** Кабинет за настоящим HTTP-стеком панели: сессии, охранники и контроллер; аккаунты и базы — в памяти. */
+  async function boot() {
     const config = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ADMIN_TELEGRAM_IDS: OWNER_ID, PUBLIC_WEB_URL: "https://rubezh.example" } as NodeJS.ProcessEnv);
     const ctx = setup();
     const rolesService = new RolesService(config, ctx.roles, ctx.accounts);
     const promos: PartnerPromos = { ofPartner: async (partnerId) => (await ctx.promo.list(500)).filter((row) => row.partnerId === partnerId) };
-    const cabinet = new PartnerCabinet(rolesService, ctx.linked, ctx.partners, config, ctx.links, ctx.promo, promos, ctx.settings);
+    const cabinet = new PartnerCabinet(rolesService, ctx.linked, ctx.partners, config, ctx.links, ctx.promo, promos, ctx.settings, ctx.funnel);
     @Module({
       controllers: [AdminSessionController, AdminCabinetController],
       providers: [
@@ -493,6 +641,11 @@ describe("кабинет партнёра по HTTP панели (T-0218)", () =
       const login = await http.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser } });
       return `${ADMIN_SESSION_COOKIE}=${/rubezh_admin_session=([^;]+)/.exec(String(login.headers["set-cookie"]))?.[1] ?? ""}`;
     };
+    return { ctx, http, cookieOf };
+  }
+
+  it("партнёр заводит ссылку и копию кода по HTTP; мусорные тела и лишние поля — 400, чужие кампании — 404, глазами партнёра — 403", async () => {
+    const { ctx, http, cookieOf } = await boot();
     const base = "/api/v1/admin/cabinet";
 
     // Партнёр — аккаунт разработческого входа, связанный с карточкой.
@@ -545,5 +698,34 @@ describe("кабинет партнёра по HTTP панели (T-0218)", () =
     expect(blocked.body).toContain("Кабинет открыт для просмотра");
     expect((await http.inject({ method: "POST", url: copyUrl(source.campaignId, `?partnerId=${partnerId}`), headers: owner, payload: { code: "OT ADMINA" } })).statusCode).toBe(403);
     expect(ctx.links.links.size).toBe(1);
+  });
+
+  it("воронка по HTTP: период в запросе, лишние поля и мусорные даты — 400, чужой кабинет партнёру — 403, владелец смотрит глазами партнёра", async () => {
+    const { ctx, http, cookieOf } = await boot();
+    const base = "/api/v1/admin/cabinet/funnel";
+    const partnerId = randomUUID();
+    await ctx.partners.create({ partnerId, name: "Канал", contact: "@secret_contact", note: "тайная заметка", createdBy: randomUUID(), createdAt: NOW, updatedAt: NOW });
+    const dev = await ctx.accounts.upsert({ platform: "telegram", platformUserId: "dev-player-p2", displayName: "Партнёр", username: null, photoUrl: null }, Date.now());
+    await ctx.roles.grant(dev.accountId, "partner", null);
+    await ctx.linked.link(partnerId, dev.accountId);
+    ctx.funnel.raws.set(partnerId, { clicks: 31, sources: [linkRow("mine", "kanal", "telegram", counts(14, { firstRunStarted: 11 }))], days: [{ day: "2026-10-02", counts: counts(14) }] });
+    const partner = { cookie: await cookieOf("dev-player-p2:Партнёр") };
+    const owner = { cookie: await cookieOf(`dev-${OWNER_ID}:Владелец`) };
+
+    expect((await http.inject({ method: "GET", url: base })).statusCode).toBe(401);
+    const own = await http.inject({ method: "GET", url: `${base}?from=2026-10-01T00:00:00.000Z&to=2026-10-31T00:00:00.000Z`, headers: partner });
+    expect(own.statusCode).toBe(200);
+    expect(own.json<{ data: unknown }>().data).toMatchObject({ from: "2026-10-01T00:00:00.000Z", to: "2026-10-31T00:00:00.000Z", clicks: 31, minGroup: 10, total: { accounts: 14 } });
+    expect(own.body).not.toMatch(/secret_contact|тайная|accountId/);
+    // Без периода — последние тридцать суток.
+    expect((await http.inject({ method: "GET", url: base, headers: partner })).statusCode).toBe(200);
+
+    for (const bad of ["?from=вчера", "?from=2026-10-31T00:00:00.000Z&to=2026-10-01T00:00:00.000Z", "?from=2024-01-01T00:00:00.000Z&to=2026-10-01T00:00:00.000Z", "?extra=1", `?partnerId=${partnerId}&sum=1`]) {
+      expect((await http.inject({ method: "GET", url: `${base}${bad}`, headers: partner })).statusCode, bad).toBe(400);
+    }
+    expect((await http.inject({ method: "GET", url: `${base}?partnerId=${randomUUID()}`, headers: partner })).statusCode).toBe(403);
+    const watched = await http.inject({ method: "GET", url: `${base}?partnerId=${partnerId}`, headers: owner });
+    expect(watched.statusCode).toBe(200);
+    expect(watched.json<{ data: { total: unknown } }>().data.total).toMatchObject({ accounts: 14 });
   });
 });
