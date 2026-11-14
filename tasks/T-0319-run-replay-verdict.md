@@ -34,6 +34,7 @@ shared:
   - backend/api/src/modules/runs/run-replay-facts.ts
   - backend/api/src/modules/admin-notify/run-review-card.ts
   - backend/api/test/run-replay.test.ts
+  - backend/api/test/ledger-operations.test.ts
   - packages/app-shell/src/state/analytics.ts
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
