@@ -43,7 +43,7 @@ function pickRandomEnemy(world: World): number {
   let seen = 0;
 
   for (let i = 0; i < enemies.count; i++) {
-    if (enemies.alive[i] === 0) continue;
+    if (enemies.alive[i] === 0 || world.hidden.mask[i] === 1) continue;
     seen++;
     if (world.rng.nextFloat() * seen < 1) chosen = i;
   }

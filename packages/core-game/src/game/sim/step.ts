@@ -70,17 +70,16 @@ export function stepWorld(world: World, input: SimInput): void {
   // Директор Карачуна — после кольца (строй, вставший в этом тике, срезает погоню сразу) и до сетки:
   // вышедший Карачун попадает в сетку того же тика.
   stepStalker(world);
-  world.enemyGrid.rebuild(
-    world.player.x,
-    world.player.y,
-    world.enemies.x,
-    world.enemies.y,
-    world.enemies.alive,
-    world.enemies.count,
-  );
+  rebuildEnemyGrid(world);
   // Лужи — до хода врагов: поставленная в этом шаге лужа начнёт бить и стареть со следующего.
   stepHazards(world);
   updateEnemies(world, dt);
+  // Кто-то исчез или появился в этом ходу: оружие этого же тика уже не должно ни целиться в скрытого,
+  // ни пропускать появившегося (`sim/hidden.ts`).
+  if (world.hidden.dirty) {
+    rebuildEnemyGrid(world);
+    world.hidden.dirty = false;
+  }
   updateWeapons(world, dt);
   updateProjectiles(world, dt);
 
@@ -106,6 +105,19 @@ export function stepWorld(world: World, input: SimInput): void {
   if (crowd > world.stats.peakEnemies) {
     world.stats.peakEnemies = crowd;
   }
+}
+
+/** Сетка врагов вокруг игрока; скрытые (Кикимора в `hidden`) в неё не попадают. */
+function rebuildEnemyGrid(world: World): void {
+  world.enemyGrid.rebuild(
+    world.player.x,
+    world.player.y,
+    world.enemies.x,
+    world.enemies.y,
+    world.enemies.alive,
+    world.enemies.count,
+    world.hidden.mask,
+  );
 }
 
 /**
@@ -275,6 +287,8 @@ function updateEnemies(world: World, dt: number): void {
     // Бьёт ли касанием — возможность паттерна, а не проверка его имени: у
     // стрелка таймер занят перезарядкой выстрела, подрывник бьёт взрывом.
     if (!type.contactDamage) continue;
+    // Бьёт ли враг в этой фазе: Кикимора — только пока идёт на игрока, не тая и не появляясь.
+    if (type.contactPhase >= 0 && enemies.phase[i] !== type.contactPhase) continue;
     // Пока горит вспышка строя, страж не кусает.
     if (type.anchored && enemies.phase[i] === CORDON_PHASE.forming) continue;
 

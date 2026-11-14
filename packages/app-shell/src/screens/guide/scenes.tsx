@@ -69,6 +69,8 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
       return <rect x={-r * 0.85} y={-r * 0.85} width={r * 1.7} height={r * 1.7} fill={fill} />;
     case "triangle":
       return <polygon points={`0,${-r} ${r},${r} ${-r},${r}`} fill={fill} />;
+    case "lozenge":
+      return <polygon points={`0,${-r} ${r * 0.5},0 0,${r} ${-r * 0.5},0`} fill={fill} />;
     case "diamond":
       return <polygon points={`0,${-r} ${r * 0.75},0 0,${r} ${-r * 0.75},0`} fill={fill} />;
     case "hexagon":

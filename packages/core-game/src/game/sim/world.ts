@@ -7,6 +7,7 @@ import type { RunBoosts } from "../progression/boosts";
 import type { WeaponType } from "../weapons/weapon-types";
 import type { CordonState } from "./cordon";
 import type { HazardState } from "./hazards";
+import type { HiddenState } from "./hidden";
 import { onPrologueSpawn, wardHealth, type PrologueState } from "../run/prologue";
 import type { RubezhState } from "./rubezh";
 import type { SiegeState } from "./siege";
@@ -495,6 +496,8 @@ export interface World {
   cordon: CordonState;
   /** лужи врагов со следом (`sim/hazards.ts`, Р157); состояние входит в снимок */
   hazards: HazardState;
+  /** скрытые враги: исчезнувшая Кикимора живая, но не на поле (`sim/hidden.ts`); маска в снимок не входит */
+  hidden: HiddenState;
   /** рубеж: страж на отметке и победа в итоге; состояние входит в снимок (T-0120) */
   rubezh: RubezhState;
   /**
@@ -675,6 +678,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.ringRadius[slot] = 0;
   // Отсчёт следа прежнего врага слота не достаётся новому: первая лужа — через everySec.
   world.hazards.trail.ticks[slot] = 0;
+  world.hidden.mask[slot] = 0;
   clearStatuses(world, slot, NO_OWNER_TYPE);
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;
@@ -691,6 +695,7 @@ export function despawnEnemy(world: World, index: number): void {
   if (world.enemies.alive[index] === 0) return;
   world.enemies.alive[index] = 0;
   world.enemies.aliveCount--;
+  world.hidden.mask[index] = 0;
 }
 
 /** Снять снаряд с поля: попал, истёк или улетел за пределы удержания. */

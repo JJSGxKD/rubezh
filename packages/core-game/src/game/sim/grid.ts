@@ -71,6 +71,9 @@ export class SpatialGrid {
    * Перестроить сетку по текущим позициям вокруг центра. Сортировка
    * подсчётом: два прохода по массиву, без аллокаций и без сравнения
    * элементов.
+   *
+   * `hidden` — маска скрытых: слот с единицей жив, но в сетку не попадает и запросам не
+   * отвечает (`sim/hidden.ts`). Без маски в сетке все живые.
    */
   rebuild(
     centerX: number,
@@ -79,13 +82,14 @@ export class SpatialGrid {
     ys: Float64Array,
     alive: Uint8Array,
     count: number,
+    hidden: Uint8Array | null = null,
   ): void {
     this.originX = centerX - (this.cols * this.cellSize) / 2;
     this.originY = centerY - (this.rows * this.cellSize) / 2;
     this.counts.fill(0);
 
     for (let i = 0; i < count; i++) {
-      if (alive[i] === 0) continue;
+      if (alive[i] === 0 || (hidden !== null && hidden[i] === 1)) continue;
       this.counts[this.cellIndex(xs[i], ys[i])]++;
     }
 
@@ -98,7 +102,7 @@ export class SpatialGrid {
     this.starts[this.counts.length] = running;
 
     for (let i = 0; i < count; i++) {
-      if (alive[i] === 0) continue;
+      if (alive[i] === 0 || (hidden !== null && hidden[i] === 1)) continue;
       const cell = this.cellIndex(xs[i], ys[i]);
       this.items[this.cursor[cell]++] = i;
     }

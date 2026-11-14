@@ -59,6 +59,9 @@ function drawRim(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec, rim: { 
     case "triangle":
       graphics.strokeTriangle(r, half * 2, r * 2 - half, r * 2 - half, half, r * 2 - half);
       return;
+    case "lozenge":
+      graphics.strokePoints(points(r - half, LOZENGE).map((point) => ({ x: point.x + half, y: point.y + half })), true, true);
+      return;
     case "chevron":
       graphics.strokePoints(points(r - half, CHEVRON).map((point) => ({ x: point.x + half, y: point.y + half })), true, true);
       return;
@@ -100,6 +103,10 @@ function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void 
       return;
     case "diamond":
       graphics.fillPoints(points(r, DIAMOND), true);
+      return;
+    case "lozenge":
+      // Высокий узкий ромб: острые верх и низ, а не рывковый клин и не ромб кристалла.
+      graphics.fillPoints(points(r, LOZENGE), true);
       return;
     case "chevron":
       // Остриё вперёд: рывковый враг читается как летящий на игрока клин, а
@@ -297,6 +304,14 @@ const DIAMOND: readonly (readonly [number, number])[] = [
   [0.75, 0],
   [0, 1],
   [-0.75, 0],
+];
+
+/** Вытянутый ромб Кикиморы: вдвое уже кристального, во всю высоту. */
+const LOZENGE: readonly (readonly [number, number])[] = [
+  [0, -1],
+  [0.5, 0],
+  [0, 1],
+  [-0.5, 0],
 ];
 
 /** Четырёхлучевая искра: длинные лучи по осям, глубокие впадины по диагоналям. */

@@ -208,7 +208,9 @@ describe("точка появления", () => {
     // Полоса высотой 60 в обе стороны: у границы остаётся 60 − радиус врага.
     let pressed = 0;
     for (let seed = 1; seed <= 60; seed++) {
-      const world = setup(seed, { bounds: { halfWidth: Infinity, halfHeight: 60 } });
+      const world = setup(seed);
+      // Границы — производная карты; тесту нужна узкая полоса, и он ставит её прямо в мир.
+      world.config.bounds = { halfWidth: Infinity, halfHeight: 60 };
       const slot = spawn(world);
       ticksUntil(world, slot, BLINK_PHASE.hidden);
       const limit = 60 - world.enemyTypes[0].radius;

@@ -46,6 +46,7 @@ const patternParams = {
   exploder: z.strictObject({ triggerDistance: num.optional(), fuseSec: num.optional(), blastRadius: num.optional() }),
   splitter: z.strictObject({ children: z.array(z.strictObject({ enemy: text, count: num.optional() })) }),
   rush: z.strictObject({ leadSec: num.optional(), runSec: num.optional() }),
+  blink: z.strictObject({ blinkEverySec: num.optional(), telegraphSec: num.optional(), blinkDistance: num.optional() }),
   cordon: z.strictObject({}),
   stalker: z.strictObject({}),
 } satisfies Record<EnemyPattern, z.ZodType>;
@@ -87,6 +88,7 @@ const enemySchema = z.discriminatedUnion("pattern", [
   enemyOf("exploder", patternParams.exploder, false),
   enemyOf("splitter", patternParams.splitter, true),
   enemyOf("rush", patternParams.rush, false),
+  enemyOf("blink", patternParams.blink, false),
   enemyOf("cordon", patternParams.cordon, false),
   enemyOf("stalker", patternParams.stalker, false),
 ]);

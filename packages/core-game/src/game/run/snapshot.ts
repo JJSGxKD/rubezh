@@ -6,6 +6,7 @@ import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { CORDON_SOURCES, createCordonState, type CordonSource, type CordonState } from "../sim/cordon";
 import { RUBEZH_PHASES, type RubezhPhase } from "../sim/rubezh";
 import { createHazardState } from "../sim/hazards";
+import { rebuildHiddenMask } from "../sim/hidden";
 import { restoreBlessings } from "../sim/secrets";
 import { createSiegeState, type SiegeState } from "../sim/siege";
 import { SIEGE_LEVEL_CEILING } from "../sim/siege-rules";
@@ -239,6 +240,8 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
 
   decodeRecord(world.stats, snapshot.stats, "stats");
   decodeRecord(world.enemies, snapshot.enemies, "enemies");
+  // Маска скрытых в снимок не входит: она выводится из фаз врагов (`sim/hidden.ts`).
+  rebuildHiddenMask(world);
   decodeRecord(world.projectiles, snapshot.projectiles, "projectiles");
   decodeRecord(world.gems, snapshot.gems, "gems");
   decodeRecord(world.pickups, snapshot.pickups, "pickups");
