@@ -37,7 +37,7 @@ describe("политика источников панели", () => {
 
   it("пускает аватары игроков из Telegram и ничего стороннего сверх них", () => {
     // t.me перенаправляет фото на CDN Telegram — без него аватар не грузится.
-    expect(directive(build, "img-src")).toEqual(["'self'", "data:", "https://t.me", "https://*.telesco.pe", "https://*.cdn-telegram.org"]);
+    expect(directive(build, "img-src")).toEqual(["'self'", "data:", "blob:", "https://t.me", "https://*.telesco.pe", "https://*.cdn-telegram.org"]);
     expect(directive(build, "object-src")).toEqual(["'none'"]);
   });
 });
