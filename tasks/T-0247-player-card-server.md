@@ -26,6 +26,7 @@ shared:
   - backend/api/src/modules/achievements/emblems.service.ts
   - packages/shared-types/src/index.ts
   - docs/21-diagrams.md
+  - backend/api/src/modules/auth/auth.controller.ts
   - backend/api/src/modules/seasons/dto/seasons.dto.ts
   - backend/api/src/modules/seasons/seasons-view.service.ts
   - backend/api/src/modules/seasons/seasons.module.ts

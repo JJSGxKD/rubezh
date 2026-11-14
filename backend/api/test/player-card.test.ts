@@ -9,6 +9,8 @@ import { PlayersController } from "../src/modules/players/players.controller.js"
 import { PlayersService, type PlayerSources } from "../src/modules/players/players.service.js";
 import { PlayerNotFoundError } from "../src/modules/players/players-errors.js";
 import { CARD_LIMIT, EMBLEM_TOP_LIMIT, isHiddenFrom, relationOf, topEmblems, type CardEmblem } from "../src/modules/players/player-card-rules.js";
+import { loadAppConfig } from "../src/config/app-config.js";
+import { AuthController } from "../src/modules/auth/auth.controller.js";
 import type { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 
 /**
@@ -389,5 +391,24 @@ describe("ручка карточки", () => {
   it("в пределах лимита — ответ в обёртке data", async () => {
     const { controller: ctl } = controller(() => true);
     expect(await ctl.card(request, PUBLIC)).toEqual({ data: { publicId: PUBLIC } });
+  });
+});
+
+describe("свой публичный id в ответе входа", () => {
+  const config = loadAppConfig({ NODE_ENV: "test", JWT_ACCESS_SECRET: "ab".repeat(32), TELEGRAM_BOT_TOKEN: "1:token", DATABASE_URL: "postgresql://localhost:5432/test" } as NodeJS.ProcessEnv);
+  const account = { accountId: VIEWER, displayName: "Путник", photoUrl: null, createdAt: new Date("2026-09-01T10:00:00Z"), created: false };
+
+  async function sessionOf(patch: Record<string, unknown>) {
+    const service = { refreshSession: async () => ({ accessToken: "a".repeat(20), expiresInSec: 900, refreshToken: "r".repeat(32), account: { ...account, ...patch } }) };
+    const controller = new AuthController(service as never, { consume: async () => true } as never, config);
+    return (await controller.refresh({ ip: "203.0.113.9", headers: {} }, { refreshToken: "r".repeat(32) })).data.account;
+  }
+
+  it("у аккаунта с id он в ответе, рядом с внутренним", async () => {
+    expect(await sessionOf({ publicId: VIEWER_PUBLIC })).toMatchObject({ accountId: VIEWER, publicId: VIEWER_PUBLIC });
+  });
+
+  it("у подмены без id поля нет — вид прежний", async () => {
+    expect(await sessionOf({})).not.toHaveProperty("publicId");
   });
 });
