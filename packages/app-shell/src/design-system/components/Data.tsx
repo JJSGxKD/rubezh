@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { appearanceHeadUrl } from "../../screens/meta/appearance-art";
+import { appearanceHeadUrl } from "../../screens/meta/appearance-head-art";
 import { showHead } from "../../screens/meta/appearance-rules";
 import { useViewerArt } from "../../state/viewer-art";
 

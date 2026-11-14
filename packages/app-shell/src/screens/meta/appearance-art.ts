@@ -1,9 +1,13 @@
 import { APPEARANCE_ORDER, DEFAULT_APPEARANCE, type KnownAppearance } from "./appearance-rules";
+import { appearanceHeadUrl } from "./appearance-head-art";
+
+// Головы лежат в своём модуле (причина — там), а карта рисунков остаётся одним входом.
+export { appearanceHeadUrl };
 
 /**
  * Рисунки обликов (tasks/T-0238, design/art/backlog.md, п. 7): портрет для
  * арсенала, голова для кружка аватара и карточка экрана «Облик», по десять
- * штук. Адреса — одной картой.
+ * штук. Адреса — одной картой; головы вынесены в `appearance-head-art.ts`.
  *
  * `?no-inline`: рисунки по три килобайта Vite иначе вшил бы в код строкой, и
  * тридцать штук уехали бы в первую загрузку вместе с кружком аватара. Файлом
@@ -22,19 +26,6 @@ const PORTRAIT: Readonly<Record<KnownAppearance, string>> = {
   skomoroh: new URL("../../../../../design/art/out/portrait-hero-skomoroh.svg?no-inline", import.meta.url).href,
   knyaz: new URL("../../../../../design/art/out/portrait-hero-knyaz.svg?no-inline", import.meta.url).href,
   navi: new URL("../../../../../design/art/out/portrait-hero-navi.svg?no-inline", import.meta.url).href,
-};
-
-const HEAD: Readonly<Record<KnownAppearance, string>> = {
-  keeper: new URL("../../../../../design/art/out/avatar-hero-keeper.svg?no-inline", import.meta.url).href,
-  frost: new URL("../../../../../design/art/out/avatar-hero-frost.svg?no-inline", import.meta.url).href,
-  herbalist: new URL("../../../../../design/art/out/avatar-hero-herbalist.svg?no-inline", import.meta.url).href,
-  gilded: new URL("../../../../../design/art/out/avatar-hero-gilded.svg?no-inline", import.meta.url).href,
-  vityaz: new URL("../../../../../design/art/out/avatar-hero-vityaz.svg?no-inline", import.meta.url).href,
-  vedunya: new URL("../../../../../design/art/out/avatar-hero-vedunya.svg?no-inline", import.meta.url).href,
-  ohotnitsa: new URL("../../../../../design/art/out/avatar-hero-ohotnitsa.svg?no-inline", import.meta.url).href,
-  skomoroh: new URL("../../../../../design/art/out/avatar-hero-skomoroh.svg?no-inline", import.meta.url).href,
-  knyaz: new URL("../../../../../design/art/out/avatar-hero-knyaz.svg?no-inline", import.meta.url).href,
-  navi: new URL("../../../../../design/art/out/avatar-hero-navi.svg?no-inline", import.meta.url).href,
 };
 
 const CARD: Readonly<Record<KnownAppearance, string>> = {
@@ -57,11 +48,6 @@ function known(id: string): KnownAppearance {
 /** Портрет облика для арсенала; незнакомый id — Хранитель. */
 export function appearancePortraitUrl(id: string): string {
   return PORTRAIT[known(id)];
-}
-
-/** Голова облика для кружка аватара; незнакомый id — Хранитель. */
-export function appearanceHeadUrl(id: string): string {
-  return HEAD[known(id)];
 }
 
 /** Карточка облика для сетки экрана «Облик»; незнакомый id — Хранитель. */

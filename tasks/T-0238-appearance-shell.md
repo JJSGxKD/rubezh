@@ -18,6 +18,7 @@ zones:
   - packages/app-shell/test/appearance-avatar.test.ts
   - packages/app-shell/test/hero-portrait.test.ts
   - packages/app-shell/src/screens/meta/appearance-preview.tsx
+  - packages/app-shell/src/screens/meta/appearance-head-art.ts
   - packages/app-shell/src/state/viewer-art.ts
   - packages/app-shell/src/i18n/appearance.ts
   - packages/app-shell/src/i18n/ru-appearance.json
