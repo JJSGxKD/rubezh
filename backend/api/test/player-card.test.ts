@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { Logger } from "@nestjs/common";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PublicIdentity, newPublicId, publicIdSchema, type PublicMark } from "../src/common/public-identity.js";
 import { RateLimitedError, ValidationError } from "../src/common/domain-error.js";
 import type { Account, AccountRepository } from "../src/modules/auth/account.repository.js";
@@ -15,6 +16,10 @@ import type { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
  * редкости, схема публичного id, правило доски и сбор карточки без базы. Запросы и порядок
  * миграции — в `player-card.integration.test.ts`.
  */
+
+beforeEach(() => {
+  for (const level of ["log", "warn", "error"] as const) vi.spyOn(Logger.prototype, level).mockImplementation(() => undefined);
+});
 
 const VIEWER = "11111111-1111-4111-8111-111111111111";
 const TARGET = "22222222-2222-4222-8222-222222222222";

@@ -48,6 +48,7 @@ import { PrismaSeasonsRepository, SEASONS_REPOSITORY } from "./seasons.repositor
   // Расписание нужно ленте событий (рекорд недели по текущему сезону, tasks/T-0174),
   // а расписание и таблицу недели читают напоминания бота (`modules/reminders`, tasks/T-0128).
   // Рейтинг в панели (tasks/T-0380) читает `AdminModule`: контроллер там, сервис здесь.
-  exports: [SeasonsProjection, SeasonSchedule, SEASON_BOARD_STORE, SeasonsAdminService],
+  // Место игрока на доске смотрящего для его карточки (`modules/players`, tasks/T-0247) читает `SeasonsViewService`.
+  exports: [SeasonsProjection, SeasonSchedule, SEASON_BOARD_STORE, SeasonsAdminService, SeasonsViewService],
 })
 export class SeasonsModule {}
