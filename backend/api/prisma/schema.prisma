@@ -196,6 +196,10 @@ model Account {
   prologueDoneAt DateTime? @map("prologue_done_at") @db.Timestamptz(3)
   /// знак у имени, который игрок выбрал носить (T-0235, Р149); пусто — «по умолчанию». Держит ли он знак сейчас, сервер считает при чтении
   shownEmblemId  String?   @map("shown_emblem_id") @db.VarChar(48)
+  /// облик героя, который игрок выбрал (T-0237, Р150); пусто — Хранитель. Держит ли он облик сейчас, сервер считает при чтении
+  appearanceId   String?   @map("appearance_id") @db.VarChar(24)
+  /// в кружке аватара — фото площадки, а не голова облика (T-0237, Р47); по умолчанию голова облика
+  avatarPhoto    Boolean   @default(false) @map("avatar_photo")
 
   roles         AccountRole[]
   // Знак у имени (T-0235): выбранная строка каталога; удалённая из каталога сбрасывает выбор

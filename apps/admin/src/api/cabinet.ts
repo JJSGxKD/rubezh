@@ -1,11 +1,14 @@
 import { z } from "zod";
+import { formatNumber } from "../format";
 import type { AdminApi, ApiResult } from "./client";
+import type { Period } from "./funnel";
 
 /**
  * Кабинет партнёра (`/admin/cabinet`, docs/35-stage4-plan.md Р136, tasks/T-0217, T-0218): партнёр видит свои
  * ссылки и промокоды и сам заводит новые в пределах лимита. Без `partnerId` — его собственный кабинет, с ним —
  * «глазами партнёра» для команды (`partners.view`), только чтение: сервер отвечает отказом на любое создание.
- * Игроков, их имён и ID в ответах нет.
+ * Игроков, их имён и ID в ответах нет. Воронка (T-0219) — те же вехи, что у команды, но группы меньше порога сервер
+ * не присылает вовсе: панель показывает строку о пороге, а чисел у неё нет.
  */
 
 /** Что за ссылка; сервер знает тот же список (`partners/partner-cabinet.ts` → `CABINET_LINK_SOURCES`). */
@@ -172,4 +175,78 @@ export type CabinetState = z.infer<typeof cabinetStateSchema>;
 
 export function setCabinetOpen(api: AdminApi, partnerId: string, open: boolean): Promise<ApiResult<CabinetState>> {
   return api.request(`/partners/${encodeURIComponent(partnerId)}/cabinet`, { method: "POST", body: { open }, schema: cabinetStateSchema });
+}
+
+/** Вехи группы игроков партнёра: те же, что в отчёте «Воронка» команды. */
+const funnelCountsSchema = z.object({
+  accounts: z.number(),
+  entered: z.number(),
+  appOpened: z.number(),
+  firstRunStarted: z.number(),
+  firstRunFinished: z.number(),
+  runs2: z.number(),
+  runs5: z.number(),
+  returnedD1: z.number(),
+  returnedD7: z.number(),
+  firstPurchase: z.number(),
+});
+
+/**
+ * Воронка кабинета. `counts: null` — игроков в срезе меньше порога, чисел сервер не прислал. Вид источника, которого
+ * панель не знает, — ошибка разбора: молча пустая таблица спрятала бы игроков.
+ */
+export const cabinetFunnelSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  minGroup: z.number(),
+  clicks: z.number(),
+  tooFew: z.boolean(),
+  total: funnelCountsSchema.nullable(),
+  sources: z.array(z.object({ via: z.enum(["link", "code"]), ref: z.string().nullable(), name: z.string().nullable(), source: z.string().nullable(), note: z.string().nullable(), counts: funnelCountsSchema.nullable() })),
+  platforms: z.array(z.object({ platform: z.string(), counts: funnelCountsSchema.nullable() })),
+  days: z.array(z.object({ day: z.string(), counts: funnelCountsSchema })),
+  hiddenDays: z.number(),
+});
+export type CabinetFunnel = z.infer<typeof cabinetFunnelSchema>;
+export type CabinetFunnelSlice = CabinetFunnel["sources"][number];
+
+export function fetchCabinetFunnel(api: AdminApi, partnerId: string | null, period: Period): Promise<ApiResult<CabinetFunnel>> {
+  return api.request("/cabinet/funnel", { query: { partnerId: partnerId ?? undefined, from: period.from, to: period.to }, schema: cabinetFunnelSchema });
+}
+
+/** Тексты вкладки «Воронка»: пустое состояние и подсказка рядом, а строки о пороге — функциями от числа из настроек. */
+export const CABINET_FUNNEL_TEXTS = {
+  empty: "Пока никто не пришёл по вашим ссылкам",
+  help: "Что делают игроки, которые пришли по вашим ссылкам и кодам: сколько зашли, сыграли первый забег, вернулись на следующий и на седьмой день, купили. Считается по дню, когда игрок пришёл к вам. Имён и номеров игроков здесь нет — только числа, а там, где игроков мало, чисел нет совсем: так никого нельзя узнать.",
+  sources: "Ссылки и коды, по которым пришли игроки. Строка «меньше N игроков» — игроков по ней пока слишком мало, чтобы показывать числа.",
+  platforms: "Те же игроки по тому, где они играют.",
+  days: "Сколько игроков пришло в каждый день и как далеко они дошли.",
+  daysHidden: (count: number) => `Скрыто дней, где игроков меньше порога: ${String(count)}`,
+} as const;
+
+/** Строка среза, где игроков меньше порога. */
+export function hiddenRowText(minGroup: number): string {
+  return `меньше ${String(minGroup)} игроков — не показываем`;
+}
+
+/** Итог меньше порога: воронки ещё нет. */
+export function tooFewText(minGroup: number): string {
+  return `Пока меньше ${String(minGroup)} игроков: воронка появится, когда их станет больше`;
+}
+
+/** Строка над воронкой: «Переходов за 30 дней: 1 240»; период со своими датами — «за выбранный период». */
+export function clicksLine(clicks: number, days: number | null): string {
+  return `Переходов за ${days === null ? "выбранный период" : `${String(days)} дней`}: ${formatNumber(clicks)}`;
+}
+
+/**
+ * Название среза словами партнёра: ссылка — «канал · Игровой угол» (вид и заметка, без заметки — название), код — «код ·
+ * СЛОВО». Удалённое называется честно.
+ */
+export function funnelSourceTitle(slice: Pick<CabinetFunnelSlice, "via" | "ref" | "name" | "source" | "note">): string {
+  if (slice.via === "code") return slice.name === null ? "код (его больше нет)" : `код · ${slice.name}`;
+  const label = slice.note ?? slice.name ?? slice.ref ?? "";
+  if (slice.source === null) return `ссылка · ${label}`.replace(/ · $/, "");
+  const kind = (SOURCE_TITLES as Partial<Record<string, string>>)[slice.source];
+  return `${(kind ?? slice.source).toLowerCase()} · ${label}`.replace(/ · $/, "");
 }

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { PartnerStatus } from "../partners/partner-rules.js";
+import type { Role } from "../roles/permissions.js";
 import type { AchievementCategory, EmblemTier, TaskDef } from "../tasks/task-rules.js";
 
 /**
@@ -17,6 +19,7 @@ export const EMBLEM_IDS = {
   tester: "emb_tester",
   supporter: "emb_supporter",
   team: "emb_team",
+  partner: "emb_partner",
   seasonChampion: "emb_season_champion",
   seasonTop10: "emb_season_top10",
   seasonTop100: "emb_season_top100",
@@ -27,7 +30,7 @@ export const EMBLEM_IDS = {
  * первый из статусных, которые он держит, в этом порядке. Сезонные и заслуги сами не
  * показываются — их носят по выбору.
  */
-export const STATUS_ORDER = [EMBLEM_IDS.team, EMBLEM_IDS.vip, EMBLEM_IDS.supporter, EMBLEM_IDS.tester] as const;
+export const STATUS_ORDER = [EMBLEM_IDS.team, EMBLEM_IDS.partner, EMBLEM_IDS.vip, EMBLEM_IDS.supporter, EMBLEM_IDS.tester] as const;
 
 /** Сезонные знаки по порогу лучшего места, от старшего: место не больше `maxPlace` — знак держится. */
 export const SEASON_STEPS = [
@@ -36,11 +39,22 @@ export const SEASON_STEPS = [
   { id: EMBLEM_IDS.seasonTop100, maxPlace: 100 },
 ] as const;
 
+/** Роль партнёра с открытым кабинетом (T-0217): она же условие знака «Партнёр». */
+export const PARTNER_ROLE = "partner" satisfies Role;
+
 /**
  * Роли, которые пускают в панель, но не делают человека членом команды игры. «Команду» ставят
- * тем, кто работает над игрой; внешний партнёр с кабинетом (T-0217) ею не станет.
+ * тем, кто работает над игрой; внешний партнёр с кабинетом (T-0217) ею не станет, ему положен
+ * свой знак «Партнёр».
  */
-export const EXTERNAL_ROLES: readonly string[] = ["partner"];
+export const EXTERNAL_ROLES: readonly string[] = [PARTNER_ROLE];
+
+/**
+ * Статус карточки партнёра, пока которого держится знак «Партнёр»: приостановили, отклонили или
+ * вернули в заявку — знак уходит сам при следующем чтении. Тип сверяет значение со списком
+ * статусов партнёров, а не со строкой в запросе.
+ */
+export const PARTNER_EMBLEM_STATUS = "active" satisfies PartnerStatus;
 
 /** Название закрытого скрытого знака: настоящее игрок узнает, только получив его. */
 export const HIDDEN_EMBLEM_TITLE = "Скрытый знак";
@@ -52,6 +66,8 @@ export interface StatusState {
   supporterAt: Date | null;
   /** есть хоть одна роль команды */
   hasRole: boolean;
+  /** роль `partner` и карточка партнёра в статусе `active` */
+  partnerActive: boolean;
 }
 
 /**
@@ -66,6 +82,7 @@ export function isVipActive(until: Date | null, at: Date): boolean {
 export function heldStatus(state: StatusState): Set<string> {
   const held = new Set<string>();
   if (state.hasRole) held.add(EMBLEM_IDS.team);
+  if (state.partnerActive) held.add(EMBLEM_IDS.partner);
   if (state.vipActive) held.add(EMBLEM_IDS.vip);
   if (state.supporterAt !== null) held.add(EMBLEM_IDS.supporter);
   if (state.testerAt !== null) held.add(EMBLEM_IDS.tester);

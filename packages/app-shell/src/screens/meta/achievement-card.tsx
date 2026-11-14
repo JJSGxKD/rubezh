@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
-import { Check, Library, Lock, Medal, Star, Swords, Trophy, Users } from "lucide-react";
+import { Check, Library, Lock, Medal, Shield, Star, Swords, Trophy, Users } from "lucide-react";
 import { Badge, Button, Card, type BadgeTone } from "../../design-system/components";
 import { formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/tasks";
 import { trackClick } from "../../state/ui-clicks";
 import { uiFeedback } from "../../state/ui-feedback";
 import { isOpenAchievement, type AchievementItem, type OpenAchievement } from "../../state/achievements-api";
-import { percentText, rarityTier, type AchievementCard, type RarityTier } from "./achievements-rules";
+import { isEmblemCategory, percentText, rarityTier, type AchievementCard, type RarityTier } from "./achievements-rules";
 import { goalText, ProgressLine } from "./task-row";
 import { RewardChips } from "./task-reward";
 
@@ -22,6 +22,8 @@ const CATEGORY_ICONS: Record<string, typeof Medal> = {
   collection: Library,
   mastery: Medal,
   friends: Users,
+  status: Shield,
+  season: Trophy,
 };
 
 /** Значок категории; незнакомая (из будущего каталога) — общий кубок. */
@@ -66,6 +68,7 @@ export function AchievementCardView(props: {
   if (!isOpenAchievement(shown)) return <ClosedCard item={shown} index={props.index} />;
 
   const item = shown;
+  if (isEmblemCategory(item.category)) return <EmblemCard item={item} index={props.index} />;
   const claimable = item.done && !item.claimed;
   const tier = rarityTier(item.percent);
   const favorite = props.favorites.includes(item.id);
@@ -145,6 +148,47 @@ export function AchievementCardView(props: {
         </div>
       ) : null}
       {props.notice === null ? null : <p className="mt-2 text-xs font-semibold text-text-muted">{props.notice}</p>}
+    </Card>
+  );
+}
+
+/**
+ * Знак у имени в витрине (T-0236): без полосы прогресса, без награды и «Забрать».
+ * Получен — отметка «Получено», нет — условие.
+ */
+function EmblemCard(props: { item: OpenAchievement; index: number }): ReactNode {
+  const { item } = props;
+  const tier = rarityTier(item.percent);
+  return (
+    <Card appearIndex={props.index}>
+      <div className="flex items-start gap-3">
+        <span
+          className={[
+            "inline-flex size-11 shrink-0 items-center justify-center rounded-md",
+            item.done ? "bg-accent/15 text-accent" : "bg-surface-raised text-text-muted",
+          ].join(" ")}
+        >
+          <CategoryIcon category={item.category} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-display text-sm font-bold text-text">{achievementTitle(item)}</span>
+            {item.done ? (
+              <Badge tone="muted">
+                <Check size={12} aria-hidden="true" />
+                {t("tasks.claimed")}
+              </Badge>
+            ) : null}
+          </div>
+          {item.done || item.hint === undefined || item.hint === null || item.hint === "" ? null : <p className="mt-0.5 text-xs text-text-muted">{item.hint}</p>}
+          {tier === null || item.percent === null || item.percent === undefined ? null : (
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+              <span>{t("achievements.rarity", { percent: percentText(item.percent) })}</span>
+              <Badge tone={RARITY_TONE[tier]}>{t(`achievements.rarity.${tier}`)}</Badge>
+            </p>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }
