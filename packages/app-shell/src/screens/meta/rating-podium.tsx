@@ -39,7 +39,7 @@ export function Podium(props: { entries: readonly LeaderboardEntry[]; scoring: S
           <li key={step.place} data-place={step.place} className="relative flex min-w-0 animate-rise-in flex-col items-center" style={staggerStyle(index)}>
             {runId === null ? null : <RowOpener runId={runId} name={step.entry.name} />}
             {step.place === 1 ? <Crown size={18} aria-hidden="true" className="mb-1 text-elite" /> : null}
-            <Avatar name={step.entry.name} url={step.entry.photoUrl} size={look.avatar} />
+            <Avatar name={step.entry.name} url={step.entry.photoUrl} size={look.avatar} appearance={step.entry.appearance} avatarPhoto={step.entry.avatarPhoto} />
             <span className={`mt-1.5 max-w-full truncate font-display text-sm font-bold ${step.entry.isMe ? "text-accent" : "text-text"}`}>{step.entry.name}</span>
             {/* Три колонки на узком экране тесны для названия: на пьедестале знак — только значок (T-0236). */}
             {step.entry.emblem === undefined ? null : (

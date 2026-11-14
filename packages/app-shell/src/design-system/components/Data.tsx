@@ -1,4 +1,7 @@
 import { useState, type ReactNode } from "react";
+import { appearanceHeadUrl } from "../../screens/meta/appearance-art";
+import { showHead } from "../../screens/meta/appearance-rules";
+import { useViewerArt } from "../../state/viewer-art";
 
 /**
  * Полоса: здоровье, опыт, загрузка.
@@ -114,8 +117,28 @@ export function Badge(props: { children: ReactNode; tone?: BadgeTone }): ReactNo
   );
 }
 
-/** Аватар с запасным вариантом из инициалов: фото площадка отдаёт не всегда. */
-export function Avatar(props: { name: string; url?: string | null; size?: number }): ReactNode {
+export interface AvatarProps {
+  name: string;
+  url?: string | null;
+  size?: number;
+  /** действующий облик игрока из строки списка; нет — сервер до обликов, рисуется фото */
+  appearance?: string | undefined;
+  /** игрок выбрал фото из Telegram вместо головы облика */
+  avatarPhoto?: boolean | undefined;
+}
+
+/**
+ * Аватар: голова облика, если зритель видит арт и игрок не выбрал фото
+ * (tasks/T-0238, Р47), иначе фото с запасным вариантом из инициалов — фото
+ * площадка отдаёт не всегда. Арт зрителя читается здесь, а не у вызывающего:
+ * правило одно на все кружки.
+ */
+export function Avatar(props: AvatarProps): ReactNode {
+  return <AvatarFace {...props} viewerArt={useViewerArt()} />;
+}
+
+/** Кружок по готовому решению «виден ли арт зрителю»: так его проверяют тесты без флагов. */
+export function AvatarFace(props: AvatarProps & { viewerArt: boolean }): ReactNode {
   const size = props.size ?? 36;
   // Фото не загрузилось — инициалы, а не значок битой картинки: адрес
   // приходит с t.me, а он открывается не из любой сети. Запоминается сам
@@ -133,6 +156,18 @@ export function Avatar(props: { name: string; url?: string | null; size?: number
   // дают картинке `max-width: 100%`, и в тесной строке фото сжималось вместе
   // с родителем вплоть до точки, а инициалы — нет.
   const box = { width: size, height: size };
+  if (showHead(props.viewerArt, props.appearance, props.avatarPhoto) && props.appearance !== undefined) {
+    return (
+      <img
+        src={appearanceHeadUrl(props.appearance)}
+        alt=""
+        width={size}
+        height={size}
+        style={box}
+        className="max-w-none shrink-0 rounded-full border-2 border-border-strong object-cover"
+      />
+    );
+  }
   if (url !== null && url !== undefined && url !== "" && url !== failedUrl) {
     return (
       <img

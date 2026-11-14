@@ -19,6 +19,10 @@ const peer = {
   tester: z.optional(z.literal(true)),
   /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен: рисуется метка `tester` */
   emblem: z.optional(publicEmblemSchema),
+  /** действующий облик героя (T-0237); нет поля — сервер до обликов или источник недоступен: кружок рисует фото */
+  appearance: z.optional(z.string()),
+  /** в кружке фото площадки, а не голова облика (T-0237) */
+  avatarPhoto: z.optional(z.literal(true)),
 };
 
 const friendSchema = z.object({ ...peer, since: z.string(), source: z.string() });
