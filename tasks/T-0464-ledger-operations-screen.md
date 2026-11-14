@@ -27,7 +27,7 @@ batch: 5
 
 # T-0464. «Бухгалтерия → Операции» в панели — формы операций и подтверждение владельцем
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0464.json)](README.md#значки-статуса) [![T-0461](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0461.json&label=T-0461)](T-0461-ledger-manual-operations.md) [![T-0462](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0462.json&label=T-0462)](T-0462-ledger-second-key-and-receipts.md) [![T-0459](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0459.json&label=T-0459)](T-0459-ledger-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0464.json)](README.md#значки-статуса) [![T-0461](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0461.json&label=T-0461)](archive/T-0461-ledger-manual-operations.md) [![T-0462](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0462.json&label=T-0462)](archive/T-0462-ledger-second-key-and-receipts.md) [![T-0459](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0459.json&label=T-0459)](archive/T-0459-ledger-screen.md)
 
 ## Зачем
 
