@@ -440,6 +440,20 @@ export function EnemyScene(props: {
           ))}
         </Stage>
       );
+    case "blink":
+      // Статичная сцена: бледный след — где враг таял, кольцо рядом с игроком — где он встанет. Новой анимации нет.
+      return (
+        <Stage label={props.label}>
+          <Player x={px} y={py} />
+          <At x={36} y={py - 8}>
+            <g opacity={0.3}>{enemy}</g>
+          </At>
+          <At x={px - 34} y={py + 16}>
+            <circle r={size * 1.7} fill="none" stroke={hex(WORLD_COLORS.threat)} strokeOpacity={0.8} strokeWidth={1.5} strokeDasharray="3 2" />
+            <circle r={size * 0.9} fill={hex(WORLD_COLORS.threat)} fillOpacity={0.2} />
+          </At>
+        </Stage>
+      );
     case "cordon": {
       // Строй вокруг игрока: восемь мест через 45°, справа место пустое — там
       // пробит проход. Сцена статичная: ни одной новой анимации.

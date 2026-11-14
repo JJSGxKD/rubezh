@@ -120,6 +120,21 @@ describe("гайдбук", () => {
     expect(markup).not.toContain("animate-");
   });
 
+  it("Кикимора: имя, строка про метку на земле, один раз среди обычных, сцена без новой анимации", () => {
+    expect(t("enemy.kikimora.name")).toBe("Кикимора");
+    expect(t("guide.pattern.blink.text")).toContain("Исчезает и появляется рядом — следи за меткой на земле");
+    for (const part of ["name", "text", "tip"]) expect(hasTranslation(`guide.pattern.blink.${part}`), part).toBe(true);
+    expect(regularEnemies().filter((enemy) => enemy.def.id === "kikimora")).toHaveLength(1);
+    expect(eliteEnemies().map((enemy) => enemy.def.id)).not.toContain("kikimora");
+
+    const markup = renderToStaticMarkup(createElement(EnemyScene, { pattern: "blink", elite: false, label: "Кикимора" }));
+    expect(markup).toContain('aria-label="Кикимора"');
+    // Форма и цвет — из облика канвы: вытянутый ромб, а не запасной кружок рядом с игроком.
+    expect(ENEMY_LOOKS.blink.shape).toBe("lozenge");
+    expect(markup).toContain("stroke-dasharray");
+    expect(markup).not.toContain("animate-");
+  });
+
   it("называет новых пеших врагов по именам и показывает каждого один раз, элиту — отдельно", () => {
     const regular = regularEnemies().map((enemy) => enemy.def.id);
     const elite = eliteEnemies().map((enemy) => enemy.def.id);
