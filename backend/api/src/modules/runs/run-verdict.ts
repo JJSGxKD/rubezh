@@ -19,7 +19,8 @@ import { MAX_WEAPONS } from "./run-rules.js";
  *   короче прошедшего); второй шанс, за который не заплачено, — честный
  *   клиент продолжает только после подтверждения оплаты сервером; снимок
  *   снаряжения, которого сервер не подписывал, или с уровнем выше уровня
- *   аккаунта; буст, не купленный на забег;
+ *   аккаунта; буст, не купленный на забег; переброс карточек, за который не
+ *   засчитан показ;
  * - **подозрение (`suspicious`)** — статистика: слишком быстро убивал, слишком
  *   быстро качался, незнакомая сборка, продолжение оплачено по меньшему
  *   числу минут, чем прошло, снимок снаряжения устарел. Здесь бывают и
@@ -73,6 +74,8 @@ export type VerdictReason =
   | "unknown_content"
   /** продолжений больше, чем оплачено */
   | "unpaid_continue"
+  /** рекламный переброс карточек заявлен без записи показа (T-0199) */
+  | "unpaid_ad_reroll"
   /** за продолжение заплачено по меньшему числу минут, чем прошло к нему (Р5.2) */
   | "underpaid_continue"
   /** время забега не проверено: старт не дошёл или пришёл слишком поздно — вердикт не меняет */
@@ -116,6 +119,10 @@ export interface VerdictInput {
   /** сколько из них оплачено */
   paidContinues: number;
   underpaidContinues: boolean;
+  /** сколько раз заявлен переброс карточек за рекламу; нет поля — не заявлен (итог прошлой сборки) */
+  adRerolls?: number;
+  /** сколько из них записано в книгу показов */
+  paidAdRerolls?: number;
   /**
    * Забег с читами: бесплатное продолжение в забеге разработчика — тоже чит,
    * и отказом оно не считается. В рейтинг такой забег не идёт и так.
@@ -138,7 +145,15 @@ export interface Verdict {
   reasons: VerdictReason[];
 }
 
-const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock", "unpaid_continue", "loadout_forged", "loadout_level_ahead", "boost_unpaid"]);
+const REJECTING: ReadonlySet<VerdictReason> = new Set([
+  "weapons_over_slots",
+  "longer_than_wall_clock",
+  "unpaid_continue",
+  "unpaid_ad_reroll",
+  "loadout_forged",
+  "loadout_level_ahead",
+  "boost_unpaid",
+]);
 const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue", "loadout_stale", "rubezh_implausible", "axis_out_of_range"]);
 
 export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdict {
@@ -169,6 +184,7 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
   }
 
   if (!input.cheats && input.continues > input.paidContinues) reasons.push("unpaid_continue");
+  if (!input.cheats && (input.adRerolls ?? 0) > (input.paidAdRerolls ?? 0)) reasons.push("unpaid_ad_reroll");
   if (input.underpaidContinues) reasons.push("underpaid_continue");
 
   if (input.loadout === "forged") reasons.push("loadout_forged");

@@ -125,6 +125,8 @@ erDiagram
     ACCOUNT ||--o{ AD_SESSION : "показы рекламы"
     RUN ||--o{ RUN_AD_CONTINUE : "продолжен за рекламу"
     ACCOUNT ||--o{ RUN_AD_CONTINUE : "рекламные продолжения за сутки"
+    RUN ||--o| RUN_AD_REROLL : "переброс карточек за рекламу: один на забег (T-0199)"
+    ACCOUNT ||--o{ RUN_AD_REROLL : "рекламные перебросы карточек"
     RUN ||--o{ RUN_GEM_CONTINUE : "продолжен за самоцветы"
     RUN ||--o| RUN_PROOF : "запись для проверки (T-0317)"
     ACCOUNT ||--o{ RUN_GEM_CONTINUE : "продолжения за самоцветы"
@@ -843,7 +845,7 @@ erDiagram
     AD_BLOCK {
         uuid block_id PK
         string network_key FK
-        enum place "second_chance|wheel_spin|run_double|task|interstitial"
+        enum place "second_chance|wheel_spin|run_double|card_reroll|task|interstitial"
         string external_id "nullable: блок в кабинете сети; нет — показ по ключам сети"
         enum success "view|click|cpa — условие успеха"
         boolean active
@@ -880,6 +882,14 @@ erDiagram
         int continue_no PK "какое по счёту продолжение забега, от 1"
         uuid account_id FK "суточный потолок рекламных продолжений (Р4)"
         string session_id UK "сессия показа места second_chance; без FK — модуль рекламы"
+        string network_key "сеть показа; у пропуска VIP — его имя"
+        datetime granted_at
+    }
+
+    RUN_AD_REROLL {
+        string run_id PK "FK на run (каскад): рекламный переброс один на забег"
+        uuid account_id FK "каскад с аккаунтом"
+        string session_id UK "сессия показа места card_reroll; без FK — модуль рекламы"
         string network_key "сеть показа; у пропуска VIP — его имя"
         datetime granted_at
     }
@@ -1912,6 +1922,15 @@ erDiagram
   `(account_id, granted_at)`, порознь для рекламы (`network_key` — сеть) и
   VIP (`network_key = 'vip'`, Р162); счёт и запись — под одной блокировкой на
   аккаунт, поэтому два параллельных забора потолок не пробивают.
+- **`RUN_AD_REROLL` — переброс карточек за рекламу** (`35-stage4-plan.md`
+  Р133, T-0199): книга показов места `card_reroll`, по образцу
+  `RUN_AD_CONTINUE`. Хозяин места — модуль забегов: забирает сессию показа и
+  записывает переброс. Первичный ключ — `run_id`: рекламный переброс один на
+  забег, вторая сессия на тот же забег не записывается; уникальная `session_id`
+  не даёт потратить одну сессию на два забега. Запись — `INSERT … ON CONFLICT DO
+  NOTHING`, два параллельных забора дают одну строку. Итог забега с заявленным
+  `adRerolls: 1` без строки отклоняется (`unpaid_ad_reroll`). Суточного потолка нет
+  — награда не валюта. Вайп стирает таблицу своим шагом до забега.
 - **`RUN_GEM_CONTINUE` — второй шанс за самоцветы** (`35-stage4-plan.md` Р162,
   T-0324): третья книга продолжений забега рядом с `PURCHASE` (звёзды) и
   `RUN_AD_CONTINUE` (реклама). Цена в самоцветах — цена в звёздах от начатых
