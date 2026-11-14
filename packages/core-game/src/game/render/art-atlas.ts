@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import { SECRET_KINDS } from "@bh/shared-types";
+import { blinkMarkFrameNames } from "./blink-look";
 import { mixChannels, STAGE_LOOKS } from "./looks";
 import { ART_ENV_KEY, ART_GROUND_KEY } from "./art-ground";
 import { ORBITER_FRAME_NAMES } from "./looks";
@@ -199,7 +200,7 @@ export class ArtAtlas {
 /** Что нужно режиму арта от мира: типы врагов, ступени и масштаб. */
 export interface ArtWorld {
   config: { unitScale: number; maxEnemies: number };
-  enemyTypes: readonly { id: string; rank: "normal" | "elite" | "boss" }[];
+  enemyTypes: readonly { id: string; rank: "normal" | "elite" | "boss"; hiddenPhase?: number }[];
   stages: readonly unknown[];
 }
 
@@ -224,6 +225,8 @@ export class ArtMode {
   private deathFrames: ArtFrame[] = [];
   /** Кадры лужи: свежая, подсохшая, гаснущая; пусто — арта луж нет, рисуется круг. */
   private puddleFrames: ArtFrame[] = [];
+  /** Кадры метки появления по id врага, который скрывается; все три или ни одного. */
+  private markFrames = new Map<string, ArtFrame[]>();
   private orbiterFrames = new Map<string, ArtFrame>();
   private secretFrames: SecretArt | null = null;
   private statusMarkFrames: StatusMarkArt = [];
@@ -297,6 +300,14 @@ export class ArtMode {
     // Лужа — все три кадра или ни одного: недорисованная смена кадров хуже ровного круга.
     const puddles = [0, 1, 2].map((k) => this.atlas.find(`fx/puddle_bog${String(k)}`));
     this.puddleFrames = puddles.every((frame): frame is ArtFrame => frame !== null) ? puddles : [];
+    // Метка появления — у врагов, что скрываются (`hiddenPhase`): кольцо сужается тремя кадрами, и недорисованная
+    // смена хуже ровного кольца-фигуры.
+    this.markFrames = new Map();
+    for (const type of this.world.enemyTypes) {
+      if ((type.hiddenPhase ?? -1) < 0) continue;
+      const marks = blinkMarkFrameNames(type.id).map((name) => this.atlas.find(name));
+      if (marks.every((frame): frame is ArtFrame => frame !== null)) this.markFrames.set(type.id, marks);
+    }
     this.orbiterFrames = new Map();
     for (const name of ORBITER_FRAME_NAMES) {
       const frame = this.atlas.find(name);
@@ -340,6 +351,11 @@ export class ArtMode {
   /** Кадры луж для `Puddles`; `null` — режим выключен или кадров нет. */
   puddleArt(): readonly ArtFrame[] | null {
     return this.enabled && this.puddleFrames.length > 0 ? this.puddleFrames : null;
+  }
+
+  /** Кадры метки появления врага с таким id; `null` — режим выключен или кадров нет (тогда рисуется кольцо). */
+  markArt(enemyId: string): readonly ArtFrame[] | null {
+    return this.enabled ? (this.markFrames.get(enemyId) ?? null) : null;
   }
 
   /** Кадры развеивания для `CombatFeedback`; `null` — режим выключен. */
