@@ -34,6 +34,7 @@ function row(patch: Partial<ReplayRunRow> = {}): ReplayRunRow {
   return {
     runId: RUN,
     accountId: ACCOUNT,
+    accountPlatform: "telegram",
     status: "finished",
     finishedAt: new Date(NOW.getTime() - 5 * 60_000),
     contentHash: "abcd1234",
@@ -300,8 +301,8 @@ function setup(initial: Record<string, string | number | boolean> = {}): Setup {
     { syncBoardsAfterReplay: (runId: string) => Promise.resolve(void unranked.push(runId)) },
     reader,
     settings,
-    sink,
     { audit: (entry) => Promise.resolve(void audits.push({ action: entry.action, target: entry.target ?? null, before: entry.before, after: entry.after })), require: () => Promise.resolve() },
+    sink,
     { now: () => clock.now, log: (line) => logs.push(line) },
   );
   return { service, repository, queue, events, logs, unranked, audits, facts, clock, settings };
@@ -707,8 +708,8 @@ describe("наблюдение: событие и метрика", () => {
       { syncBoardsAfterReplay: () => Promise.resolve() },
       { of: () => Promise.resolve(ordinary) },
       t.settings,
-      { write: () => Promise.reject(new Error("очередь событий упала")) },
       { audit: () => Promise.resolve(), require: () => Promise.resolve() },
+      { write: () => Promise.reject(new Error("очередь событий упала")) },
       { now: () => NOW, log: () => undefined },
     );
     t.repository.add({ replayVerdict: "pending", replayRequired: true });

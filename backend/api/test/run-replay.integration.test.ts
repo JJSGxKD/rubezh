@@ -121,13 +121,13 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
       runsService,
       { of: () => Promise.resolve(facts.value) },
       settings,
+      rolesService,
       {
         write: (rows) => {
           events.push(...rows);
           return Promise.resolve();
         },
       },
-      rolesService,
     );
     // Подписка, которую в приложении делает `RunReplayJob`: запись пришла — повтор ставится.
     proofs.onStored("replay", (runId) => service.onProofStored(runId));
