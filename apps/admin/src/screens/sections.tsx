@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { AdsScreen } from "./ads/AdsScreen";
 import { BalanceScreen } from "./balance/BalanceScreen";
 import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
@@ -34,6 +34,10 @@ import { SettingsScreen } from "./settings/SettingsScreen";
 import { LedgerScreen } from "./ledger/LedgerScreen";
 import { MyProjectScreen } from "./my-project/MyProjectScreen";
 import { StakeholdersScreen } from "./stakeholders/StakeholdersScreen";
+import { Loading } from "../ui/kit";
+
+// Витрины компонентов — только при разработке: в сборке условие ложно, и модуль в неё не попадает.
+const DevStands = import.meta.env.DEV ? lazy(() => import("../promo-editor/DevStands")) : null;
 
 /**
  * Экраны разделов по идентификатору из `SECTIONS` (routes.ts). `id` —
@@ -76,4 +80,13 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   partners: (id) => <PartnersScreen id={id} />,
   // Собственный кабинет партнёра; команда смотрит кабинет глазами партнёра из его карточки, а не по адресу.
   cabinet: () => <CabinetScreen partnerId={null} />,
+  ...(DevStands === null
+    ? {}
+    : {
+        dev: (id: string | null) => (
+          <Suspense fallback={<Loading />}>
+            <DevStands id={id} />
+          </Suspense>
+        ),
+      }),
 };

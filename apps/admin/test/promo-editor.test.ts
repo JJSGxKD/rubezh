@@ -11,6 +11,7 @@ import { editorProblems } from "../src/promo-editor/problems";
 import { qrImageUrl } from "../src/promo-editor/qr-svg";
 import { fitZoom, ZOOM_MAX, ZOOM_MIN } from "../src/promo-editor/zoom";
 import { photoProblem } from "../src/promo-editor/photo";
+import { logoImage } from "../src/promo-editor/logo-svg";
 
 // Редактор промо (tasks/T-0274, Р159): документ — источник истины, холст Fabric
 // лишь отображение. Всё, что можно проверить без DOM, — чистые функции.
@@ -442,5 +443,26 @@ describe("масштаб холста", () => {
     expect(fitZoom({ width: 1080, height: 1920 }, { width: 100, height: 100 })).toBe(ZOOM_MIN);
     expect(fitZoom({ width: 100, height: 100 }, { width: 1000, height: 1000 })).toBe(ZOOM_MAX);
     expect(fitZoom({ width: 1080, height: 1920 }, { width: 0, height: 0 })).toBe(ZOOM_MIN);
+  });
+});
+
+describe("логотип слоя", () => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -24 454 143"><path d="M0 0"/></svg>';
+
+  it("знак вписывается в рамку по пропорциям viewBox, размер дописан в разметку", () => {
+    const image = logoImage(svg, { width: 908, height: 600 });
+    expect(image).toMatchObject({ width: 908, height: 286 });
+    const markup = decodeURIComponent((image?.url ?? "").replace(/^data:image\/svg\+xml;charset=utf-8,/, ""));
+    expect(markup).toContain('<svg width="908" height="286" xmlns=');
+  });
+
+  it("узкая рамка ограничивает по ширине, широкая — по высоте", () => {
+    expect(logoImage(svg, { width: 227, height: 500 })).toMatchObject({ width: 227, height: 72 });
+    expect(logoImage(svg, { width: 2000, height: 143 })).toMatchObject({ width: 454, height: 143 });
+  });
+
+  it("разметка без viewBox или пустая рамка — не знак", () => {
+    expect(logoImage("<svg></svg>", { width: 100, height: 100 })).toBeNull();
+    expect(logoImage(svg, { width: 0, height: 100 })).toBeNull();
   });
 });
