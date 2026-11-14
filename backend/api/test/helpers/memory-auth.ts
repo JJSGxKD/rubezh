@@ -1,3 +1,4 @@
+import { newPublicId } from "../../src/common/public-identity.js";
 import { storedNameFor, type Account, type AccountArrival, type AccountBan, type AccountRepository, type RecipientsPage } from "../../src/modules/auth/account.repository.js";
 import type { RefreshSession, RefreshStore, RefreshTake } from "../../src/modules/auth/refresh.store.js";
 
@@ -27,6 +28,7 @@ export class MemoryAccountRepository implements AccountRepository {
 
     const account: Account = {
       accountId: crypto.randomUUID(),
+      publicId: newPublicId(),
       ...identity,
       platformName: identity.displayName,
       nameLockedAt: null,
@@ -52,6 +54,18 @@ export class MemoryAccountRepository implements AccountRepository {
       if (account.accountId === accountId) return { ...account, created: false };
     }
     return null;
+  }
+
+  async byPublicId(publicId: string): Promise<Account | null> {
+    for (const account of this.byKey.values()) {
+      if (account.publicId === publicId) return { ...account, created: false };
+    }
+    return null;
+  }
+
+  async publicIds(accountIds: readonly string[]): Promise<Map<string, string>> {
+    const wanted = new Set(accountIds);
+    return new Map([...this.byKey.values()].flatMap((account) => (wanted.has(account.accountId) && account.publicId !== undefined ? [[account.accountId, account.publicId] as const] : [])));
   }
 
   async displayNames(accountIds: readonly string[]): Promise<Map<string, string>> {

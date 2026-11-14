@@ -2091,6 +2091,8 @@ export interface PublicEmblem {
 
 /** То, что список показывает рядом с именем игрока: знак, облик героя и выбор аватара. */
 export interface PublicMark {
+  /** публичный id игрока (T-0247, Р47): 12 строчных hex-знаков; по нему открывается карточка. Нет поля — сервер до публичных id или источник недоступен */
+  publicId?: string | undefined;
   emblem?: PublicEmblem | undefined;
   /** действующий облик (T-0237, Р150): выбранный, а если игрок им больше не владеет, — `keeper`; нет поля — сервер до обликов или источник недоступен */
   appearance?: string | undefined;
@@ -2111,6 +2113,8 @@ export interface LeaderboardEntry {
   tester?: true | undefined;
   /** поддержал проект (Р109); нет поля — не поддержал */
   supporter?: true | undefined;
+  /** публичный id игрока (T-0247): по нему открывается карточка и зовут в друзья; нет поля — сервер до публичных id или источник недоступен */
+  publicId?: string | undefined;
   /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен, клиент рисует по `tester` и `supporter` */
   emblem?: PublicEmblem | undefined;
   /** действующий облик героя (T-0237); нет поля — сервер до обликов или источник недоступен, клиент рисует Хранителя */
@@ -2127,6 +2131,40 @@ export interface LeaderboardEntry {
   style?: string | null | undefined;
   /** дивизион сезона (T-0295); `null` — места на доске сезона нет */
   division?: string | null | undefined;
+}
+
+/** Отношение смотрящего к игроку карточки. */
+export type PlayerRelation = "self" | "friend" | "outgoing" | "incoming" | "none";
+
+/**
+ * Карточка игрока, `GET /api/v1/players/:publicId` (T-0247, Р48). Внутреннего `accountId` и id
+ * площадки в ней нет — игрока называет публичный id. Числа читаются по доске смотрящего.
+ */
+export interface PlayerCard {
+  publicId: string;
+  name: string;
+  photoUrl?: string | undefined;
+  /** действующий облик героя */
+  appearance: string;
+  /** в кружке аватара фото площадки, а не голова облика */
+  avatarPhoto?: true | undefined;
+  /** знак у имени, как в строках списков */
+  emblem?: PublicEmblem | undefined;
+  /** `held` — сколько знаков держит, `top` — до пяти лучших по редкости */
+  emblems: { held: number; top: PublicEmblem[] };
+  level: number;
+  /** мощь надетого снаряжения */
+  power: number;
+  /** место на доске текущего сезона глазами смотрящего; `null` — сезона или игрока в таблице нет */
+  season: { place: number } | null;
+  stats: { runs: number; totalKills: number; bestSurvivalSec: number };
+  /** очки престижа за достижения */
+  prestige: number;
+  /** три любимых достижения витрины */
+  favorites: { id: string; title: string | null; category: string }[];
+  relation: PlayerRelation;
+  /** VIP активен; нет поля — нет */
+  vip?: true | undefined;
 }
 
 /** Своя строка доски: место и числа лучшего забега, даже если оно ниже показанных строк. */
