@@ -3,7 +3,7 @@ id: T-0245
 title: «Набор хранителя» — сервер: 48 часов после первой победы над Рубежом, окрас и самоцветы
 epic: E1
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -25,8 +25,15 @@ shared:
   - backend/api/src/modules/appearance/appearance.module.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/src/modules/appearance/appearance.service.ts
+  - backend/api/src/modules/shop/shop-overrides.ts
+  - backend/api/test/appearance-rules.test.ts
+  - backend/api/test/appearance.integration.test.ts
+  - backend/api/test/shop.test.ts
+  - backend/api/test/wipe-plan.test.ts
   - docs/07-monetization-and-ads.md
   - docs/21-diagrams.md
+  - docs/30-configuration-map.md
 runner: any
 executor: sonnet-5.5
 effort: extra
