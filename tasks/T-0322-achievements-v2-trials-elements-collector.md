@@ -34,6 +34,7 @@ shared:
   - packages/app-shell/src/state/tasks-api.ts
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
+  - backend/api/src/modules/wallet/wallet-limits.ts
 runner: any
 executor: sonnet-5.5
 effort: high
