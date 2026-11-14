@@ -125,6 +125,8 @@ describe.skipIf(!live)("набор хранителя на живых Postgres �
   }
 
   const skus = (view: ShopView) => view.items.map((item) => item.sku);
+  /** Номер оплаты уникален в базе, а тестовая база живёт между прогонами. */
+  const chargeId = (name: string) => `${name}-${randomUUID()}`;
 
   beforeAll(async () => {
     config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, TELEGRAM_BOT_UPDATES: "polling", PAYMENTS_ENABLED: "true", DATABASE_URL, REDIS_URL } as NodeJS.ProcessEnv);
@@ -266,8 +268,9 @@ describe.skipIf(!live)("набор хранителя на живых Postgres �
       const before = (await wallet.balances(me.accountId)).gems;
       const invoice = await shop.order(me, "keeper_set");
 
-      await pay(me, invoice.purchaseId, "charge-same");
-      await pay(me, invoice.purchaseId, "charge-same");
+      const same = chargeId("same");
+      await pay(me, invoice.purchaseId, same);
+      await pay(me, invoice.purchaseId, same);
       const stored = await prisma.purchase.findUniqueOrThrow({ where: { purchaseId: invoice.purchaseId } });
       await shop.fulfill(stored);
       await shop.fulfill(stored);
@@ -325,11 +328,12 @@ describe.skipIf(!live)("набор хранителя на живых Postgres �
       await run(me.accountId, new Date(Date.now() - HOUR));
       const before = (await wallet.balances(me.accountId)).gems;
       const invoice = await shop.order(me, "keeper_set");
-      await pay(me, invoice.purchaseId, "charge-refund");
+      const charge = chargeId("refund");
+      await pay(me, invoice.purchaseId, charge);
       await appearance.choose(me.accountId, { id: "dawn" });
       expect(await appearance.viewFor(me.accountId)).toMatchObject({ selected: "dawn", effective: "dawn" });
 
-      await confirmation.refunded("charge-refund", Date.now());
+      await confirmation.refunded(charge, Date.now());
 
       expect((await wallet.balances(me.accountId)).gems).toBe(before);
       expect(await grantRows(me.accountId)).toEqual([]);
@@ -343,10 +347,11 @@ describe.skipIf(!live)("набор хранителя на живых Postgres �
       const me = await player();
       await run(me.accountId, new Date(Date.now() - HOUR));
       const invoice = await shop.order(me, "keeper_set");
-      await pay(me, invoice.purchaseId, "charge-spent");
+      const charge = chargeId("spent");
+      await pay(me, invoice.purchaseId, charge);
       await prisma.$executeRaw`UPDATE wallet_balance SET balance = 30 WHERE account_id = ${me.accountId}::uuid AND resource = 'gems'::"WalletResource"`;
 
-      await confirmation.refunded("charge-spent", Date.now());
+      await confirmation.refunded(charge, Date.now());
 
       expect((await wallet.balances(me.accountId)).gems).toBe(0);
       expect(await grantRows(me.accountId)).toEqual([]);
@@ -358,11 +363,12 @@ describe.skipIf(!live)("набор хранителя на живых Postgres �
       for (const account of [me, neighbour]) await run(account.accountId, new Date(Date.now() - HOUR));
       const mine = await shop.order(me, "keeper_set");
       const theirs = await shop.order(neighbour, "keeper_set");
-      await pay(me, mine.purchaseId, "charge-mine");
-      await pay(neighbour, theirs.purchaseId, "charge-theirs");
+      const charge = chargeId("mine");
+      await pay(me, mine.purchaseId, charge);
+      await pay(neighbour, theirs.purchaseId, chargeId("theirs"));
 
-      await confirmation.refunded("charge-mine", Date.now());
-      await confirmation.refunded("charge-mine", Date.now());
+      await confirmation.refunded(charge, Date.now());
+      await confirmation.refunded(charge, Date.now());
 
       expect(await grantRows(me.accountId)).toEqual([]);
       expect(await grantRows(neighbour.accountId)).toHaveLength(1);
@@ -414,7 +420,8 @@ describe.skipIf(!live)("набор хранителя на живых Postgres �
         providers: [
           { provide: APP_CONFIG, useValue: config },
           { provide: REDIS, useValue: redis },
-          { provide: ShopService, useValue: shop },
+          // Не сам сервис: Nest позвал бы его `onModuleInit` второй раз, а отзыв и выдача уже зарегистрированы.
+          { provide: ShopService, useValue: { view: async (account: AccountRef) => await shop.view(account), order: async (account: AccountRef, sku: string) => await shop.order(account, sku) } },
           { provide: ShowcaseService, useValue: {} },
           { provide: AppearanceService, useValue: appearance },
           RateLimiter,
