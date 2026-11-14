@@ -360,7 +360,8 @@ describe.skipIf(!live)("карточка игрока на живых Postgres �
 
       expect(missing.statusCode).toBe(404);
       expect(separate.statusCode).toBe(404);
-      expect(separate.json()).toEqual(missing.json());
+      const stripped = (body: { error: Record<string, unknown> }) => ({ ...body.error, requestId: undefined });
+      expect(stripped(separate.json())).toEqual(stripped(missing.json()));
       expect(separate.json<{ error: { code: string } }>().error.code).toBe("player_not_found");
       // смотрящий с полной доской его видит
       boards.set(me.accountId, "full");
