@@ -38,6 +38,8 @@ export const KIND_TITLES: Partial<Record<string, string>> = {
   evolution_runs: "Эволюции",
   friends: "Друзья в списке",
   account_level: "Уровень аккаунта",
+  status: "Знак статуса",
+  season: "Знак сезона",
   channel: "Подписка на канал",
   link: "Переход по ссылке",
   bot: "Запуск бота",
@@ -97,10 +99,41 @@ export const CLIENT_KINDS: ReadonlyMap<string, TaskPeriod> = new Map<string, Tas
  */
 export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level"]);
 
+/**
+ * Знаки статусов и сезонов у имени (T-0235, `tasks/task-rules.ts`, `EMBLEM_KINDS`): строки каталога без
+ * цели и награды. Игрок их не выполняет, а держит, пока сервер по состоянию аккаунта находит условие
+ * выполненным (VIP идёт, аккаунт тестера, место в сезоне). Заводит их миграция; панель правит название,
+ * подсказку, редкость знака, порядок и «включено».
+ */
+export const EMBLEM_KINDS: ReadonlySet<string> = new Set(["status", "season"]);
+
+/** Строка каталога — знак статуса или сезона. */
+export function isEmblemRow(task: Pick<TaskDef, "kind">): boolean {
+  return EMBLEM_KINDS.has(task.kind);
+}
+
 /** Категории достижений — те же, что у сервера; названия — те, что видит игрок. */
 export const ACHIEVEMENT_CATEGORIES = ["combat", "collection", "mastery", "friends"] as const;
-export type AchievementCategory = (typeof ACHIEVEMENT_CATEGORIES)[number];
-export const CATEGORY_TITLES: Record<AchievementCategory, string> = { combat: "Бой", collection: "Коллекция", mastery: "Мастерство", friends: "Друзья" };
+/** Категории знаков статуса и сезона: свои группы в разделе «Знаки» у игрока. */
+export const EMBLEM_CATEGORIES = ["status", "season"] as const;
+export const ALL_CATEGORIES = [...ACHIEVEMENT_CATEGORIES, ...EMBLEM_CATEGORIES] as const;
+export type AchievementCategory = (typeof ALL_CATEGORIES)[number];
+export const CATEGORY_TITLES: Record<AchievementCategory, string> = { combat: "Бой", collection: "Коллекция", mastery: "Мастерство", friends: "Друзья", status: "Статус", season: "Сезоны" };
+
+/** Редкость знака у имени: шкала предметов и тон `team` для знака «Команда» (как на сервере, `EMBLEM_TIERS`). */
+export const EMBLEM_TIERS = ["common", "uncommon", "rare", "epic", "legendary", "mythic", "team"] as const;
+export type EmblemTier = (typeof EMBLEM_TIERS)[number];
+export const EMBLEM_TIER_TITLES: Record<EmblemTier, string> = {
+  common: "Обычный",
+  uncommon: "Добротный",
+  rare: "Редкий",
+  epic: "Эпический",
+  legendary: "Легендарный",
+  mythic: "Мифический",
+  team: "Команда",
+};
+/** Пусто — у достижения знака нет. */
+export const NO_EMBLEM_TITLE = "Нет знака";
 /** Пусто — достижение вне витрины: игрок видит его только во вкладке заданий. */
 export const NO_CATEGORY_TITLE = "Без категории";
 
@@ -184,12 +217,14 @@ const taskSchema = z.object({
   rate: z.number().nullable().default(null),
   holdDays: z.number().default(0),
   /** поля достижения с престижем (T-0106); сервер до них полей не отдавал */
-  category: z.enum(ACHIEVEMENT_CATEGORIES).nullable().default(null),
+  category: z.enum(ALL_CATEGORIES).nullable().default(null),
   ladder: z.string().nullable().default(null),
   rung: z.number().nullable().default(null),
   hidden: z.boolean().default(false),
   hint: z.string().nullable().default(null),
   prestige: z.number().default(0),
+  /** редкость знака у имени (T-0235); сервер до знаков поля не отдавал */
+  emblemTier: z.enum(EMBLEM_TIERS).nullable().default(null),
 });
 
 export type TaskDef = z.infer<typeof taskSchema>;
@@ -288,7 +323,7 @@ function cleanFilter(task: Pick<TaskDef, "kind" | "filter">): TaskFilter | null 
 }
 
 /** Поля достижения «нет»: у ежедневных, недельных и партнёрских целей их не бывает. */
-const ACHIEVEMENT_EMPTY = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0 } as const;
+const ACHIEVEMENT_EMPTY = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0, emblemTier: null } as const;
 
 /** Заказчика нет: задание своё. У цели забега и вида по сигналу клиента продавать нечего. */
 export const NO_CUSTOMER_FIELDS = { customer: null, payModel: null, rate: null, holdDays: 0 } as const;
@@ -322,11 +357,21 @@ export function isAchievement(task: Pick<TaskDef, "kind" | "period">): boolean {
 }
 
 /** Поля достижения в том виде, что принимает сервер: обрезанные, пустое — «нет», у не-достижения — всё пусто. */
-function cleanAchievement(task: Pick<TaskDef, "kind" | "period" | "category" | "ladder" | "rung" | "hidden" | "hint" | "prestige">): Pick<TaskDef, "category" | "ladder" | "rung" | "hidden" | "hint" | "prestige"> {
+function cleanAchievement(
+  task: Pick<TaskDef, "kind" | "period" | "category" | "ladder" | "rung" | "hidden" | "hint" | "prestige" | "emblemTier">,
+): Pick<TaskDef, "category" | "ladder" | "rung" | "hidden" | "hint" | "prestige" | "emblemTier"> {
   if (!isAchievement(task)) return ACHIEVEMENT_EMPTY;
   const ladder = task.ladder?.trim() ?? "";
   const hint = task.hint?.trim() ?? "";
-  return { category: task.category, ladder: ladder === "" ? null : ladder, rung: ladder === "" ? null : task.rung, hidden: task.hidden, hint: hint === "" ? null : hint, prestige: task.prestige };
+  return {
+    category: task.category,
+    ladder: ladder === "" ? null : ladder,
+    rung: ladder === "" ? null : task.rung,
+    hidden: task.hidden,
+    hint: hint === "" ? null : hint,
+    prestige: task.prestige,
+    emblemTier: task.emblemTier,
+  };
 }
 
 /** Смена срока в форме: у не-достижения поля достижения остаются пустыми, а не висят скрытыми в форме. */
@@ -437,6 +482,7 @@ function achievementProblemOf(task: TaskDef): string | null {
   const hint = task.hint?.trim() ?? "";
   if (!isAchievement(task)) {
     const filled = task.category !== null || ladder !== "" || task.rung !== null || hint !== "" || task.hidden || task.prestige !== 0;
+    if (task.emblemTier !== null) return "Знак у имени — только у достижений забега";
     return filled ? "Категория, лестница, подсказка, скрытость и престиж — только у достижений забега" : null;
   }
   if (!Number.isInteger(task.prestige) || task.prestige < 0 || task.prestige > PRESTIGE_MAX) return `Престиж — целое от 0 до ${PRESTIGE_MAX.toLocaleString("ru-RU")}`;
@@ -445,6 +491,23 @@ function achievementProblemOf(task: TaskDef): string | null {
   if (ladder === "" && task.rung !== null) return "Ступень без лестницы: укажите лестницу или очистите ступень";
   if (hint.length > HINT_MAX) return `Подсказка — до ${String(HINT_MAX)} знаков`;
   if (task.hidden && hint === "") return "У скрытого достижения нужна подсказка: её игрок видит, пока оно закрыто";
+  if (task.emblemTier !== null && (task.title?.trim() ?? "") === "") return "У знака нужно название: его игрок видит рядом с именем";
+  return null;
+}
+
+/**
+ * Знак статуса или сезона: цели и награды у него нет, правятся только название, подсказка, редкость,
+ * порядок и «включено». Те же правила, что у схемы сервера.
+ */
+function emblemRowProblem(task: TaskDef): string | null {
+  if ((task.title?.trim() ?? "") === "") return "У знака нужно название: его игрок видит рядом с именем";
+  if ((task.title?.trim().length ?? 0) > TITLE_MAX) return `Название — до ${String(TITLE_MAX)} знаков`;
+  const hint = task.hint?.trim() ?? "";
+  if (hint === "") return "У знака нужна подсказка — условие, которое игрок видит у закрытого знака";
+  if (hint.length > HINT_MAX) return `Подсказка — до ${String(HINT_MAX)} знаков`;
+  if (task.emblemTier === null) return "У знака статуса и сезона нужна редкость";
+  // Заказчик продаёт действие вне игры, а знак держат: те же правила у схемы сервера и CHECK базы.
+  if (task.customer !== null || task.payModel !== null || task.rate !== null || task.holdDays !== 0) return "У знака статуса и сезона нет заказчика и удержания";
   return null;
 }
 
@@ -460,6 +523,7 @@ export function taskProblem(task: TaskDef, isNew: boolean, catalog: readonly Tas
   const id = task.taskId.trim();
   if (!TASK_ID_PATTERN.test(id)) return "id — латиница в нижнем регистре, цифры и подчёркивание, с буквы, до 48 знаков";
   if (isNew && catalog.some((existing) => existing.taskId === id)) return "Такой id уже есть — выберите его в списке, чтобы поправить";
+  if (isEmblemRow(task)) return isNew ? "Знаки статусов и сезонов заводит миграция: здесь их можно только править" : emblemRowProblem(task);
   if (!Number.isInteger(task.target) || task.target <= 0) return "Цель — целое число больше нуля";
   if (![task.coins, task.gems, task.shards, task.passPoints].every(nonNegativeInt)) return "Награда и очки заданий — целые неотрицательные";
   if (task.coins + task.gems + task.shards === 0) return "Без награды задание некому выполнять — дайте монеты, самоцветы или осколки";
@@ -499,6 +563,8 @@ export function rewardLabel(task: Pick<TaskDef, "coins" | "gems" | "shards">): s
 
 /** Цель подписью: время — минутами, канал — именем, ссылка — адресом, остальное — числом. */
 export function targetLabel(task: Pick<TaskDef, "kind" | "target"> & Partial<Pick<TaskDef, "params" | "period">>): string {
+  // Знак не выполняют, а держат: цели у него нет.
+  if (isEmblemRow(task)) return "—";
   const params = task.params ?? null;
   if (params !== null) {
     const listed = task.kind === CHANNEL_KIND ? (params.platform === undefined ? [] : [params.platform]) : partnerPlatforms(params);

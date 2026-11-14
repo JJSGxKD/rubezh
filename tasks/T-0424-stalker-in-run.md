@@ -3,8 +3,8 @@ id: T-0424
 title: Карачун в забеге — подключение, шина сцены, калибровка и эталоны
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0392, T-0422, T-0423, T-0425, T-0426]
@@ -19,6 +19,7 @@ shared:
   - packages/core-game/src/run-api.ts
   - packages/core-game/src/engine/run-bus.ts
   - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/game/diagnostics/replay.ts
   - packages/core-game/test/**
   - scripts/balance/balance-sim.ts
   - docs/32-balance.md

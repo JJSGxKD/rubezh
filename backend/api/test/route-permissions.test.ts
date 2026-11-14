@@ -98,14 +98,16 @@ describe("права на маршрутах", () => {
     expect(unguarded).toEqual([]);
   });
 
-  it("учёт в панели: чтение закрыто ledger.view, правка мест и статей — finance.entry.create (T-0457, T-0460, Р219, Р220)", () => {
+  it("учёт в панели: чтение закрыто ledger.view, правка мест, статей и операций и шаблонов — finance.entry.create (T-0457, T-0460, T-0461, T-0463, Р219, Р220)", () => {
     const ledgerRoutes = routes.filter((route) => route.controller === "AdminLedgerController");
-    const reading = ["articles", "balances", "journal", "places"];
-    const writing = ["archiveArticle", "archivePlace", "createArticle", "createPlace", "renameArticle", "updatePlace"];
+    const reading = ["articles", "balances", "journal", "listOperations", "listTemplates", "operation", "places"];
+    const writing = ["archiveArticle", "archivePlace", "archiveTemplate", "createArticle", "createOperation", "createPlace", "createTemplate", "discardOperation", "draftPeriod", "renameArticle", "submitOperation", "updateOperation", "updatePlace", "updateTemplate"];
+    // Второй ключ (T-0462): решение по операции, ждущей владельца, — отдельное право, только у владельца
+    const deciding = ["approveOperation", "rejectOperation"];
 
-    expect(ledgerRoutes.map((route) => route.method).sort()).toEqual([...reading, ...writing].sort());
+    expect(ledgerRoutes.map((route) => route.method).sort()).toEqual([...reading, ...writing, ...deciding].sort());
     for (const route of ledgerRoutes) {
-      const expected = reading.includes(route.method) ? "ledger.view" : "finance.entry.create";
+      const expected = reading.includes(route.method) ? "ledger.view" : deciding.includes(route.method) ? "finance.operation.approve" : "finance.entry.create";
       expect(Reflect.getMetadata(PERMISSION_METADATA, route.handler), route.method).toBe(expected);
     }
   });

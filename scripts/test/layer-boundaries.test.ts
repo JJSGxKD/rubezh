@@ -2,6 +2,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+// @ts-expect-error — правила общие с хуком Claude Code, на чистом JS: типов у них нет и не нужно
+import { BACKEND_MODULES, ENGINE_ENTRY, PLATFORM_ADAPTER, PORTS_FORBIDDEN, RULES, TEAM_TOOLS } from "../hooks/layer-rules.mjs";
 
 /**
  * Границы слоёв по исходникам (CLAUDE.md, «Границы слоёв — жёсткие»;
@@ -13,102 +15,11 @@ import { describe, expect, it } from "vitest";
  *
  * Тест общий для репозитория и потому живёт в `scripts/test`, а не в пакете:
  * он про отношения между пакетами, а не про содержимое одного.
+ *
+ * Список правил — `scripts/hooks/layer-rules.mjs`: его же читает хук Claude
+ * Code, который проверяет один файл сразу после правки (Р224 A, T-0473).
  */
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
-
-interface Rule {
-  /** какой пакет проверяем */
-  from: string;
-  /** что ему запрещено импортировать */
-  forbidden: RegExp;
-  why: string;
-}
-
-const RULES: Rule[] = [
-  {
-    from: "packages/app-shell/src",
-    forbidden: /["']@bh\/adapter-/,
-    why: "оболочка не знает о площадках: адаптер приходит готовым объектом из apps/web-*",
-  },
-  {
-    from: "packages/app-shell/src",
-    forbidden: /["']phaser["']/i,
-    why: "Phaser уходит отдельным чанком; прямой импорт затянул бы его в первую загрузку",
-  },
-  {
-    from: "packages/app-shell/src",
-    forbidden: /["']@bh\/core-game\//,
-    why: "движок берётся только через публичный API index.ts, внутренности забега — не контракт",
-  },
-  {
-    from: "packages/core-game/src",
-    forbidden: /["']@bh\/app-shell/,
-    why: "движок ничего не знает о том, кто и чем рисует меню",
-  },
-  {
-    from: "packages/core-game/src",
-    forbidden: /["']react/,
-    why: "движок не знает о React: оболочка приходит к нему, а не наоборот",
-  },
-  {
-    from: "packages/core-game/src",
-    forbidden: /["']@bh\/adapter-/,
-    why: "движок общается с площадкой только через PlatformAdapter из shared-types",
-  },
-  {
-    from: "packages/shared-types/src",
-    forbidden: /["']@bh\//,
-    why: "shared-types — корень зависимостей и не импортирует ничего из монорепо",
-  },
-  {
-    from: "packages/design-tokens/src",
-    forbidden: /["']@bh\//,
-    why: "токены дизайна — корень визуального стиля игры и панели и не зависят ни от чего в монорепо",
-  },
-  {
-    from: "packages/fx/src",
-    forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
-    why: "ядро курсов самодостаточно: ни игры, ни Nest, ни Prisma — им станет отдельный сервис (docs/35-stage4-plan.md, Р32)",
-  },
-  {
-    from: "packages/ledger/src",
-    forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
-    why: "ядро учёта переходит в другие проекты: ни игры, ни Nest, ни Prisma (docs/35-stage4-plan.md, Р98, Р219)",
-  },
-  {
-    from: "packages/proxy-kit/src",
-    forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
-    why: "пакет проксирования переиспользуется в других проектах: ни игры, ни Nest, ни Prisma",
-  },
-  {
-    from: "packages/promo-kit/src",
-    forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma|["']fabric["']/,
-    why: "модель промо-материала переиспользуется панелью, кабинетом партнёра и другими проектами: ни игры, ни Nest, ни Prisma, ни Fabric (docs/35-stage4-plan.md, Р106, Р159)",
-  },
-  {
-    from: "apps/admin/src",
-    forbidden: /["']@bh\/(core-game|app-shell|adapter-)|["']phaser["']/i,
-    why: "панель — отдельное приложение команды: ни движка, ни оболочки игры, ни площадок; с игрой её роднят только токены дизайна (docs/29-admin-panel.md §4)",
-  },
-  {
-    from: "packages/core-game/src/content",
-    forbidden: /["']\.\.\/game\//,
-    why: "контент — это данные: он не знает о коде движка",
-  },
-  {
-    from: "apps/sim-worker/src",
-    forbidden: /["']@bh\/adapter-|["']phaser["']|["'](?:\.\.\/)+(?:backend|packages\/app-shell|apps\/admin)\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
-    why: "sim-worker — свой процесс со своей сборкой движка (docs/35-stage4-plan.md, Р15): ни бэкенда, ни площадок, ни оболочки, ни Phaser",
-  },
-  {
-    from: "apps/sim-worker/src",
-    forbidden: /["']@bh\/core-game["']|["']@bh\/core-game\/src\/(?:index|engine\/|game\/(?:MainScene|BenchScene|render\/|overlays\/|bench\/|diagnostics\/(?!replay["'])|joystick|radar))/,
-    why: "движок берётся только симуляцией, балансом и контентом (`@bh/core-game/src/game/sim`, `game/balance`, `content`) и повтором забега (`game/diagnostics/replay`, без Phaser — это держит тест сборки в `apps/sim-worker/test/replay-job.test.ts`): index.ts и сцены тянут за собой Phaser в единственный файл сборки",
-  },
-];
-
-/** Публичная дверь движка: только этот файл вправе тянуть Phaser в оболочке. */
-const ENGINE_ENTRY = "packages/core-game/src/index.ts";
 
 /** Путь в сообщении — со слэшами: тест читают и на Windows, и в логе CI. */
 function shown(path: string): string {
@@ -170,19 +81,8 @@ describe("границы слоёв", () => {
  * Бэкенд: домен не знает, на какой он площадке (docs/35-stage4-plan.md, Р22,
  * §3.11). Доменные модули просят порты из `platforms/ports`, адаптеры живут в
  * `platforms/<площадка>`. Модуль считается доменным по умолчанию — новый не
- * проскочит мимо правила, — а исключения названы поимённо.
+ * проскочит мимо правила, — а исключения (`TEAM_TOOLS`) названы поимённо.
  */
-const BACKEND_MODULES = "backend/api/src/modules";
-
-/**
- * Инструменты команды, а не игра: карточки отчётов, сводка, выгрузка и
- * отзывы живут в чате администраторов в Telegram, и порт им не нужен.
- */
-const TEAM_TOOLS = new Set(["admin-notify", "export", "feedback"]);
-
-/** Импорт адаптера площадки — `../../platforms/telegram/…` и старый `../telegram/…` — или библиотеки Bot API. */
-const PLATFORM_ADAPTER = /from ["'][./]*(?:platforms\/)?(?:telegram|max|vk)\/|["']grammy["']/;
-
 describe("границы бэкенда", () => {
   const modules = readdirSync(join(ROOT, BACKEND_MODULES)).filter((name) => statSync(join(ROOT, BACKEND_MODULES, name)).isDirectory());
 
@@ -201,7 +101,7 @@ describe("границы бэкенда", () => {
 
   it("порты не знают ни адаптеров, ни домена: это контракт, а не реализация", () => {
     for (const { path, source } of collect("backend/api/src/platforms/ports")) {
-      expect(source, shown(path)).not.toMatch(/from ["']\.\.\/(?:telegram|max|vk)\/|["'](?:\.\.\/)+modules\//);
+      expect(source, shown(path)).not.toMatch(PORTS_FORBIDDEN);
     }
   });
 });

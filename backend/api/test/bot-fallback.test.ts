@@ -44,7 +44,7 @@ function setup(options: { env?: Record<string, string>; botUsername?: string | n
     },
   } as unknown as Redis;
   const botUsername = options.botUsername === undefined ? "rubezh_test_bot" : options.botUsername;
-  const identity = new BotIdentity(config, { async getMe() { return { id: 1, username: botUsername ?? "" }; } });
+  const identity = new BotIdentity(config, { async getMe() { return { id: 1, username: botUsername ?? "", topicsEnabled: false }; } });
   const router = new BotRouter();
   const setFallback = vi.spyOn(router, "setFallback");
   const reply = new BotFallbackReply(config, router, identity, api, redis);

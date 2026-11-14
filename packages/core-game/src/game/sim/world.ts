@@ -1,4 +1,4 @@
-import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, SecretKind, SecretsDef, SiegeDef, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, RunModifierId, SecretKind, SecretsDef, SiegeDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import { markSpawn, type HuntState } from "../run/hunt-log";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
@@ -148,6 +148,30 @@ export interface PlayerState {
   knockbackTicks: number;
   knockbackVx: number;
   knockbackVy: number;
+}
+
+/**
+ * Какие типы врагов хоть раз вышли в мир. Лежит рядом со статистикой, а не в ней: пул статистики
+ * целиком уходит в снимок, и новое поле в нём ломало бы чтение снимков прошлых сборок. Только
+ * считается: `world.rng` и порядок событий не трогает, поэтому эталоны баланса не двигаются.
+ */
+export interface SeenEnemies {
+  /** по индексу типа врага: 1 — выходил в мир */
+  flags: Uint8Array;
+  /** индексы типов в порядке первого появления; без повторов */
+  order: number[];
+}
+
+export function createSeenEnemies(typeCount: number): SeenEnemies {
+  return { flags: new Uint8Array(typeCount), order: [] };
+}
+
+/** Отметить тип врага вышедшим в мир. Вызывается из `spawnEnemy` для любого ранга. */
+export function markEnemySeen(world: World, typeIndex: number): void {
+  const seen = world.seen;
+  if (seen.flags[typeIndex] === 1) return;
+  seen.flags[typeIndex] = 1;
+  seen.order.push(typeIndex);
 }
 
 export interface RunStats {
@@ -460,6 +484,8 @@ export interface World {
   chests: ChestState;
   /** журнал охоты и время появления врагов (`run/hunt-log.ts`, tasks/T-0292) */
   hunt: HuntState;
+  /** типы врагов, вышедшие в мир за забег, в порядке первого появления (tasks/T-0479); в снимок не входит */
+  seen: SeenEnemies;
   /** подстройка давления под силу игрока; `null` — подстройки нет, и забег идёт по кривой единой сложности */
   pressureRules: PressureDef | null;
   /** правила тайников рубежа */
@@ -507,6 +533,11 @@ export interface World {
    * каждый отрезок таймлайна; от забега к забегу он не меняется.
    */
   difficultyLevel: DifficultyDef;
+  /**
+   * Модификаторы забега: действие уже в `difficultyLevel`, здесь они нужны снимку,
+   * итогу и записи. Пустой — забег без модификатора.
+   */
+  modifierIds: readonly RunModifierId[];
   player: PlayerState;
   /** характеристики игрока с учётом пассивок — пересчитываются при улучшении */
   playerStats: PlayerStats;
@@ -633,6 +664,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.type[slot] = typeIndex;
   pool.stage[slot] = stageIndex;
   markSpawn(world, slot);
+  markEnemySeen(world, typeIndex);
   pool.alive[slot] = 1;
   // Состояние паттерна сбрасывается целиком: слот мог принадлежать врагу с
   // другим поведением, и его фаза рывка не должна достаться новому врагу.

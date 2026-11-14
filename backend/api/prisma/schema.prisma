@@ -194,8 +194,12 @@ model Account {
   supporterAt    DateTime? @map("supporter_at") @db.Timestamptz(3)
   /// пролог пройден (T-0279, Р151): победа в нём; аккаунтам, игравшим до пролога, миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты
   prologueDoneAt DateTime? @map("prologue_done_at") @db.Timestamptz(3)
+  /// знак у имени, который игрок выбрал носить (T-0235, Р149); пусто — «по умолчанию». Держит ли он знак сейчас, сервер считает при чтении
+  shownEmblemId  String?   @map("shown_emblem_id") @db.VarChar(48)
 
   roles         AccountRole[]
+  // Знак у имени (T-0235): выбранная строка каталога; удалённая из каталога сбрасывает выбор
+  shownEmblem   TaskDef?              @relation("account_shown_emblem", fields: [shownEmblemId], references: [taskId], onDelete: SetNull)
   runs          Run[]
   purchases     Purchase[]
   sessions      AccountSession[]
@@ -1425,7 +1429,10 @@ model RunBoost {
   runId      String    @id @map("run_id") @db.VarChar(64)
   accountId  String    @map("account_id") @db.Uuid
   boosts     String[]
-  /// сколько списано по ресурсам: { "coins": 270, "gems": 4 }
+  /// сколько списано по ресурсам: { "coins": 270, "gems": 4 } и чем оплачен каждый
+  /// буст: "paid_with": { "fury": "credit", "aegis": "coins" } — "credit" значит
+  /// подарок пасса (`boost_credit`), его возврат — подарок, а не деньги (T-0312);
+  /// у покупок до подарков ключа нет
   cost       Json
   createdAt  DateTime  @map("created_at") @db.Timestamptz(3)
   refundedAt DateTime? @map("refunded_at") @db.Timestamptz(3)
@@ -1669,6 +1676,9 @@ model TaskDef {
   hint            String?    @db.VarChar(120)
   /// очки престижа за выполненное достижение; у ежедневных и недельных — ноль
   prestige        Int        @default(0)
+  /// редкость знака у имени (T-0235, Р149): common…mythic по шкале предметов и `team`
+  /// для знака «Команда»; пусто — у достижения знака нет. Только у достижений (`CHECK` в миграции)
+  emblemTier      String?    @map("emblem_tier") @db.VarChar(16)
   /// заказчик партнёрского задания (Р138); `null` — задание своё. Только у
   /// партнёрской цели, связи полей — `CHECK` в миграции
   customer        String?    @db.VarChar(80)
@@ -1690,6 +1700,7 @@ model TaskDef {
   rarity       AchievementRarity?
   favorites    AchievementFavorite[]
   channelWatch TaskChannelWatch[]
+  shownBy      Account[]             @relation("account_shown_emblem")
 
   @@map("task_def")
 }
@@ -1906,6 +1917,8 @@ model AdBlock {
   updatedAt  DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт
   updatedBy  String?    @map("updated_by") @db.Uuid
+  /// в архиве с этого момента (Р200): блок выключен и в панели виден только во вкладке «Архив»; `null` — не в архиве
+  archivedAt DateTime?  @map("archived_at") @db.Timestamptz(3)
 
   network  AdNetwork   @relation(fields: [networkKey], references: [networkKey])
   sessions AdSession[]
@@ -2378,15 +2391,17 @@ model OutboundServiceMode {
 /// кеш навсегда. Строка не меняется никогда. Формат, размер и стороны держат
 /// `CHECK` в миграции и `media/image-rules.ts`.
 model MediaImage {
-  imageId     String   @id @map("image_id") @db.VarChar(64)
-  contentType String   @map("content_type") @db.VarChar(32)
-  width       Int
-  height      Int
-  sizeBytes   Int      @map("size_bytes")
-  data        Bytes
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  imageId        String   @id @map("image_id") @db.VarChar(64)
+  contentType    String   @map("content_type") @db.VarChar(32)
+  width          Int
+  height         Int
+  sizeBytes      Int      @map("size_bytes")
+  data           Bytes
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   /// кто загрузил; без внешнего ключа — картинка переживает аккаунт
-  createdBy   String?  @map("created_by") @db.Uuid
+  createdBy      String?  @map("created_by") @db.Uuid
+  /// право на показ закрытой картинки (`ledger.view` у снимка чека, T-0462); пусто — открыта игроку и панели
+  viewPermission String?  @map("view_permission") @db.VarChar(64)
 
   tasks      TaskDef[]
   homeSlides HomeSlide[]
@@ -2837,6 +2852,16 @@ model PassClaim {
   @@map("pass_claim")
 }
 
+/// Метка закрытого месяца пасса (T-0312): пишется последней, когда незабранное
+/// выдано всем. Нет строки у прошедшего месяца — задание закрывает его снова, а
+/// двойных выдач нет: каждая награда держится на ключе кошелька и журнале `pass_claim`
+model PassClose {
+  monthKey String   @id @map("month_key") @db.VarChar(7)
+  closedAt DateTime @map("closed_at") @db.Timestamptz(3)
+
+  @@map("pass_close")
+}
+
 /// Бусты-подарки: пасс дарит буст, а не списывает самоцветы за него. Тратит
 /// подарок включение буста на забег (T-0312)
 model BoostCredit {
@@ -3198,7 +3223,8 @@ model LedgerArticle {
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   archivedAt DateTime?         @map("archived_at") @db.Timestamptz(3)
 
-  accounts LedgerAccount[]
+  accounts  LedgerAccount[]
+  templates LedgerTemplate[]
 
   @@map("ledger_article")
 }
@@ -3224,7 +3250,9 @@ model LedgerAccount {
   articleId        String?           @map("article_id") @db.VarChar(64)
   article          LedgerArticle?    @relation(fields: [articleId], references: [articleId], onDelete: Restrict)
 
-  lines LedgerLine[]
+  lines     LedgerLine[]
+  loans     LedgerLoan[]
+  templates LedgerTemplate[]
 
   @@index([place])
   @@index([articleId])
@@ -3269,4 +3297,117 @@ model LedgerLine {
   @@unique([entryId, accountId])
   @@index([accountId, entryId])
   @@map("ledger_line")
+}
+
+// Ручные операции учёта: что ввёл человек и условия займов (docs/37-accounting.md §4, Р220, tasks/T-0461)
+
+enum LedgerOperationKind {
+  transfer
+  exchange
+  expense
+  income
+  loan
+  reversal
+}
+
+/// draft — черновик (в том числе из шаблона), pending — ждёт второго ключа (tasks/T-0462), posted — проведена,
+/// rejected — отклонена владельцем
+enum LedgerOperationStatus {
+  draft
+  pending
+  posted
+  rejected
+}
+
+/// Операция, которую вносит человек: поля вида лежат в `input`, а проводку из них собирает сервер (`op:<id>`).
+/// Черновик правится и удаляется, проведённая операция не меняется — исправление только сторно.
+model LedgerOperation {
+  operationId    String                @id @map("operation_id") @db.Uuid
+  kind           LedgerOperationKind
+  status         LedgerOperationStatus @default(draft)
+  /// поля вида без причины и ссылки: суммы десятичными строками в валюте места, дата события
+  input          Json
+  /// причина или описание, 3…500 знаков; становится описанием проводки
+  note           String                @db.VarChar(500)
+  link           String?               @db.VarChar(500)
+  /// снимок чека: id картинки профиля `finance_receipt` в хранилище картинок панели (T-0462); без внешнего ключа, как и всё в учёте
+  receiptImage   String?               @map("receipt_image") @db.Char(64)
+  /// оценка размера в долларах по курсу на момент ввода: для порога второго ключа и списка; нет курса — пусто
+  amountUsd      Decimal?              @map("amount_usd") @db.Decimal(18, 2)
+  /// ключ проводки `op:<id>` — появляется, когда операция проведена
+  sourceKey      String?               @unique @map("source_key") @db.VarChar(128)
+  /// кто внёс; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  createdBy      String                @map("created_by") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  decidedBy      String?               @map("decided_by") @db.Uuid
+  decidedAt      DateTime?             @map("decided_at") @db.Timestamptz(3)
+  decisionNote   String?               @map("decision_note") @db.VarChar(500)
+  /// шаблон повторяющегося расхода, из которого создан черновик, и период «ГГГГ-ММ»: на период один черновик
+  templateId     String?               @map("template_id") @db.VarChar(64)
+  templatePeriod String?               @map("template_period") @db.Char(7)
+
+  loan LedgerLoan?
+
+  @@unique([templateId, templatePeriod])
+  @@index([status, createdAt])
+  @@map("ledger_operation")
+}
+
+/// Заём проекту: тело, премия и ставка погашения — условия для закрытия месяца (волна 4). Остаток — тело и премия
+/// за вычетом погашенного; счёт-обязательство `loan.<кредитор>.<валюта>` общий у займов одного кредитора в одной валюте.
+model LedgerLoan {
+  loanId      String   @id @map("loan_id") @db.Uuid
+  lender      String   @db.VarChar(128)
+  accountId   String   @map("account_id") @db.VarChar(64)
+  currency    String   @db.VarChar(16)
+  /// тело займа в минимальных единицах валюты
+  principal   BigInt
+  /// премия сверх тела в минимальных единицах той же валюты
+  premium     BigInt
+  /// доля чистой прибыли месяца на погашение, сотые доли процента: 0…10 000
+  repaymentBp Int      @map("repayment_bp")
+  operationId String   @unique @map("operation_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  account   LedgerAccount   @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+  operation LedgerOperation @relation(fields: [operationId], references: [operationId], onDelete: Restrict)
+
+  @@index([accountId])
+  @@map("ledger_loan")
+}
+
+// Шаблоны повторяющихся расходов (docs/37-accounting.md §8, Р220, tasks/T-0463)
+
+enum LedgerTemplateSchedule {
+  monthly
+  yearly
+}
+
+/// Шаблон расхода: статья, место, обычная сумма и график. Сам ничего не проводит — «Расходы месяца» создаёт по нему
+/// черновик операции (`ledger_operation.template_id` + `template_period`, на период один), человек сверяет и проводит.
+/// Связи операции с шаблоном внешним ключом нет: операция живёт и после того, как шаблон забыли.
+model LedgerTemplate {
+  /// слаг из названия, «vps»; занят — «vps-2»
+  templateId     String                 @id @map("template_id") @db.VarChar(64)
+  name           String                 @db.VarChar(128)
+  articleId      String                 @map("article_id") @db.VarChar(64)
+  /// счёт места хранения, с которого платим: `bank.karta`, `stars.bot.available`
+  placeAccountId String                 @map("place_account_id") @db.VarChar(64)
+  /// обычная сумма в минимальных единицах валюты места: в реальности она могла измениться, поэтому — только черновик
+  amount         BigInt
+  schedule       LedgerTemplateSchedule
+  /// месяц года, 1…12, для `yearly`; у `monthly` пусто
+  month          Int?                   @db.SmallInt
+  note           String?                @db.VarChar(500)
+  archivedAt     DateTime?              @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// кто завёл; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  createdBy      String                 @map("created_by") @db.Uuid
+
+  article      LedgerArticle @relation(fields: [articleId], references: [articleId], onDelete: Restrict)
+  placeAccount LedgerAccount @relation(fields: [placeAccountId], references: [accountId], onDelete: Restrict)
+
+  @@index([articleId])
+  @@index([placeAccountId])
+  @@map("ledger_template")
 }

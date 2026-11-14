@@ -1,5 +1,5 @@
 import type { ContentSnapshot } from "./content/snapshot";
-import type { BlessingDef, CardTools, ChestReward, ChestSize, ChestSource, DeviceClass, DifficultyId, RunLoadout, RunMode, RunOutcome, RunPressureStart, RunResult, SecretKind, StatusElement, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardTools, ChestReward, ChestSize, ChestSource, DeviceClass, DifficultyId, RunLoadout, RunMode, RunModifierId, RunOutcome, RunPressureStart, RunResult, SecretKind, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -214,6 +214,8 @@ export interface RunSnapshot {
   startingWeaponId: string;
   /** режим забега; нет поля — `endless` (снимок прошлой сборки пролога не знал), формат из-за него не меняется */
   mode?: RunMode;
+  /** модификатор забега (T-0119); нет поля — забег без него, формат не меняется */
+  modifierIds?: RunModifierId[];
   summary: RunSnapshotSummary;
   /** состояние мира; формат знает только движок */
   world: unknown;
@@ -269,6 +271,8 @@ export interface RunOptions {
   mapId: string;
   /** уровень сложности; неизвестный id — базовая сложность без поправок */
   difficultyId: DifficultyId;
+  /** модификатор нового забега (T-0119); продолженный берёт его из снимка. Закрытые уровнем отбрасываются */
+  modifierIds?: readonly RunModifierId[];
   startingWeaponId: string;
   diagnostics: RunDiagnosticsOptions;
   /** настройки графики игрока; без них рисуется всё */
@@ -417,7 +421,22 @@ export interface RunEvents {
    */
   ringEnded: { index: number; outcome: "broken" | "held" | "died"; guards: number; killed: number; lifeSec: number; elapsedSec: number };
   /**
-   * Осада стоящего (Р197, T-0392): за `leftSec` секунд до осады на земле загорелось кольцо радиуса
+   * Появление Карачуна закончилось (аналитика, `stalker_ended`, T-0427): растворился (`faded`), срезан
+   * строем стражей (`cut`) или игрок погиб (`died`). Приходит один раз на появление, в том числе когда
+   * он не успел выйти (`lifeSec` 0). `hits` — касаний, дошедших до игрока, `pushes` — ударов оружия,
+   * сдвинувших его, `relocations` — сколько раз его отбросили дальше `farDistance`.
+   */
+  stalkerEnded: {
+    index: number;
+    outcome: "faded" | "cut" | "died";
+    hits: number;
+    pushes: number;
+    relocations: number;
+    lifeSec: number;
+    elapsedSec: number;
+  };
+  /**
+   * Осада стоящего (Р197, T-0392): за `leftSec` секунд секунд до осады на земле загорелось кольцо радиуса
    * `radius` вокруг якоря `(x, y)`. Приходит один раз на отсчёт; ушёл из круга — осады не будет, события
    * об отмене нет: кольцо гаснет само.
    */
@@ -511,6 +530,8 @@ export interface RunRecording {
   startingWeaponId: string;
   /** режим забега; нет поля — `endless`. Повтор собирает мир пролога только по нему */
   mode?: RunMode;
+  /** модификатор забега (T-0119); нет поля — забег без него. Без него повтор разошёлся бы с первого тика */
+  modifierIds?: RunModifierId[];
   contentHash: string;
   /** физических пикселей на игровую единицу — мир считается в них, повтору он нужен */
   unitScale: number;
@@ -578,6 +599,8 @@ export interface RunProof extends RunProofProgress {
   mapId: string;
   difficultyId: DifficultyId;
   mode: RunMode;
+  /** модификатор забега (T-0119); нет поля — забег без него. Без него повтор записи разошёлся бы с первого тика */
+  modifierIds?: RunModifierId[];
   startingWeaponId: string;
   contentHash: string;
   /** физических пикселей на игровую единицу: мир считается в них */

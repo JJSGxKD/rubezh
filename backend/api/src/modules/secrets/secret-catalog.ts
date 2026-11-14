@@ -74,6 +74,8 @@ interface KeyCheckSpec {
   headers: (value: string) => Record<string, string>;
   /** что проверить, когда сервис не принял ключ */
   refusalHint: string;
+  /** коды, которые тоже значат отказ: GitHub на закрытый от токена ресурс отвечает 404 */
+  extraRefusalStatuses?: readonly number[];
 }
 
 /** Проверка связи с сервисом ключом: один лёгкий запрос, ответы — словами для панели. */
@@ -85,7 +87,7 @@ function keyCheck(spec: KeyCheckSpec) {
         signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
       });
       if (response.ok) return { ok: true, message: `${spec.service} принял ключ` };
-      if (response.status === 401 || response.status === 403 || response.status === 400) {
+      if (response.status === 401 || response.status === 403 || response.status === 400 || spec.extraRefusalStatuses?.includes(response.status) === true) {
         return { ok: false, message: `${spec.service} не принял ключ (${String(response.status)}): ${spec.refusalHint}` };
       }
       if (response.status === 429) return { ok: false, message: `${spec.service} ответил «слишком много запросов» — ключ не проверен, попробуйте через минуту` };
@@ -115,6 +117,7 @@ const FOREXRATEAPI_SERVICE = "Курсы валют · ForexRateAPI";
 const ADSGRAM_SERVICE = "Трекинг закупок · AdsGram";
 const ADSGRAM_TASKS_SERVICE = "Задания сетей · AdsGram";
 const MAX_SERVICE = "MAX";
+const GITHUB_XRAY_SERVICE = "Обновление ядра Xray · GitHub";
 
 /**
  * Адрес награды за задание AdsGram (docs/35-stage4-plan.md WP13, часть 6):
@@ -134,6 +137,15 @@ export const ADSGRAM_REWARD_PATH = "/api/v1/ads/adsgram/reward";
  */
 export const MAX_WEBHOOK_PATH = "/api/v1/max/webhook";
 const MAX_API_ROOT = "https://platform-api2.max.ru";
+
+/**
+ * Запуск обновления ядра Xray (docs/35-stage4-plan.md Р202, tasks/T-0416): куда и
+ * какой workflow. Те же значения стоят в `proxies/xray-core/xray-core-target.ts`
+ * (`XRAY_UPDATE_TARGET`): домен прокси каталог ключей не импортирует, а их
+ * совпадение сверяет тест.
+ */
+const GITHUB_API = "https://api.github.com";
+const XRAY_BUMP_WORKFLOW_URL = `${GITHUB_API}/repos/JJSGxKD/rubezh/actions/workflows/xray-bump.yml`;
 
 /** Секрет адреса — 32 случайных байта в base64url: подобрать его перебором нельзя. */
 export const GENERATED_SECRET_BYTES = 32;
@@ -399,6 +411,26 @@ export const SECRETS = {
       reveal: (_value, config) => `${config.telegram.publicApiUrl}${MAX_WEBHOOK_PATH}`,
       where: "вставлять никуда не нужно: сервер сам оформит подписку у MAX; выше — адрес вебхука для справки",
     },
+  },
+  githubXrayUpdate: {
+    key: "github.xray-update",
+    service: GITHUB_XRAY_SERVICE,
+    title: "Токен запуска обновления ядра Xray",
+    hint: "Fine-grained токен GitHub только на репозиторий игры с одним правом — Actions: Read and write (Metadata: Read GitHub добавит сам). Ни содержимого, ни PR: ветку и PR делает сам workflow. Без ключа кнопки «Обновить» во вкладке «Ядро Xray» нет.",
+    cabinetUrl: "https://github.com/settings/personal-access-tokens/new",
+    // Только fine-grained: классический токен даёт права на все репозитории владельца.
+    pattern: /^github_pat_[A-Za-z0-9_]{70,120}$/,
+    example: "github_pat_11ABCDEFG0aBcDeFgHiJkL_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTU",
+    // Только из панели: токен перевыпускают в кабинете GitHub, и заменять его должен человек.
+    fromEnv: () => null,
+    // Файл workflow читается тем же правом Actions; 404 значит, что токен его не видит или файла ещё нет в main.
+    check: keyCheck({
+      service: "GitHub",
+      url: () => XRAY_BUMP_WORKFLOW_URL,
+      headers: (value) => ({ authorization: `Bearer ${value}`, "x-github-api-version": "2022-11-28", "user-agent": "rubezh-api" }),
+      refusalHint: "проверьте, что токен fine-grained, выдан на репозиторий игры и у него право Actions: Read and write",
+      extraRefusalStatuses: [404],
+    }),
   },
 } as const satisfies Record<string, SecretDefinition>;
 

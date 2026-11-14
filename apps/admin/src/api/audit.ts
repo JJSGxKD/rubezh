@@ -109,6 +109,7 @@ const ACTION_TITLES: Record<string, string> = {
   "secrets.save": "Замена ключа интеграции",
   "secrets.reset": "Сброс ключа интеграции к окружению",
   "secrets.generate": "Новый адрес для сети",
+  "proxies.xray_core.update": "Запуск обновления ядра Xray",
   "flags.save": "Изменение флага",
   "flags.remove": "Удаление флага",
   "tasks.create": "Новое задание",
@@ -152,6 +153,8 @@ const ACTION_TITLES: Record<string, string> = {
   "ads.networks.reorder": "Порядок рекламных сетей",
   "ads.block.create": "Новый рекламный блок",
   "ads.block.update": "Правка рекламного блока",
+  "ads.block.archive": "Рекламный блок в архив",
+  "ads.block.unarchive": "Рекламный блок из архива",
   "ads.test": "Проверка рекламы командой",
   "names.rule.create": "Новое правило фильтра имён",
   "names.rule.update": "Правка правила фильтра имён",
@@ -236,6 +239,11 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
       return { kind: "настройка", label: target, route: { section: "settings", id: null } };
     case "secrets":
       return { kind: "ключ", label: named(entry, "title") ?? target, route: { section: "secrets", id: null } };
+    case "proxies":
+      // Те же «proxies.*» — и у ручных прокси; прежнее поведение для них не меняем.
+      return action.startsWith("proxies.xray_core.")
+        ? { kind: "ядро Xray", label: target, route: { section: "proxies", id: null } }
+        : { kind: "объект", label: short(target), route: null };
     case "flags":
       return { kind: "флаг", label: target, route: { section: "flags", id: null } };
     case "tasks":
@@ -303,6 +311,7 @@ const FIELD_TITLES: Record<string, string> = {
   devices: "устройства",
   segment: "аудитория",
   version: "версия",
+  running: "запущенная версия",
   kind: "вид",
   published: "опубликовано",
   price: "курс",

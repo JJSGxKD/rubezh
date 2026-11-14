@@ -43,6 +43,8 @@ export const TEAM_PATHS: readonly string[] = [
   "modules/name-rules/name-rules-reclean.service.ts",
   // подписка Xray — раздел панели, игрок её не видит
   "modules/proxies/subscription/",
+  // ядро Xray (T-0416): раздел панели, тексты отказов — сотруднику
+  "modules/proxies/xray-core/",
   // контент и баланс (T-0303): версии, черновики, проверка — раздел панели, тексты сотруднику
   "modules/content/",
   // заявки на правку цен (T-0309): раздел панели, тексты сотруднику
@@ -68,6 +70,7 @@ export const TEAM_PATHS: readonly string[] = [
  */
 export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   { code: "ad_block_shape_locked", fragment: "заведите новый блок, а этот выключите" },
+  { code: "ad_block_archived", fragment: "верните его, чтобы изменить" },
   { code: "task_shape_locked", fragment: "заведите новое задание и выключите это" },
   { code: "promo_code_taken", fragment: "Придумайте другой" },
   { code: "purchase_undeliverable", fragment: "Верните звёзды" },

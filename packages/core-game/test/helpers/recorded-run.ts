@@ -31,6 +31,8 @@ export interface RecordedRunOptions {
   continues?: boolean;
   /** снаряжение на забег — как его подаёт оболочка */
   loadout?: RunLoadout;
+  /** модификатор забега (T-0119) — как его подаёт оболочка */
+  modifierIds?: readonly string[];
 }
 
 export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
@@ -41,6 +43,7 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     difficultyId: options.difficultyId ?? "normal",
     unitScale,
     ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
+    ...(options.modifierIds === undefined ? {} : { modifierIds: options.modifierIds }),
   });
   const recorder = new RunRecorder({
     reportId: "00000000-0000-4000-8000-000000000001",
@@ -54,6 +57,7 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     unitScale,
     replayBlocker: null,
     ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
+    ...(world.modifierIds.length === 0 ? {} : { modifierIds: [...world.modifierIds] }),
   });
   const choose = options.choose ?? ((offers) => offers[0].id);
   const input: SimInput = { moveX: 0, moveY: 0 };

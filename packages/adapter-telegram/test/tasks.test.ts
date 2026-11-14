@@ -110,7 +110,12 @@ describe("задание AdsGram в строке оболочки", () => {
     const [element] = created;
     expect(placed).toEqual([element]);
     expect(Object.fromEntries(element?.attributes ?? [])).toEqual({ "data-block-id": "task-123", "data-debug": "true" });
+    // Блочный элемент во всю ширину: пользовательский элемент по умолчанию
+    // строчный, а у строчного наблюдатель размеров всегда видит ноль — задание
+    // нарисовано, а строка так и не становится «на экране».
     expect(Object.fromEntries(element?.properties ?? [])).toEqual({
+      display: "block",
+      width: "100%",
       "--adsgram-task-font-size": "14px",
       "--adsgram-task-icon-size": "44px",
       "--adsgram-task-icon-border-radius": "var(--radius-md)",
@@ -155,7 +160,8 @@ describe("задание AdsGram в строке оболочки", () => {
     }
   });
 
-  it("задание так и не нарисовалось — значит, его нет", async () => {
+  it("задание так и не нарисовалось — значит, его нет; ждём не меньше 20 секунд — сеть берёт задание по сети игрока", async () => {
+    expect(READY_TIMEOUT_MS).toBeGreaterThanOrEqual(20_000);
     vi.useFakeTimers();
     const { dom } = fakeDom();
     const { mount, states } = mountOf();

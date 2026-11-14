@@ -25,7 +25,7 @@ import { ProgressService } from "../src/modules/progress/progress.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
-import { ELEMENTS, TASK_KIND_IDS, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { ELEMENTS, TASK_KIND_IDS, isEmblemKind, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
 import { PrismaWalletRepository } from "../src/modules/wallet/wallet.repository.js";
@@ -57,6 +57,9 @@ const live = DATABASE_URL !== "" && REDIS_URL !== "";
 const NOON = new Date(Date.UTC(2026, 9, 21, 9));
 const HOUR = 3_600_000;
 const STAMP = String(Date.now());
+
+/** Строки статусных и сезонных знаков (T-0235): они тоже в витрине, но целей, наград и престижа у них нет. */
+const EMBLEM_ROWS = 7;
 
 /** Девять существующих достижений: цель и награда не меняются миграцией. */
 const OLD: Readonly<Record<string, { target: number; coins: number; gems: number; title: string }>> = {
@@ -168,7 +171,8 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
     tasks = new TasksService(tasksRepository, wallet, new RunsHooks(), unused, unused, unused, unused);
     const friends = new PrismaFriendsRepository(prisma);
     service = new AchievementsService(tasks, repository, { friendCount: (accountId) => friends.count(accountId) }, new ProgressService(new PrismaProgressRepository(prisma)), settings);
-    catalog = (await tasksRepository.catalog()).filter((task) => task.period === "achievement" && task.category !== null && !task.taskId.startsWith("it_"));
+    // Статусные и сезонные знаки (T-0235) — строки того же каталога, но не достижения с целью и престижем: их проверяет emblems.integration.test.ts.
+    catalog = (await tasksRepository.catalog()).filter((task) => task.period === "achievement" && task.category !== null && !isEmblemKind(task.kind) && !task.taskId.startsWith("it_"));
   });
 
   afterAll(async () => {
@@ -199,7 +203,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
     });
 
     it("ни одна посеянная строка не потерялась при чтении: вид, фильтр и поля известны серверу", async () => {
-      const [row] = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM task_def WHERE category IS NOT NULL AND task_id NOT LIKE 'it\_%'`;
+      const [row] = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM task_def WHERE category IS NOT NULL AND kind NOT IN ('status', 'season') AND task_id NOT LIKE 'it\_%'`;
       expect(row?.count).toBe(catalog.length);
       for (const task of catalog) expect(TASK_KIND_IDS, task.taskId).toContain(task.kind);
       const weaponIds = new Set(WEAPONS.map((weapon) => weapon.id));
@@ -370,9 +374,12 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
     it("витрина — это достижения: ежедневные, недельные и партнёрские цели в неё не попадают; порядок как в панели", async () => {
       const me = await player();
       const view = await service.view(me, NOON);
-      expect(view.items.length).toBe(catalog.length);
-      expect(idsOf(view).every((id) => catalog.some((task) => task.taskId === id))).toBe(true);
-      const sorts = idsOf(view).map((id) => catalog.find((task) => task.taskId === id)?.sort ?? 0);
+      expect(view.items.length).toBe(catalog.length + EMBLEM_ROWS);
+      // Знаки статуса и сезона (T-0235) идут в конце списка: их `sort` — с 900.
+      const regular = idsOf(view).filter((id) => !id.startsWith("emb_"));
+      expect(idsOf(view).slice(regular.length).every((id) => id.startsWith("emb_"))).toBe(true);
+      expect(regular.every((id) => catalog.some((task) => task.taskId === id))).toBe(true);
+      const sorts = regular.map((id) => catalog.find((task) => task.taskId === id)?.sort ?? 0);
       expect(sorts).toEqual([...sorts].sort((a, b) => a - b));
       expect(view).toMatchObject({ prestige: 0, favorites: [] });
     });
@@ -472,7 +479,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
         settings,
       );
       const view = await broken.view(me, NOON);
-      expect(view.items.length).toBe(catalog.length);
+      expect(view.items.length).toBe(catalog.length + EMBLEM_ROWS);
     });
   });
 
@@ -832,7 +839,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
       expect(Object.keys(body).sort()).toEqual(["favorites", "items", "prestige", "rarity"]);
       expect(Object.keys(body.rarity).sort()).toEqual(["computedAt", "population", "shown"]);
       expect(body.prestige).toBe(10);
-      expect(body.items.length).toBe(catalog.length);
+      expect(body.items.length).toBe(catalog.length + EMBLEM_ROWS);
 
       const empty = await http.inject({ method: "GET", url: "/api/v1/achievements/summary", headers });
       expect(empty.json<{ data: unknown }>().data).toEqual({ prestige: 10, favorites: [] });

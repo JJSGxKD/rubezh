@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
+import { DEFAULT_DAILY_LADDER_TEXT, parseDailyLadder } from "../daily/daily-rules.js";
 import { AMOUNTS_PROBLEM, parseAmounts } from "../donations/donation-amounts.js";
+import { MAX_COINS_PER_RUN, MAX_XP_PER_RUN, MIN_REWARDED_SEC, DEFAULT_LEVEL_LADDER_TEXT, parseLevelLadder } from "../progress/progress-rules.js";
 import { pointsFromOf } from "../rating/rating-switch.js";
 import { ratingSinceOf } from "../runs/rated-runs.js";
 import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
@@ -56,6 +58,12 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
   readonly fromEnv: (config: AppConfig) => T | null;
   readonly fallback: T;
   /**
+   * Ключ «деньги» (tasks/T-0310; docs/19-content-admin.md §6): число награды или
+   * цены в той же валюте, что продаётся за звёзды. Обычная правка настроек его не
+   * меняет — только заявка со вторым участником (`change-requests/reward-settings.ts`).
+   */
+  readonly money?: true;
+  /**
    * Проверка, которой нужно текущее время, — только при сохранении из панели;
    * текст ошибки или `null`. Схема времени не знает, и значение из окружения или
    * базы через неё не отсекается.
@@ -66,6 +74,8 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
 export const SETTING_KEY = /^[a-z][a-z0-9.-]{1,63}$/;
 
 const NOTIFY_GROUP = "Уведомления команде";
+
+const REWARDS_GROUP = "Награды";
 
 const chatSchema = z
   .string()
@@ -201,6 +211,8 @@ const REMINDERS_GROUP = "Напоминания";
 
 const PROLOGUE_GROUP = "Пролог";
 
+const PARTNERS_GROUP = "Партнёры";
+
 const MAX_BOT_GROUP = "Бот MAX";
 
 const PAYMENTS_GROUP = "Платежи";
@@ -289,6 +301,13 @@ export const SETTINGS = {
     "notify.chat.reminders",
     "Напоминания",
     "Раз в игровые сутки одно сообщение: сколько напоминаний бота отправлено вчера, сколько не доставлено и сколько игроков заблокировали бота. Пусто — общий чат",
+    () => "",
+  ),
+  // Переменной окружения нет: адрес задаётся только в панели (пусто — общий чат).
+  chatFinance: chat(
+    "notify.chat.finance",
+    "Бухгалтерия",
+    "Операции учёта, ждущие подтверждения владельца, и решения по ним. Пусто — общий чат",
     () => "",
   ),
   notifyReports: {
@@ -949,6 +968,26 @@ export const SETTINGS = {
     20,
   ),
   /**
+   * Кабинет партнёра (docs/35-stage4-plan.md Р136, tasks/T-0218): сколько своего партнёр заводит сам.
+   * Без окружения: числа правятся в панели без релиза.
+   */
+  partnersCabinetMaxLinks: integer(
+    "partners.cabinet.max-links",
+    PARTNERS_GROUP,
+    "Кабинет партнёра: ссылок",
+    "Сколько ссылок может быть у партнёра в кабинете: считаются все его ссылки, и заведённые им самим, и заведённые командой. Дошёл до потолка — кабинет отвечает «это потолок кабинета», новые ссылки ему заводит команда. Нуль — партнёр сам не заводит ссылок",
+    { min: 0, max: 200, unit: ["ссылка", "ссылки", "ссылок"] },
+    20,
+  ),
+  partnersCabinetMaxPromoCopies: integer(
+    "partners.cabinet.max-promo-copies",
+    PARTNERS_GROUP,
+    "Кабинет партнёра: копий промокодов",
+    "Сколько копий своих промокодов партнёр заводит сам, с новым кодовым словом. Награда, лимит погашений и срок у копии те же, что у исходного кода: их назначает команда. Нуль — партнёр сам не копирует",
+    { min: 0, max: 100, unit: ["копия", "копии", "копий"] },
+    5,
+  ),
+  /**
    * Подписка Xray для прокси (docs/35-stage4-plan.md Р101, tasks/T-0093).
    * Без окружения: числа правятся в панели без релиза.
    */
@@ -1027,6 +1066,82 @@ export const SETTINGS = {
     2_000,
   ),
   /**
+   * Награды числами (docs/19-content-admin.md §6, tasks/T-0310): монеты и опыт за
+   * забег, награды за уровень и награда дня. Ключи «деньги»: правятся заявкой
+   * со вторым участником, а не здесь. Умолчание — прежние постоянные в
+   * `progress/progress-rules.ts` и `daily/daily-rules.ts`; окружения нет. Потолки
+   * кошелька (`wallet/wallet-limits.ts`) остаются в коде.
+   */
+  rewardsRunMaxCoins: {
+    ...integer(
+      "rewards.run-max-coins",
+      REWARDS_GROUP,
+      "Награда за забег: потолок монет",
+      "Больше монет за один забег не начисляется, как бы долго игрок ни жил. Выше суточного потолка кошелька из забегов (20 000) часть не начислится",
+      { min: 1, max: 100_000, unit: ["монета", "монеты", "монет"] },
+      MAX_COINS_PER_RUN,
+    ),
+    money: true,
+  } satisfies SettingDefinition<number>,
+  rewardsRunMaxXp: {
+    ...integer(
+      "rewards.run-max-xp",
+      REWARDS_GROUP,
+      "Награда за забег: потолок опыта",
+      "Больше опыта за один забег не начисляется. Влияет на то, как быстро растёт уровень аккаунта",
+      { min: 1, max: 100_000, unit: ["очко", "очка", "очков"] },
+      MAX_XP_PER_RUN,
+    ),
+    money: true,
+  } satisfies SettingDefinition<number>,
+  rewardsRunMinSec: {
+    ...integer(
+      "rewards.run-min-sec",
+      REWARDS_GROUP,
+      "Награда за забег: минимальная длина",
+      "Забег короче этого времени награды не даёт: иначе «нажал и вышел» фармили бы монеты",
+      { min: 10, max: 600, unit: ["секунда", "секунды", "секунд"] },
+      MIN_REWARDED_SEC,
+    ),
+    money: true,
+  } satisfies SettingDefinition<number>,
+  rewardsLevelLadder: {
+    key: "rewards.level-ladder",
+    group: REWARDS_GROUP,
+    title: "Награды за уровень аккаунта",
+    hint: "Ступени «с уровня:монет за уровень:самоцветов:раз в сколько уровней» через «;» (до восьми, первая — с первого уровня). Монеты за уровень = число × номер уровня; самоцветы — на каждом уровне, кратном последнему числу. Например 1:50:10:5; 20:80:20:10",
+    kind: "text",
+    schema: z
+      .string()
+      .trim()
+      .max(160)
+      .superRefine((value, context) => {
+        const parsed = parseLevelLadder(value);
+        if (!parsed.ok) context.addIssue({ code: "custom", message: parsed.problem });
+      }),
+    fromEnv: () => null,
+    fallback: DEFAULT_LEVEL_LADDER_TEXT,
+    money: true,
+  } satisfies SettingDefinition<string>,
+  rewardsDailyLadder: {
+    key: "rewards.daily-ladder",
+    group: REWARDS_GROUP,
+    title: "Награда дня: неделя",
+    hint: "Семь дней через запятую, у каждого «монеты/осколки»: основа до множителей недели и уровня. Седьмой день обычно крупнее. Например 60/0, 80/0, 100/0, 120/0, 150/0, 180/0, 300/10",
+    kind: "text",
+    schema: z
+      .string()
+      .trim()
+      .max(160)
+      .superRefine((value, context) => {
+        const parsed = parseDailyLadder(value);
+        if (!parsed.ok) context.addIssue({ code: "custom", message: parsed.problem });
+      }),
+    fromEnv: () => null,
+    fallback: DEFAULT_DAILY_LADDER_TEXT,
+    money: true,
+  } satisfies SettingDefinition<string>,
+  /**
    * Холд оплаты звёздами (docs/35-stage4-plan.md Р218, tasks/T-0453): через сколько дней после оплаты звёзды
    * доступны к выводу. Кабинет участника считает по нему, сколько выручки месяца ещё в холде. Ключ назван по
    * площадке: у MAX и VK будут свои сроки.
@@ -1038,6 +1153,19 @@ export const SETTINGS = {
     "Через сколько дней звёзды оплаты становятся доступны к выводу. Кабинет участника считает по нему, сколько выручки ещё в холде",
     { min: 0, max: 90, unit: ["день", "дня", "дней"] },
     21,
+  ),
+  /**
+   * Второй ключ на операции учёта (docs/35-stage4-plan.md Р220, tasks/T-0462): операция финансов дороже порога
+   * в долларах по курсу на момент ввода ждёт подтверждения владельца. Без окружения: число правится в панели.
+   * Без оценки в долларах или с исправлением операция ждёт при любом пороге.
+   */
+  financeApproveThresholdUsd: integer(
+    "finance.approve-threshold-usd",
+    PAYMENTS_GROUP,
+    "Подтверждение владельцем от, $",
+    "Операция учёта от финансов на сумму от этого порога в долларах по текущему курсу ждёт подтверждения владельца. Исправления и операции без оценки в долларах ждут при любом пороге; операции владельца проводятся сразу",
+    { min: 0, max: 100_000, unit: ["доллар", "доллара", "долларов"] },
+    200,
   ),
 } as const;
 

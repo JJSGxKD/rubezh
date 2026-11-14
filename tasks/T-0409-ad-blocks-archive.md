@@ -3,8 +3,8 @@ id: T-0409
 title: Архив рекламных блоков — «В архив» выключает блок и убирает его из списка
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: []
@@ -33,6 +33,10 @@ shared:
   - apps/admin/test/audit.test.ts
   - apps/admin/src/ui/help.ts
   - docs/29-admin-panel.md
+  - docs/21-diagrams.md
+  - backend/api/test/ads.integration.test.ts
+  - backend/api/test/player-address.test.ts
+  - apps/admin/test/ads.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
@@ -443,7 +447,9 @@ batch: 5
   блоков, показы остаются в воронке; «Вернуть» возвращает блок
   выключенным; блок в архиве не правится (`35-stage4-plan.md` Р200)». В
   перечень действий журнала — `ads.block.archive`, `ads.block.unarchive`.
-- `docs/21-diagrams.md` не меняется: полей `ad_block` в ER-схеме нет.
+- `docs/21-diagrams.md`: в ER-схеме у `AD_BLOCK` есть поля, поэтому добавляется
+  колонка `archived_at` и фраза об архиве в пояснении к рекламе (схема не должна
+  отставать от кода, `CLAUDE.md`, «Схемы — обязательная документация»).
 
 ## Критерии приёмки
 

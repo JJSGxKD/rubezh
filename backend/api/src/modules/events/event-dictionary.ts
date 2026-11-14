@@ -228,6 +228,19 @@ export const EVENT_DICTIONARY = {
       elapsedSec: seconds,
     }),
   },
+  // Появление Карачуна закончилось (tasks/T-0427, Р205): растворился, разрезан строем или игрок погиб.
+  stalker_ended: {
+    version: 1,
+    payload: payload({
+      index: count,
+      outcome: z.enum(["faded", "cut", "died"]),
+      hits: count,
+      pushes: count,
+      relocations: count,
+      lifeSec: count,
+      elapsedSec: count,
+    }),
+  },
   // Воронка пролога (tasks/T-0280, Р151): шаг первого забега аккаунта — `start`,
   // `first_gem`, `first_level`, `first_elite`, `first_chest`, `guard`, `won`;
   // победа добавляет `tutorial_completed` с секундой забега.

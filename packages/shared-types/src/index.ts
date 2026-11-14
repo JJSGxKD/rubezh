@@ -1512,7 +1512,51 @@ export interface DifficultyDef {
   spawnRateMul: number;
   /** потолок живых врагов одновременно */
   maxAliveMul: number;
+  /**
+   * Опыт в бою: сумма кристаллов за врага равна `round(xp · xpMul)`. Есть только у
+   * сложности, составленной с модификатором забега (`composeDifficulty`); в контенте
+   * поля нет, и нет поля — множитель 1.
+   */
+  xpMul?: number;
 }
+
+/**
+ * Модификатор забега (docs/39-retention-mechanics.md Б8, Р105): условие, которое игрок
+ * берёт на себя перед забегом ради награды. Оси ложатся умножением поверх выбранной
+ * сложности, плюс опыт в бою. Награда за забег — отдельная таблица
+ * `RUN_MODIFIER_REWARD_MUL`, движок её не читает.
+ */
+export type RunModifierId = "hurry" | "inverse";
+
+export const RUN_MODIFIER_IDS: readonly RunModifierId[] = ["hurry", "inverse"];
+
+export interface RunModifierDef {
+  id: RunModifierId;
+  nameKey: string;
+  descriptionKey: string;
+  /** здоровье врагов, множитель поверх сложности */
+  enemyHpMul: number;
+  /** урон врагов */
+  enemyDamageMul: number;
+  /** темп спавна — врагов в секунду */
+  spawnRateMul: number;
+  /** потолок живых врагов одновременно */
+  maxAliveMul: number;
+  /** опыт в бою: множитель суммы кристаллов за убитого врага */
+  xpMul: number;
+}
+
+/**
+ * Во сколько раз модификатор увеличивает награду за забег (монеты и опыт аккаунта).
+ * Лежит здесь, а не в контенте движка, потому что её читают двое: сервер, когда
+ * считает награду (T-0122), и лист «Перед забегом», когда подписывает выбор (T-0123).
+ * Движок её не читает — награда не влияет на сам бой. Числа стартовые, калибрует
+ * геймдизайнер.
+ */
+export const RUN_MODIFIER_REWARD_MUL: Readonly<Record<RunModifierId, number>> = {
+  hurry: 1.25,
+  inverse: 1.25,
+};
 
 /** Наклоны рычагов подстройки: на сколько множитель меняется на единицу уровня давления. */
 export interface PressureLeversDef {
@@ -1594,6 +1638,8 @@ export interface AccountUnlockDef {
   passives?: string[];
   /** слоты с этого уровня; не заданное — как на уровне ниже */
   slots?: { weapons?: number; passives?: Partial<Record<PassiveCategory, number>> };
+  /** модификаторы забега, которые открываются на этом уровне (`RUN_MODIFIER_IDS`) */
+  modifiers?: string[];
 }
 
 /**
@@ -1754,6 +1800,8 @@ export interface RunResult {
   mapId: string;
   /** уровень сложности: рекорд и лидерборд — отдельно по каждому */
   difficultyId: DifficultyId;
+  /** модификатор забега (T-0119); у забега без него поля нет */
+  modifierIds?: RunModifierId[];
   /**
    * Отпечаток игрового контента. Без него правку баланса не отделить от
    * сезонности: два забега с разной длиной могут отличаться и игроком, и
@@ -1802,6 +1850,12 @@ export interface RunResult {
   prologue?: RunPrologue;
   /** убийства по id врага; враги без убийств не попадают */
   killsByEnemy: Record<string, number>;
+  /**
+   * Типы врагов, вышедшие в мир, — id в порядке первого появления, без повторов (tasks/T-0479).
+   * Не «убил», а «встретил»: босс и элита здесь есть, даже если их не убили. Необязательное:
+   * итог прошлой сборки поля не знает.
+   */
+  enemiesSeen?: string[];
   damageDealt: number;
   damageTaken: number;
   /**
@@ -1947,6 +2001,8 @@ export interface RunFinishStats {
   noHitSec?: number;
   noKillSec?: number;
   killsByElement?: Partial<Record<ElementId, number>>;
+  /** типы врагов, вышедшие в мир (tasks/T-0479): по ним сервер открывает записи кодекса; записи прошлых сборок поля не знают */
+  enemiesSeen?: string[];
   /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
   huntLog?: RunHuntEntry[];
   buildScore?: number;
@@ -2015,6 +2071,22 @@ export interface RunScoreView {
   expectedPoints: number;
 }
 
+/** Знак у имени в строке списка (T-0235, Р149): выбранный игроком или знак по умолчанию. */
+export interface PublicEmblem {
+  id: string;
+  title: string;
+  /** редкость: шкала предметов и отдельный тон `team` у знака «Команда» */
+  tier: string;
+  category: "status" | "season" | "merit";
+  /** порядковый номер сезона — только у сезонного знака */
+  season?: number | undefined;
+}
+
+/** То, что список показывает рядом с именем игрока; облик (T-0237) добавится сюда же. */
+export interface PublicMark {
+  emblem?: PublicEmblem | undefined;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   name: string;
@@ -2028,6 +2100,8 @@ export interface LeaderboardEntry {
   tester?: true | undefined;
   /** поддержал проект (Р109); нет поля — не поддержал */
   supporter?: true | undefined;
+  /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен, клиент рисует по `tester` и `supporter` */
+  emblem?: PublicEmblem | undefined;
   /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
   prestige?: number | undefined;
   /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */

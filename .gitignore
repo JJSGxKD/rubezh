@@ -39,3 +39,6 @@ design/art/out/preview/*
 design/art/out/promo/
 # Черновые WAV музыки: в git — только OGG и M4A в packages/app-shell/src/audio/music.
 design/art/out/music/
+
+# Состояние конвейера тимлида: очередь поезда, итоги, провалы и лог (scripts/lead)
+.lead/
