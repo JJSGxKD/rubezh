@@ -61,6 +61,7 @@ export const ANALYTICS_EVENTS = [
   "task_points_claimed",
   "achievement_unlocked",
   "achievement_favorites_set",
+  "emblem_shown_changed",
   "task_link_opened",
   "task_shown",
   "bot_mention_started",

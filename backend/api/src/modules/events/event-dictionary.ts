@@ -356,6 +356,10 @@ export const EVENT_DICTIONARY = {
   // Сохранил любимые достижения для профиля (T-0107): `count` — сколько их стало.
   // Событие шлёт клиент после ответа сервера; пустой список («убрал все») — тоже сохранение.
   achievement_favorites_set: { version: 1, payload: payload({ count: z.number().int().min(0).max(3) }) },
+  // Сменил знак у имени (T-0236, docs/35-stage4-plan.md Р149): `emblem` — id выбранного знака или
+  // `auto` — «по умолчанию»; `category` — группа знака, который стал виден у имени (у `auto` без
+  // знака её нет). Событие шлёт клиент после ответа сервера; выбор того же знака события не шлёт.
+  emblem_shown_changed: { version: 1, payload: payload({ emblem: id, category: z.enum(["status", "season", "merit"]).optional() }) },
   // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
   // открывших доходят до награды. Подписку проверяет бот, и она видна только
   // по achievement_unlocked; открытие без награды — «не подписался». У
