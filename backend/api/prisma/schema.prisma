@@ -223,6 +223,8 @@ model Account {
   seasonRewards SeasonReward[]
   // Любимые достижения (T-0106)
   achFavorites  AchievementFavorite[]
+  // Кодекс врагов (T-0127)
+  codexEntries  CodexEntry[]
   // Батл-пасс (T-0311)
   passProgress  PassProgress[]
   passClaims    PassClaim[]
@@ -264,6 +266,7 @@ model Account {
   vipDaily         VipDaily?
   showcaseOffers   ShowcaseOffer[]
   adContinues      RunAdContinue[]
+  adRerolls        RunAdReroll[]
   gemContinues     RunGemContinue[]
   compensation     TesterCompensation?
   botMentionTasks  BotMentionTask[]
@@ -520,6 +523,7 @@ model Run {
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   purchases    Purchase[]
   adContinues  RunAdContinue[]
+  adRerolls    RunAdReroll[]
   gemContinues RunGemContinue[]
   proof        RunProof?
 
@@ -1843,6 +1847,8 @@ enum AdPlace {
   run_double
   task
   interstitial
+  /// значения enum в базе дописываются в конец: порядок мест в коде (`AD_PLACES`) свой
+  card_reroll
 }
 
 /// Условие успеха предложения (Р6): показ, клик или целевое действие.
@@ -3382,6 +3388,34 @@ model LedgerLoan {
   @@map("ledger_loan")
 }
 
+// Месяцы учёта: сверка, закрытие и замок (docs/37-accounting.md §13, Р222, tasks/T-0468)
+
+/// open — открыт (строки у такого месяца может не быть вовсе), review — на сверке, closed — закрыт.
+enum LedgerPeriodStatus {
+  open
+  review
+  closed
+}
+
+/// Месяц учёта по UTC, «ГГГГ-ММ». Закрытый месяц запирает журнал: проводка с его месяцем отклоняется. `snapshot` —
+/// параметры и итог закрытия (ставки, доли, займы, курсы, водопад), по нему месяц пересчитывается без базы и не
+/// зависит от того, что поменяют потом; снимается вместе с закрытием. `reopened_count` входит в ключи проводок
+/// закрытия (`close:<месяц>:r<N>:…`), поэтому повторное закрытие не конфликтует со сторнированными.
+model LedgerPeriod {
+  period        String             @id @db.Char(7)
+  status        LedgerPeriodStatus @default(open)
+  reviewAt      DateTime?          @map("review_at") @db.Timestamptz(3)
+  /// кто поставил на сверку и закрыл; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  reviewBy      String?            @map("review_by") @db.Uuid
+  closedAt      DateTime?          @map("closed_at") @db.Timestamptz(3)
+  closedBy      String?            @map("closed_by") @db.Uuid
+  reopenedCount Int                @default(0) @map("reopened_count")
+  snapshot      Json?
+  updatedAt     DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("ledger_period")
+}
+
 // Шаблоны повторяющихся расходов (docs/37-accounting.md §8, Р220, tasks/T-0463)
 
 enum LedgerTemplateSchedule {
@@ -3416,6 +3450,49 @@ model LedgerTemplate {
   @@index([articleId])
   @@index([placeAccountId])
   @@map("ledger_template")
+}
+
+// Переброс карточек за рекламу (T-0199)
+
+/// Переброс карточек за рекламу (docs/35-stage4-plan.md Р133): один на забег, выданный по сессии показа места
+/// `card_reroll` — досмотренной или пропуску VIP. Забег — хозяин места, как у второго шанса; итог сверяется с этой
+/// книгой: заявленный рекламный переброс без строки отклоняет забег. `run_id` — ключ: второй переброс на забег не
+/// записывается, а сессия показа уникальна и потому не тратится на два забега.
+model RunAdReroll {
+  runId      String   @id @map("run_id") @db.VarChar(64)
+  accountId  String   @map("account_id") @db.Uuid
+  /// сессия показа; повтор той же сессией на тот же забег дожимает ответ
+  sessionId  String   @unique @map("session_id") @db.VarChar(32)
+  /// сеть показа; у пропуска VIP — его имя
+  networkKey String   @map("network_key") @db.VarChar(32)
+  grantedAt  DateTime @map("granted_at") @db.Timestamptz(3)
+
+  run     Run     @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("run_ad_reroll")
+}
+
+// Кодекс врагов (docs/39-retention-mechanics.md К2, tasks/T-0127). Награда за
+// кодекс — три достижения лестницы `codex` в `task_def`, процент пишется в
+// `task_progress` видом `codex_percent`.
+
+/// Открытая запись кодекса: игрок встретил врага в забеге. Одна строка на пару,
+/// открытая запись не закрывается и не переписывается — повтор забега ничего
+/// не меняет (`ON CONFLICT DO NOTHING`). Список врагов — таблица сервера
+/// `CODEX_ENEMY_IDS`, внешнего ключа на врага нет: враги живут в контенте движка
+model CodexEntry {
+  accountId   String   @map("account_id") @db.Uuid
+  /// id врага из контента (`content/enemies.ts`)
+  enemyId     String   @map("enemy_id") @db.VarChar(48)
+  /// когда запись открыта: время записи забега, в котором враг встретился первым
+  firstSeenAt DateTime @map("first_seen_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, enemyId])
+  @@map("codex_entry")
 }
 
 // Выданные облики (docs/35-stage4-plan.md Р155, tasks/T-0245). Большинство обликов сервер

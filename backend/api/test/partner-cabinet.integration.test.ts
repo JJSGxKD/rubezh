@@ -6,6 +6,7 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
 import { PrismaLinksRepository } from "../src/modules/links/links.repository.js";
 import { PartnerCabinet, PrismaPartnerAccounts, PrismaPartnerPromos } from "../src/modules/partners/partner-cabinet.js";
+import { PrismaCabinetFunnel } from "../src/modules/partners/partner-cabinet-funnel.js";
 import { PrismaPartnersRepository } from "../src/modules/partners/partners.repository.js";
 import { codeKey } from "../src/modules/promo-codes/promo-code-rules.js";
 import { PrismaPromoCodesRepository, type NewPromoCampaign } from "../src/modules/promo-codes/promo-codes.repository.js";
@@ -15,9 +16,10 @@ import { panelSettings } from "./helpers/settings.js";
 import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
- * Кабинет партнёра, ссылки и промокоды, на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
+ * Кабинет партнёра, ссылки, промокоды и воронка, на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
  * TEST_DATABASE_URL, без него пропуск; tasks/T-0218): владелец ссылки — партнёр кабинета, чужое и командное
  * в список не попадает, копия кампании сохраняет награду, лимит и срок, а её погашение привязывает игрока.
+ * Воронка (T-0219): игроки двух партнёров не смешиваются, переходы — по кликам своих ссылок за период.
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
@@ -25,7 +27,7 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const NOW = new Date();
 
-describe.skipIf(DATABASE_URL === "")("кабинет партнёра: ссылки и промокоды на живом Postgres (T-0218)", () => {
+describe.skipIf(DATABASE_URL === "")("кабинет партнёра: ссылки, промокоды и воронка на живом Postgres (T-0218, T-0219)", () => {
   let prisma: PrismaClient;
   let accounts: PrismaAccountRepository;
   let partners: PrismaPartnersRepository;
@@ -94,7 +96,7 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра: ссыл�
     linked = new PrismaPartnerAccounts(prisma);
     const config = loadAppConfig({ NODE_ENV: "test", DATABASE_URL, PUBLIC_WEB_URL: "https://rubezh.example" } as NodeJS.ProcessEnv);
     const roles = new RolesService(config, new PrismaRolesRepository(prisma), accounts);
-    cabinet = new PartnerCabinet(roles, linked, partners, config, links, promo, new PrismaPartnerPromos(prisma), panelSettings());
+    cabinet = new PartnerCabinet(roles, linked, partners, config, links, promo, new PrismaPartnerPromos(prisma), panelSettings(), new PrismaCabinetFunnel(prisma));
   });
 
   afterAll(async () => {
@@ -216,5 +218,87 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра: ссыл�
     await expect(cabinet.copyPromo(admin, { partnerId }, source.campaignId, uniqueWord(), NOW)).rejects.toThrowError("Кабинет открыт для просмотра");
     expect(await prisma.link.count({ where: { partnerId } })).toBe(1);
     expect(await prisma.promoCampaign.count({ where: { partnerId } })).toBe(1);
+  });
+
+  /** Игрок, привязанный к партнёру ссылкой или кодом в момент `at`, с вехами воронки. */
+  async function bound(partnerId: string, via: { linkCode: string } | { campaignId: string }, at: Date, steps: { run?: boolean; d7?: boolean; purchase?: boolean } = {}): Promise<AccountRef> {
+    const who = await player();
+    await prisma.partnerBinding.create({
+      data: { accountId: who.accountId, partnerId, boundAt: at, linkCode: "linkCode" in via ? via.linkCode : null, campaignId: "campaignId" in via ? via.campaignId : null },
+    });
+    await prisma.accountFunnel.create({
+      data: {
+        accountId: who.accountId,
+        enteredAt: at,
+        appOpenedAt: at,
+        firstRunStartedAt: steps.run === true ? at : null,
+        returnedD7At: steps.d7 === true ? at : null,
+        firstPurchaseAt: steps.purchase === true ? at : null,
+      },
+    });
+    return who;
+  }
+
+  const click = (linkCode: string, at: Date) =>
+    links.recordClick({ clickId: newClickId(), linkCode, at, utm: { source: null, medium: null, campaign: null, content: null, term: null }, refererHost: null, deviceClass: "mobile", ipPrefix: null, language: null, networkParams: null });
+
+  it("воронка: только игроки своего партнёра, переходы — по кликам его ссылок за период, группы меньше порога без чисел, в ответе ни ID, ни имён, ни сумм", async () => {
+    const mine = await partnerWithCabinet("Воронка своя");
+    const other = await partnerWithCabinet("Воронка чужая");
+    const own = await cabinet.createLink(mine.actor, {}, { campaign: "Игровой угол", source: "channel", note: "Игровой угол" });
+    const foreign = await cabinet.createLink(other.actor, {}, { campaign: "Чужая", source: "post", note: null });
+    const word = uniqueWord();
+    const code = await campaign(mine.partnerId, word, { title: "Служебное название для команды" });
+    const dayA = new Date(Date.UTC(2026, 9, 10, 12));
+    const dayB = new Date(Date.UTC(2026, 9, 11, 12));
+    const before = new Date(Date.UTC(2026, 8, 15, 12));
+    const period = { from: new Date(Date.UTC(2026, 9, 1)), to: new Date(Date.UTC(2026, 10, 1)) };
+
+    // Своя ссылка: 12 игроков за период (10 в первый день, 2 во второй), один — до периода. Код: 3 игрока — меньше порога.
+    for (let index = 0; index < 10; index += 1) await bound(mine.partnerId, { linkCode: own.code }, dayA, { run: index < 8, d7: index < 3, purchase: index < 2 });
+    for (let index = 0; index < 2; index += 1) await bound(mine.partnerId, { linkCode: own.code }, dayB);
+    await bound(mine.partnerId, { linkCode: own.code }, before, { purchase: true });
+    for (let index = 0; index < 3; index += 1) await bound(mine.partnerId, { campaignId: code.campaignId }, dayA, { purchase: true });
+    for (let index = 0; index < 11; index += 1) await bound(other.partnerId, { linkCode: foreign.code }, dayA, { purchase: true });
+    // Переходы: три в периоде, один до него; чужие и командные не считаются.
+    await Promise.all([click(own.code, dayA), click(own.code, dayA), click(own.code, dayB), click(own.code, before), click(foreign.code, dayA), click(foreign.code, dayB)]);
+
+    const funnel = await cabinet.funnel(mine.actor, {}, period, NOW);
+
+    expect(funnel).toMatchObject({ clicks: 3, minGroup: 10, tooFew: false, total: { accounts: 15, firstRunStarted: 8, returnedD7: 3, firstPurchase: 5 } });
+    expect(funnel.sources).toMatchObject([
+      { via: "link", ref: own.code, name: "igrovoy-ugol", source: "channel", note: "Игровой угол", counts: { accounts: 12 } },
+      { via: "code", name: word, counts: null },
+    ]);
+    expect(funnel.platforms).toMatchObject([{ platform: "telegram", counts: { accounts: 15 } }]);
+    expect(funnel.days).toMatchObject([{ day: "2026-10-10", counts: { accounts: 13 } }]);
+    expect(funnel.hiddenDays).toBe(1);
+    const text = JSON.stringify(funnel);
+    expect(text).not.toContain(foreign.code);
+    expect(text).not.toContain("Служебное название");
+    expect(text).not.toMatch(/accountId|account_id|displayName|username|amount|stars|revenue/i);
+
+    // Владелец глазами партнёра видит то же.
+    const admin = await ownerOf();
+    expect(await cabinet.funnel(admin, { partnerId: mine.partnerId }, period, NOW)).toEqual(funnel);
+    // Партнёр чужой кабинет не открывает.
+    await expect(cabinet.funnel(other.actor, { partnerId: mine.partnerId }, period, NOW)).rejects.toMatchObject({ code: "forbidden" });
+    // У чужого партнёра свои 11 игроков и ни одного перехода в этом разрезе.
+    expect(await cabinet.funnel(other.actor, {}, period, NOW)).toMatchObject({ clicks: 2, total: { accounts: 11, firstPurchase: 11 } });
+  });
+
+  it("воронка: игроков меньше порога — только строка о пороге; партнёр без игроков и без ссылок — пустой ответ без ошибки", async () => {
+    const small = await partnerWithCabinet("Воронка малая");
+    const empty = await partnerWithCabinet("Воронка пустая");
+    const link = await cabinet.createLink(small.actor, {}, { campaign: "Мало", source: "chat", note: null });
+    const day = new Date(Date.UTC(2026, 9, 10, 12));
+    for (let index = 0; index < 9; index += 1) await bound(small.partnerId, { linkCode: link.code }, day, { purchase: true });
+    const period = { from: new Date(Date.UTC(2026, 9, 1)), to: new Date(Date.UTC(2026, 10, 1)) };
+
+    const funnel = await cabinet.funnel(small.actor, {}, period, NOW);
+    expect(funnel).toMatchObject({ tooFew: true, total: null, sources: [], platforms: [], days: [], hiddenDays: 0, clicks: 0 });
+    expect(JSON.stringify(funnel)).not.toContain(link.code);
+
+    expect(await cabinet.funnel(empty.actor, {}, period, NOW)).toMatchObject({ tooFew: true, total: null, clicks: 0 });
   });
 });

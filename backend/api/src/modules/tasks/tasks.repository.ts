@@ -64,6 +64,8 @@ export interface TasksRepository {
    * записи забега: значение не убывает и не уходит за цель. Повтор безвреден.
    */
   applyState(accountId: string, deltas: readonly TaskDelta[], at: Date): Promise<void>;
+  /** сколько из заданий игрок выполнил — один запрос с `count`; нужен «Коллекционеру» (T-0322) */
+  completedCount(accountId: string, taskIds: readonly string[]): Promise<number>;
   /** отметить забор; `false` — уже забрано параллельным запросом */
   markClaimed(accountId: string, taskId: string, periodStart: string, at: Date): Promise<boolean>;
   /**
@@ -241,6 +243,15 @@ export class PrismaTasksRepository implements TasksRepository {
     await this.prisma.$transaction(async (tx) => {
       await mergeProgress(tx, accountId, at, deltas);
     });
+  }
+
+  async completedCount(accountId: string, taskIds: readonly string[]): Promise<number> {
+    if (taskIds.length === 0) return 0;
+    // Достижение живёт одной строкой прогресса, поэтому срок не сверяется: выполненное остаётся выполненным.
+    const [row] = await this.prisma.$queryRaw<unknown[]>`
+      SELECT count(*)::int AS count FROM task_progress
+      WHERE account_id = ${accountId}::uuid AND task_id = ANY(${[...taskIds]}::text[]) AND completed_at IS NOT NULL`;
+    return z.object({ count: z.number().int() }).parse(row).count;
   }
 
   async insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean> {

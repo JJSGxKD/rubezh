@@ -3,8 +3,8 @@ id: T-0480
 title: Знак «Партнёр» у имени — держит активный партнёр с кабинетом
 epic: E16
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0235, T-0217]
@@ -25,6 +25,8 @@ shared:
   - backend/api/prisma/migrations/**
   - docs/21-diagrams.md
   - docs/35-stage4-plan.md
+  - apps/admin/test/tasks.test.ts
+  - backend/api/test/achievements.integration.test.ts
 runner: local
 executor: sonnet-5.5
 effort: extra

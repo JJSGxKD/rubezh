@@ -146,7 +146,13 @@ export class EmblemsService {
     for (const [accountId, account] of statuses) {
       const standing = seasons.get(accountId);
       const held = new Set<string>([
-        ...heldStatus({ vipActive: isVipActive(vip.get(accountId) ?? null, at), testerAt: account.testerAt, supporterAt: account.supporterAt, hasRole: account.hasRole }),
+        ...heldStatus({
+          vipActive: isVipActive(vip.get(accountId) ?? null, at),
+          testerAt: account.testerAt,
+          supporterAt: account.supporterAt,
+          hasRole: account.hasRole,
+          partnerActive: account.partnerActive,
+        }),
         ...heldSeason(standing?.bestPlace ?? null),
         ...(merit.get(accountId) ?? []),
       ]);

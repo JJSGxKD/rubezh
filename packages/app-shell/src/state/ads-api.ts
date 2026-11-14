@@ -12,7 +12,7 @@ import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
  * чего клиент ещё не знает.
  */
 
-export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "task", "interstitial"] as const;
+export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "card_reroll", "task", "interstitial"] as const;
 export type AdPlace = (typeof AD_PLACES)[number];
 
 /**

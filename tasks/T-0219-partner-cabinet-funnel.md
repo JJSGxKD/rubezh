@@ -3,8 +3,8 @@ id: T-0219
 title: Кабинет партнёра — воронка по своим ссылкам и кодам, без ID и малых групп
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0218]
@@ -17,6 +17,9 @@ zones:
   - apps/admin/src/screens/cabinet/**
 shared:
   - backend/api/src/modules/settings/setting-catalog.ts
+  - backend/api/src/modules/partners/partner-cabinet-funnel.ts
+  - backend/api/src/modules/partners/partners.module.ts
+  - apps/admin/test/cabinet-funnel.test.ts
   - docs/23-referral-and-partner-program.md
   - docs/30-configuration-map.md
 runner: any

@@ -68,4 +68,17 @@ describe("словарь событий", () => {
       expect(MAX_PAYLOAD_KEYS).toBeGreaterThanOrEqual(48);
     });
   });
+
+  describe("сообщения бота (tasks/T-0394, Р199)", () => {
+    const sent = { kind: "season_card", format: "card", outcome: "fallback", topic: "rewards", silent: true };
+
+    it("bot_message_sent принимает вид, формат, исход, тему и звук; формат вне списка отклоняет", () => {
+      const { payload } = EVENT_DICTIONARY.bot_message_sent;
+      expect(payload.safeParse(sent).success).toBe(true);
+      expect(payload.safeParse({ ...sent, format: "html" }).success).toBe(false);
+      expect(payload.safeParse({ ...sent, outcome: "retry" }).success).toBe(false);
+      expect(payload.safeParse({ ...sent, topic: "chat" }).success).toBe(false);
+      expect(payload.safeParse({ ...sent, silent: "да" }).success).toBe(false);
+    });
+  });
 });

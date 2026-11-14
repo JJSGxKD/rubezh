@@ -36,10 +36,10 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 93 модели, стирается 27", () => {
+  it("остаётся 94 модели, стирается 29", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(93);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(27);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(94);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(29);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
@@ -68,6 +68,12 @@ describe("план вайпа: полнота", () => {
     expect(plan.RunGemContinue?.why).toContain("часть забега");
     expect(order.indexOf("RunGemContinue")).toBe(order.indexOf("RunAdContinue") + 1);
     expect(order.indexOf("RunGemContinue")).toBeLessThan(order.indexOf("Run"));
+  });
+
+  it("рекламный переброс карточек (T-0199) — часть забега: стирается своим шагом до забега, а не только каскадом", () => {
+    expect(plan.RunAdReroll?.action).toBe("wipe");
+    expect(plan.RunAdReroll?.why).toContain("часть забега");
+    expect(order.indexOf("RunAdReroll")).toBeLessThan(order.indexOf("Run"));
   });
 
   it("запись забега для проверки стирается своим шагом до забега (T-0317), а не только каскадом", () => {
@@ -101,6 +107,7 @@ describe("план вайпа: порядок стирания", () => {
     expect(order).toEqual([
       "RunAdContinue",
       "RunGemContinue",
+      "RunAdReroll",
       "RunProof",
       "RunReward",
       "RunBoost",
@@ -126,6 +133,7 @@ describe("план вайпа: порядок стирания", () => {
       "PassProgress",
       "PassClaim",
       "BoostCredit",
+      "CodexEntry",
     ]);
   });
 

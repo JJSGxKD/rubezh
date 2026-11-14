@@ -3,6 +3,7 @@ import { PARTNER_FUNNEL, PrismaFunnelRepository } from "../funnel/funnel.reposit
 import { LINKS_REPOSITORY, PrismaLinksRepository } from "../links/links.repository.js";
 import { PROMO_CODES_REPOSITORY, PrismaPromoCodesRepository } from "../promo-codes/promo-codes.repository.js";
 import { PARTNER_ACCOUNTS, PARTNER_PROMOS, PartnerCabinet, PrismaPartnerAccounts, PrismaPartnerPromos } from "./partner-cabinet.js";
+import { CABINET_FUNNEL, PrismaCabinetFunnel } from "./partner-cabinet-funnel.js";
 import { PartnerLinkBinder } from "./partner-links.js";
 import { PARTNER_LINKS, PrismaPartnerLinksSource } from "./partner-links.repository.js";
 import { PARTNERS_REPOSITORY, PrismaPartnersRepository } from "./partners.repository.js";
@@ -21,7 +22,8 @@ import { PartnersService } from "./partners.service.js";
  * ссылок: карточке партнёра нужны только клики и запуски — теми же
  * запросами, что в списке ссылок, чтобы числа совпадали, — а контроллер
  * переходника и сервис ссылок ей ни к чему. Так же — репозиторий воронки:
- * карточке нужен только отчёт по игрокам партнёра (T-0068).
+ * карточке нужен только отчёт по игрокам партнёра (T-0068). Воронка кабинета (T-0219) читает привязки и клики
+ * сама: ей нужны вехи с порогом группы, а не отчёт карточки для команды.
  */
 @Module({
   providers: [
@@ -35,6 +37,7 @@ import { PartnersService } from "./partners.service.js";
     { provide: PARTNER_FUNNEL, useClass: PrismaFunnelRepository },
     { provide: PROMO_CODES_REPOSITORY, useClass: PrismaPromoCodesRepository },
     { provide: PARTNER_PROMOS, useClass: PrismaPartnerPromos },
+    { provide: CABINET_FUNNEL, useClass: PrismaCabinetFunnel },
   ],
   exports: [PartnersService, PartnerLinkBinder, PartnerCabinet],
 })

@@ -39,6 +39,7 @@ export const PLACE_FORMAT: Record<AdPlace, AdFormat> = {
   second_chance: "rewarded",
   wheel_spin: "rewarded",
   run_double: "rewarded",
+  card_reroll: "rewarded",
   task: "task",
   interstitial: "interstitial",
 };
@@ -61,6 +62,7 @@ export const PLACE_TITLES: Record<AdPlace, string> = {
   second_chance: "Второй шанс",
   wheel_spin: "Крутка колеса",
   run_double: "Удвоение за забег",
+  card_reroll: "Переброс карточек",
   task: "Задания",
   interstitial: "Между забегами",
 };

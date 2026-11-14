@@ -1,5 +1,9 @@
 import type { ChatTarget } from "./chat-target.js";
 import type { PlatformId } from "./platform.js";
+import type { RichDocument } from "./rich-message.js";
+
+/** Тема сообщений в личном чате: новости, награды, поддержка (Р199, WP52). Площадка без тем поле пропускает. */
+export type MessageTopic = "news" | "rewards" | "support";
 
 /**
  * Сообщение игроку от бота площадки (docs/35-stage4-plan.md §3.10, §3.11):
@@ -18,10 +22,21 @@ export interface OutgoingMessage {
    * сообщение без неё; рассылки поле не заполняют.
    */
   action?: { text: string; data: string };
+  /**
+   * Оформленный вид сообщения (Р199). Поле необязательное: фейки тестов и
+   * площадки без оформления работают как раньше. `text` при нём — всегда
+   * `plainTextOf(rich)`: его шлёт и площадка без оформления, и Telegram при отказе.
+   */
+  rich?: RichDocument;
+  /** без звука уведомления; не задано — как решит площадка (со звуком) */
+  silent?: boolean;
+  /** тема в личном чате; адаптер без тем поле пропускает (тема в Telegram — отдельная задача WP52) */
+  topic?: MessageTopic;
 }
 
 export type SendOutcome =
-  | { status: "sent" }
+  /** `fallback` — оформленное не ушло, ушёл простой текст того же документа */
+  | { status: "sent"; fallback?: true }
   /** писать этому игроку нельзя: заблокировал бота или не начинал с ним разговор */
   | { status: "blocked" }
   /** площадка просит подождать: превышен темп или сбой связи — повторить не раньше, чем через `afterSec` */
@@ -35,6 +50,12 @@ export interface Messenger {
   readonly configured: boolean;
   /** сколько сообщений в секунду площадка принимает от бота на массовой отправке */
   readonly ratePerSec: number;
+  /**
+   * Что площадка умеет сверх простого текста. Поле необязательное: нет поля —
+   * площадка умеет только простой текст. Возможность спрашивают у порта, а не
+   * по имени площадки.
+   */
+  readonly capabilities?: { rich: boolean; topics: boolean };
   send(platformUserId: string, message: OutgoingMessage): Promise<SendOutcome>;
   /**
    * Простой текст в чат команды (с темой, если она есть) — суточные отчёты
