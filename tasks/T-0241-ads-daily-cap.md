@@ -3,7 +3,7 @@ id: T-0241
 title: Дневной кап роликов на все места — реклама не становится работой
 epic: E1
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
