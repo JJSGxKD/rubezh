@@ -139,7 +139,7 @@ export class AchievementsService {
   private async syncState(accountId: string, at: Date): Promise<void> {
     try {
       const all = (await this.tasks.achievementDefs()).filter((def) => isStateKind(def.kind));
-      // Друзья и уровень читаются здесь; остальные состояния дописывают их модули (кодекс — `codex`).
+      // Друзья и уровень читаются здесь; остальные состояния дописывают их модули (кодекс врагов — `codex`, кодекс тайников — `secrets-codex`).
       const defs = all.filter((def) => def.kind === "friends" || def.kind === "account_level");
       if (defs.length > 0) await this.syncPlayerState(accountId, defs, at);
       // «Мастеров» считает сервис заданий — он же дописывает их после каждого забега.
