@@ -3,8 +3,8 @@ id: T-0247
 title: Карточка игрока — сервер: публичный id, ответ карточки, заявка в друзья по публичному id
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0240, T-0237, T-0113]
