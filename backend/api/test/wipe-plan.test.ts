@@ -36,9 +36,9 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 92 модели, стирается 27", () => {
+  it("остаётся 93 модели, стирается 27", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(92);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(93);
     expect(actions.filter((action) => action === "wipe")).toHaveLength(27);
   });
 
@@ -48,7 +48,7 @@ describe("план вайпа: полнота", () => {
   });
 
   it("контент игры на сервере (T-0303) остаётся: это правила игры, а не данные игроков", () => {
-    for (const model of ["ContentVersion", "ContentDraft", "ContentCheck"]) expect(plan[model]?.action, model).toBe("keep");
+    for (const model of ["ContentVersion", "ContentDraft", "ContentCheck", "ContentCurrent"]) expect(plan[model]?.action, model).toBe("keep");
   });
 
   it("связь с аккаунтом MAX или VK (T-0377) остаётся: она постоянна, как привязки приглашения и источника (Р188)", () => {

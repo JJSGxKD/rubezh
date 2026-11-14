@@ -217,6 +217,8 @@ const MAX_BOT_GROUP = "Бот MAX";
 
 const PAYMENTS_GROUP = "Платежи";
 
+const CONTENT_GROUP = "Баланс игры";
+
 /** Имя бота MAX в ссылке `max.ru/<имя>`: латиница, цифры, знак подчёркивания, точка и дефис; без «@» и без адреса. */
 const MAX_BOT_USERNAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$/;
 
@@ -1167,6 +1169,21 @@ export const SETTINGS = {
     { min: 0, max: 100_000, unit: ["доллар", "доллара", "долларов"] },
     200,
   ),
+  /**
+   * Рельс публикации баланса (docs/19-content-admin.md §4.3, tasks/T-0306): без свежей зелёной проверки черновик не
+   * публикуется. Выключение — осознанное и временное, например когда sim-worker недоступен, а баланс нужно
+   * поправить срочно: каждая публикация в обход проверки помечается в аудите. Только из панели — в `.env` ключа нет.
+   */
+  contentPublishRequireCheck: {
+    key: "content.publish-require-check",
+    group: CONTENT_GROUP,
+    title: "Публиковать баланс только после проверки",
+    hint: "Включено — черновик баланса публикуется, только если по его нынешнему состоянию есть свежая зелёная проверка: схема, проверки контента и симуляция в коридорах. Выключено — проверка не требуется, а каждая такая публикация помечается в аудите. Держать включённым: выключают на время, когда проверку не запустить",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
 } as const;
 
 export const SETTING_LIST: readonly SettingDefinition[] = Object.values(SETTINGS);

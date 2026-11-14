@@ -147,6 +147,7 @@ erDiagram
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
     CONTENT_VERSION ||--o{ CONTENT_DRAFT : "черновик правит копию снимка версии-основы"
     CONTENT_DRAFT ||--o{ CONTENT_CHECK : "проверки черновика в sim-worker"
+    CONTENT_VERSION ||--o{ CONTENT_CURRENT : "какая версия в игре у команды и у всех"
     ACCOUNT ||--o{ TASK_CHANNEL_WATCH : "окна перепроверки подписки после награды"
     TASK_DEF ||--o{ TASK_CHANNEL_WATCH : "задание, чья награда под наблюдением"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
@@ -1286,7 +1287,7 @@ erDiagram
         string source "repo или panel (CHECK)"
         uuid created_by "без FK; null — завёл выкат"
         datetime created_at
-        datetime published_at "null — не публиковалась; публикация — T-0306"
+        datetime published_at "null — в игре не бывала; ставит публикация из панели или подхват версии из кода при выкате (T-0306)"
     }
 
     CONTENT_DRAFT {
@@ -1306,6 +1307,13 @@ erDiagram
         string status "queued, done, failed, timeout (CHECK)"
         jsonb report "итог sim-worker как есть или { error }"
         datetime created_at "частичный UNIQUE (draft_id, snapshot_hash) где status не failed"
+    }
+
+    CONTENT_CURRENT {
+        string audience PK "team или all (CHECK): не больше одной строки на аудиторию"
+        int version_no FK "RESTRICT: версию не удалить, пока на неё указывает строка"
+        uuid set_by "без FK; null — поставил выкат"
+        datetime set_at
     }
 
     TASK_CHANNEL_WATCH {
@@ -1761,6 +1769,12 @@ erDiagram
   отчёт воркера читается при опросе `GET /checks/:id`, повтор того же снимка
   отдаёт прошлый отчёт (`snapshot_hash` — sha256 канонического JSON: порядок
   ключей jsonb его не меняет). Вайп таблицы не трогает: это правила игры.
+- **`CONTENT_CURRENT` — какая версия контента в игре** (`19-content-admin.md` §3,
+  T-0306): не больше одной строки на аудиторию, `team` (аккаунты с ролью) и `all`.
+  Нет строки `team` — команда играет версией «всем»; нет строки `all` —
+  ничего не публиковалось. Публикация и откат меняют номер версии в строке, версию
+  с указателем из базы не удалить. Хэш версии из панели — sha256 канонического JSON
+  снимка (хэш движка сервер посчитать не может). Поток — §4.44.
 - **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
@@ -5790,6 +5804,54 @@ sequenceDiagram
   задание падает, метрика `outcome="error"`; воркер остаётся жив.
 - **Один повтор — не дольше минуты**, проверка ждёт идущий повтор не дольше этого же
   срока: начатое не прерывается.
+
+### 4.44 Публикация баланса: «Команде», «Всем», откат, выдача версии клиенту (этап 4, реализовано)
+
+Черновик, прошедший проверку (§4.33), становится версией игры
+(`19-content-admin.md` §3 «Публикация и выдача версии», §4.4–§4.5, `tasks/T-0306`).
+Версия — неизменяемая строка `content_version`, а то, какая из них в игре у кого,
+говорят две строки `content_current`: `team` и `all`. Откат — смена номера в строке.
+Клиент (`T-0307`) спрашивает версию по своей схеме, а сам снимок берёт по хэшу.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Панель (content.publish)
+    participant S as Сервер: ContentPublishService
+    participant L as Redis, замок content:publish:lock
+    participant D as Postgres
+    participant C as Клиент игрока (T-0307)
+    participant E as Край: Caddy и CDN
+
+    P->>S: POST /drafts/:id/publish {audience}
+    S->>D: черновик, его основа, живая проверка по snapshot_hash этого снимка
+    alt проверки нет, она устарела, не зелёная или ключ content.publish-require-check включён и причина есть
+        S-->>P: 409 content_check_required, причина в тексте
+    else годится (или ключ выключен — аудит помечает checkBypassed)
+        S->>L: SET NX PX 30 с, ожидание до 5 с
+        S->>D: одна транзакция: версия (хэш уникален — повтор версию не заводит) и указатели team, а для «Всем» ещё и all
+        S->>L: снять замок, если токен наш
+        S-->>P: {versionNo, created, changed, previousVersionNo}; аудит content.publish
+    end
+    P->>S: POST /rollback {audience, versionNo}
+    S->>D: версия уже бывала в игре (published_at) → указатель аудитории на неё; новой версии нет
+    C->>S: GET /content/current?schema=n (токен)
+    S->>D: указатели; роль в account_role — аудитория «команда»; версия с schema_version ≤ n
+    S-->>C: {versionNo, hash, url} или null — играть встроенным
+    C->>E: GET /content/v/<хэш>.json
+    E-->>C: снимок, Cache-Control: public, max-age=31536000, immutable; повтор — 304
+```
+
+- **Условия публикации те же, что рельсы панели.** Готовая проверка того же снимка,
+  без проблем схемы и контента, симуляция уложилась во время, все посчитанные
+  метрики в коридорах. Сервер публикует снимок, прочитанный один раз, — правка
+  черновика посреди публикации проверенное не подменит.
+- **Целостность держит база.** Хэш версии уникален, указатель — одна строка на
+  аудиторию, операции берут строки в одном порядке (`team`, потом `all`); замок
+  Redis упорядочивает публикации между репликами, но без него версия всё равно одна.
+- **Выкат из кода** (`deploy.yml`, `docs/09` §10) заводит версию `repo` и ставит её
+  в игру только там, где текущая версия тоже из кода или её нет; панельную версию
+  не затирает.
 
 ## 5. Топология развёртывания
 

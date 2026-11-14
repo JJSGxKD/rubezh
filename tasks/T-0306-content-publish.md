@@ -3,8 +3,8 @@ id: T-0306
 title: Публикация контента — версия сначала команде, потом всем, только после зелёной проверки; откат кнопкой; версия для клиента по его схеме
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-61 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0305]
@@ -28,6 +28,23 @@ shared:
   - docs/09-ci-cd.md
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
+  - docs/21-diagrams.md
+  - backend/api/src/modules/content/content-adopt.ts
+  - backend/api/src/modules/content/content-delivery.service.ts
+  - backend/api/src/modules/content/content-merge.ts
+  - backend/api/src/modules/content/content-publish-errors.ts
+  - backend/api/src/modules/content/content-publish-lock.ts
+  - backend/api/src/modules/content/content-publish-rules.ts
+  - backend/api/src/modules/content/content-publish.repository.ts
+  - backend/api/src/modules/admin/admin-content-publish.controller.ts
+  - backend/api/src/modules/admin/admin.module.ts
+  - backend/api/src/cli/content-import.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/content-publish.test.ts
+  - backend/api/test/content-drafts.integration.test.ts
+  - apps/admin/src/screens/balance/BalanceWorkspace.tsx
+  - apps/admin/src/ui/help.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
@@ -165,10 +182,10 @@ batch: 7
 
 ## Критерии приёмки
 
-- [ ] Публикация «Команде», потом «Всем» — только после свежей зелёной проверки; откат — кнопкой.
-- [ ] Клиент получает последнюю совместимую версию; снимок — по хэшу с вечным кешем.
-- [ ] Новые версии из кода при выкате не затирают опубликованное из панели.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Публикация «Команде», потом «Всем» — только после свежей зелёной проверки; откат — кнопкой.
+- [x] Клиент получает последнюю совместимую версию; снимок — по хэшу с вечным кешем.
+- [x] Новые версии из кода при выкате не затирают опубликованное из панели.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 
