@@ -36,7 +36,7 @@ effort: extra
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0379. Бот MAX — связывает аккаунт по стартовому параметру и проверяет подписку на канал

@@ -58,6 +58,7 @@ import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 import { MemoryShopPromoRepository } from "./helpers/memory-shop-promos.js";
 import { switchesOf } from "./helpers/notify-targets.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Заявки на правку цен на живом Postgres (tasks/T-0309; адрес — TEST_DATABASE_URL,
@@ -285,7 +286,7 @@ describe.skipIf(DATABASE_URL === "")("заявки на правку цен на
   it("получатели уведомления — аккаунты с ролью, дающей право на цены; остальных нет", async () => {
     const accounts = new PrismaAccountRepository(prisma);
     const make = async (): Promise<string> => {
-      const created = await accounts.upsert({ platform: "telegram", platformUserId: String(930_000_000 + Math.floor(Math.random() * 30_000_000)), displayName: "Роль", username: null }, Date.now());
+      const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Роль", username: null }, Date.now());
       roleAccounts.push(created.accountId);
       return created.accountId;
     };

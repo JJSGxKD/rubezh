@@ -77,6 +77,7 @@
   "task.kind.evolution_runs": "Получи эволюцию оружия в {count} {target, plural, one {забеге} few {забегах} many {забегах} other {забегах}}",
   "task.kind.friends": "Набери друзей: {count}",
   "task.kind.account_level": "Дорасти до {count} уровня аккаунта",
+  "task.kind.secrets_kinds": "Найди виды тайников: {count}",
   "task.kind.no_hit_sec": "Продержись {time} подряд без единого попадания",
   "task.kind.no_kill_sec": "Продержись {time} подряд, никого не убив",
   "task.kind.element_kills": "Победи {count} {target, plural, one {врага} few {врага} many {врагов} other {врага}} стихией «{element}»",

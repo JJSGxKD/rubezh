@@ -36,6 +36,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Достижения с престижем на живых Postgres и Redis (tasks/T-0106,
@@ -90,7 +91,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(980_000_000 + Math.floor(Math.random() * 15_000_000)), displayName: "Достижения", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Достижения", username: null },
       Date.now(),
     );
     return created.accountId;
@@ -191,8 +192,8 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
   });
 
   describe("каталог после миграции", () => {
-    it("ровно 84 достижения (48, 17 про боссов, элит, сундуки, кристаллы и эволюции, 3 про кодекс врагов и 16 — достижения v2), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
-      expect(catalog.length).toBe(84);
+    it("ровно 85 достижений (48, 17 про боссов, элит, сундуки, кристаллы и эволюции, 3 про кодекс врагов, 16 — достижения v2 и «Следопыт» про тайники), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
+      expect(catalog.length).toBe(85);
       expect(new Set(catalog.map((task) => task.taskId)).size).toBe(catalog.length);
       for (const task of catalog) {
         expect(["combat", "collection", "mastery", "friends"], task.taskId).toContain(task.category);
@@ -256,7 +257,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
 
     it("новые награждаются монетами, без самоцветов и осколков; вместе со старыми они не упираются в суточный потолок", () => {
       const added = catalog.filter((task) => OLD[task.taskId] === undefined);
-      expect(added.length).toBe(75); // 56 прежних новых, три достижения кодекса (T-0127) и 16 — v2 (T-0322)
+      expect(added.length).toBe(76); // 56 прежних новых, три достижения кодекса (T-0127), 16 — v2 (T-0322) и «Следопыт» (T-0261)
       for (const task of added) expect(task, task.taskId).toMatchObject({ gems: 0, shards: 0, passPoints: 0 });
       for (const task of added) expect(task.coins, task.taskId).toBeGreaterThan(0);
       // Включённые достижения разом, вместе с v2 (T-0322) и кодексом (T-0127), — в пределах суточного

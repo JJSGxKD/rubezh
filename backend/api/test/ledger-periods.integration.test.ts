@@ -16,6 +16,7 @@ import type { AuditEntry } from "../src/modules/roles/roles.repository.js";
 import type { AccountRef, RolesService } from "../src/modules/roles/roles.service.js";
 import type { SettingsReader } from "../src/modules/settings/settings.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Месяцы учёта на живом Postgres (docs/17-testing-strategy.md §4.2; адрес — TEST_DATABASE_URL, без него пропуск;
@@ -157,7 +158,7 @@ describe.skipIf(DATABASE_URL === "")("месяцы учёта на живом Po
 
   /** Аккаунт для строк, у которых есть внешний ключ на аккаунт (покупка, доля). */
   async function person(name: string): Promise<string> {
-    const account = await people.upsert({ platform: "telegram", platformUserId: String(940_000_000 + Math.floor(Math.random() * 50_000_000)), displayName: name, username: null, photoUrl: null }, NOW.getTime());
+    const account = await people.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, NOW.getTime());
     createdAccounts.push(account.accountId);
     return account.accountId;
   }

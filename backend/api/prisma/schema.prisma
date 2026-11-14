@@ -223,6 +223,8 @@ model Account {
   seasonRewards SeasonReward[]
   // Любимые достижения (T-0106)
   achFavorites  AchievementFavorite[]
+  // Кодекс тайников (T-0261)
+  secretsFound  SecretFound[]
   // Кодекс врагов (T-0127)
   codexEntries  CodexEntry[]
   // Батл-пасс (T-0311)
@@ -3491,4 +3493,25 @@ model CodexEntry {
 
   @@id([accountId, enemyId])
   @@map("codex_entry")
+}
+
+// Кодекс тайников (design/art/meta-v2.md §5.3, tasks/T-0261). Награда — достижение
+// «Следопыт» в `task_def` с видом `secrets_kinds`, число найденных видов пишется в
+// `task_progress` по итогу забега.
+
+/// Найденный вид тайника: игрок нашёл его в забеге, который считается по правилам наград.
+/// Одна строка на пару «аккаунт — вид», найденное не закрывается и не переписывается —
+/// повтор забега ничего не меняет (`ON CONFLICT DO NOTHING`). Виды — список движка
+/// (`SECRET_KINDS`), внешнего ключа на вид нет
+model SecretFound {
+  accountId String   @map("account_id") @db.Uuid
+  /// вид тайника: shrine, hoard, stone, tree, rift или wisp
+  kind      String   @db.VarChar(16)
+  /// когда найден: время записи забега, в котором вид найден первым
+  firstAt   DateTime @map("first_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, kind])
+  @@map("secret_found")
 }

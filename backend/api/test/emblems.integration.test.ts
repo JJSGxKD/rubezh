@@ -38,6 +38,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Знаки у имени на живых Postgres и Redis (tasks/T-0235, docs/35-stage4-plan.md
@@ -56,7 +57,7 @@ const live = DATABASE_URL !== "" && REDIS_URL !== "";
 const DAY = 86_400_000;
 const STAMP = String(Date.now());
 
-/** 31 отобранное достижение и редкость их знака: 24 из T-0235 и 7 из T-0322 (достижения v2). */
+/** 32 отобранных достижения и редкость их знака: 24 из T-0235, 7 из T-0322 (достижения v2) и «Следопыт» (T-0261). */
 const MERIT_TIERS: Readonly<Record<string, string>> = {
   ach_kills_100k: "legendary",
   ach_time_100h: "legendary",
@@ -90,6 +91,7 @@ const MERIT_TIERS: Readonly<Record<string, string>> = {
   ach_cold_10k: "epic",
   ach_lightning_10k: "epic",
   ach_poison_10k: "epic",
+  ach_secrets_all: "epic",
 };
 
 /** Восемь статусных и сезонных знаков: [id, название, вид, категория, редкость, подсказка]. */
@@ -122,7 +124,7 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(940_000_000 + Math.floor(Math.random() * 15_000_000)), displayName: "Знаки", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Знаки", username: null },
       Date.now(),
     );
     return created.accountId;
@@ -279,13 +281,13 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
   });
 
   describe("миграция", () => {
-    it("у 31 отобранного достижения редкость знака по таблице; других, кроме восьми новых, знаков нет", async () => {
+    it("у 32 отобранных достижений редкость знака по таблице; других, кроме восьми новых, знаков нет", async () => {
       const rows = await prisma.$queryRaw<{ task_id: string; emblem_tier: string }[]>`
         SELECT task_id, emblem_tier FROM task_def WHERE emblem_tier IS NOT NULL AND task_id NOT LIKE 'it\_%' ORDER BY task_id`;
       const merit = rows.filter((row) => !row.task_id.startsWith("emb_"));
       expect(Object.fromEntries(merit.map((row) => [row.task_id, row.emblem_tier]))).toEqual(MERIT_TIERS);
-      expect(merit.length).toBe(31);
-      expect(rows.length).toBe(31 + SPECIAL.length);
+      expect(merit.length).toBe(32);
+      expect(rows.length).toBe(32 + SPECIAL.length);
     });
 
     it("восемь новых строк: вид, категория, редкость, подсказка, цель 1, награда 0, порядок после существующих достижений", async () => {
@@ -632,12 +634,12 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
   });
 
   describe("знаки игрока: GET /achievements/emblems", () => {
-    it("в каталоге 39 знаков: статусные и сезонные, затем заслуги; держимые отмечены, shown и auto — по умолчанию", async () => {
+    it("в каталоге 40 знаков: статусные и сезонные, затем заслуги; держимые отмечены, shown и auto — по умолчанию", async () => {
       const me = await account();
       await makeTester(me);
       await complete(me, "ach_runs_200", "ach_weapon_spark");
       const view = await emblems.listFor(me);
-      expect(view.items.length).toBe(31 + SPECIAL.length);
+      expect(view.items.length).toBe(32 + SPECIAL.length);
       expect(view.shown).toBe("emb_tester");
       expect(view.auto).toBe(true);
       const held = view.items.filter((item) => item.held).map((item) => item.id).sort();

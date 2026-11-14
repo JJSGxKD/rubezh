@@ -46,7 +46,7 @@ effort: high
 release: none
 merge: lead
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0390. Снятие застрявшего захвата тимлидом — попытка задачи и ветка task/T-NNNN-N

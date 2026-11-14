@@ -20,7 +20,7 @@ effort: medium
 release: minor
 merge: self
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0412. Раздел «Настройки» — вкладки по группам с адресом вместо одной ленты

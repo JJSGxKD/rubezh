@@ -11,6 +11,7 @@ import { PrismaStakeholdersRepository } from "../src/modules/stakeholders/stakeh
 import { StakeholdersService } from "../src/modules/stakeholders/stakeholders.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Доли участников проекта на живом Postgres (docs/17-testing-strategy.md §4.2; адрес — TEST_DATABASE_URL,
@@ -47,7 +48,7 @@ describe.skipIf(DATABASE_URL === "")("доли участников на жив�
 
   async function person(name: string, roles: Role[] = []): Promise<AccountRef> {
     const account = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(930_000_000 + Math.floor(Math.random() * 60_000_000)), displayName: name, username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null },
       NOW.getTime(),
     );
     created.push(account.accountId);

@@ -26,7 +26,7 @@ batch: 5
 
 # T-0470. «Бухгалтерия → Месяцы» в панели — сверка, отчёт, закрытие и выплаты
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0470.json)](README.md#значки-статуса) [![T-0468](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0468.json&label=T-0468)](T-0468-ledger-periods-close.md) [![T-0469](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0469.json&label=T-0469)](T-0469-ledger-confirmations-payouts.md) [![T-0464](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0464.json&label=T-0464)](T-0464-ledger-operations-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0470.json)](README.md#значки-статуса) [![T-0468](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0468.json&label=T-0468)](archive/T-0468-ledger-periods-close.md) [![T-0469](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0469.json&label=T-0469)](T-0469-ledger-confirmations-payouts.md) [![T-0464](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0464.json&label=T-0464)](T-0464-ledger-operations-screen.md)
 
 ## Зачем
 

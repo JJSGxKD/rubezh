@@ -4,6 +4,7 @@ import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaWheelRepository } from "../src/modules/wheel/wheel.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Крутки колеса на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -24,7 +25,7 @@ describe.skipIf(DATABASE_URL === "")("колесо на живом Postgres", ()
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(870_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Колесо", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Колесо", username: null },
       Date.now(),
     );
     return created.accountId;

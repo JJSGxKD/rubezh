@@ -5,6 +5,7 @@ import { PrismaAccountSettingsRepository } from "../src/modules/account-settings
 import { AccountSettingsService } from "../src/modules/account-settings/account-settings.service.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Настройки аккаунта на живом Postgres (docs/17-testing-strategy.md §4.2;
@@ -22,7 +23,7 @@ describe.skipIf(DATABASE_URL === "")("настройки аккаунта на �
   let service: AccountSettingsService;
 
   async function account(): Promise<AccountRef> {
-    const platformUserId = String(760_000_000 + Math.floor(Math.random() * 90_000_000));
+    const platformUserId = uniquePlatformUserId();
     const created = await accounts.upsert({ platform: "telegram", platformUserId, displayName: "Настройки", username: null }, Date.now());
     return { accountId: created.accountId, platform: "telegram", platformUserId };
   }

@@ -24,6 +24,7 @@ import { Messengers, type Messenger, type OutgoingMessage, type SendOutcome } fr
 import { panelSettings } from "./helpers/settings.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { retryOnConflict } from "./helpers/retry-conflict.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Напоминания на живых Postgres и Redis (docs/17-testing-strategy.md §4.2;
@@ -126,7 +127,7 @@ describe.skipIf(!live)("напоминания на живых Postgres и Redis
 
   async function player(options: { canMessage?: boolean | null; banned?: boolean; platform?: "telegram" | "vk"; prologueDone?: boolean } = {}): Promise<string> {
     const { canMessage = true, banned = false, platform = "telegram", prologueDone = true } = options;
-    const account = await accounts.upsert({ platform, platformUserId: String(500_000_000 + Math.floor(Math.random() * 400_000_000)), displayName: "Напомни", username: null, photoUrl: null }, Date.now());
+    const account = await accounts.upsert({ platform, platformUserId: uniquePlatformUserId(), displayName: "Напомни", username: null, photoUrl: null }, Date.now());
     created.push(account.accountId);
     if (canMessage !== null) await messaging.set(account.accountId, { canMessage, reason: canMessage ? "entered" : "blocked", changedAt: new Date() });
     // Награда дня закрыта до пролога (Р151): без признака игрок в напоминания не попадает.
