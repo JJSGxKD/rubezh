@@ -50,7 +50,6 @@ const RATES: Record<string, string> = { USD: "1", XTR: "0.013", RUB: "0.0125" };
 
 /** Выручка 10 000 ⭐ × 0,013 = 130 $; доля 25 % = 32,50 $ = 2 600 ₽ по курсу 0,0125; на владельца 97,50 $. */
 const SALE_STARS = 10_000n;
-const ALICE_OWED = 260_000n;
 
 async function domainError(promise: Promise<unknown>): Promise<DomainError> {
   try {

@@ -19,6 +19,7 @@ import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { FxService } from "../src/modules/fx/fx.service.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import { PayoutsService } from "../src/modules/ledger/payouts/payouts.service.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
@@ -147,6 +148,8 @@ describe("«Мой проект» по HTTP", () => {
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: RateLimiter, useValue: limiter },
         ProjectMonthService,
+        // маршруты отчёта месяца и подтверждения проверяет `admin-ledger.http.test.ts`; здесь сервис выплат не нужен
+        { provide: PayoutsService, useValue: {} },
         PanelLoginService,
         RolesService,
         PermissionGuard,

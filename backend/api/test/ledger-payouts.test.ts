@@ -19,7 +19,7 @@ import { PayoutsService } from "../src/modules/ledger/payouts/payouts.service.js
 import type { PeriodSnapshot } from "../src/modules/ledger/periods/period-snapshot.js";
 import type { AuditEntry } from "../src/modules/roles/roles.repository.js";
 import type { Permission } from "../src/modules/roles/permissions.js";
-import type { RolesService } from "../src/modules/roles/roles.service.js";
+import type { AccountRef, RolesService } from "../src/modules/roles/roles.service.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 import { MemoryPayoutsRepository, closedSnapshot, type SnapshotInput } from "./helpers/memory-payouts.js";
 import { memoryNotifications } from "./helpers/memory-notifications.js";
@@ -426,8 +426,8 @@ describe("факты месяца для выплаты", () => {
 // ---- Подтверждение отчёта участником ----
 
 describe("подтверждение отчёта участником", () => {
-  const participant = { accountId: ALICE, platform: "telegram", platformUserId: "111" };
-  const stranger = { accountId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", platform: "telegram", platformUserId: "444" };
+  const participant: AccountRef = { accountId: ALICE, platform: "telegram", platformUserId: "111" };
+  const stranger: AccountRef = { accountId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", platform: "telegram", platformUserId: "444" };
   const OWN_VIEW: Permission = "revenue.split.own.view";
 
   function setup(now: Date = DAY_2) {
@@ -517,7 +517,7 @@ describe("подтверждение отчёта участником", () => {
     const { granted, service, now } = setup();
     granted.set(ALICE, []);
     expect((await failure(service.confirm(participant, PERIOD, { decision: "confirmed" }, now))).status).toBe(403);
-    expect((await failure(service.reportFor(participant, PERIOD, now))).status).toBe(403);
+    expect((await failure(service.reportFor(participant, PERIOD))).status).toBe(403);
   });
 
   it("месяц не закрыт — 409 `ledger_period_status`: подтверждать нечего", async () => {
@@ -577,7 +577,7 @@ describe("подтверждение отчёта участником", () => {
     const { repository, service, now } = setup();
     await repository.saveConfirmation({ period: PERIOD, accountId: BORIS, status: "disputed", comment: "Не согласен", decidedAt: now });
 
-    const view = await service.reportFor(participant, PERIOD, now);
+    const view = await service.reportFor(participant, PERIOD);
 
     expect(view.period).toBe(PERIOD);
     expect(view.mine).toMatchObject({ accountId: ALICE, name: "Алиса", confirmation: null, canChange: true });
