@@ -19,6 +19,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Задания «юзернейм бота» на настоящих Postgres и Redis
@@ -120,7 +121,7 @@ describe.skipIf(!live)("задания «юзернейм бота» на жив
   });
 
   async function player(platform: "telegram" | "max" = "telegram"): Promise<AccountRef> {
-    const platformUserId = String(600_000_000 + Math.floor(Math.random() * 390_000_000));
+    const platformUserId = uniquePlatformUserId();
     const created = await accounts.upsert({ platform, platformUserId, displayName: "Задания", username: null, photoUrl: null }, Date.now());
     return { accountId: created.accountId, platform, platformUserId };
   }

@@ -5,6 +5,7 @@ import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaFriendReturnsRepository } from "../src/modules/referrals/friend-returns.repository.js";
 import { PrismaReferralsRepository } from "../src/modules/referrals/referrals.repository.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /** Привязки рефералов на живом Postgres: одна и навсегда, активация — один раз. Без базы — пропуск. */
 
@@ -16,7 +17,7 @@ describe.skipIf(DATABASE_URL === "")("рефералка на живом Postgre
   let referrals: PrismaReferralsRepository;
 
   async function account(): Promise<string> {
-    const platformUserId = String(990_000_000 + Math.floor(Math.random() * 9_000_000));
+    const platformUserId = uniquePlatformUserId();
     return (await accounts.upsert({ platform: "telegram", platformUserId, displayName: "Приглашённый", username: null, photoUrl: null }, Date.now())).accountId;
   }
 

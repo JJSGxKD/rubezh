@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from "@nestjs/common";
-import { emblemOf, PublicIdentity, type PublicEmblem, type PublicMark } from "../../common/public-identity.js";
+import { markOf, PublicIdentity, type PublicEmblem, type PublicMark } from "../../common/public-identity.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { ValidationError } from "../../common/domain-error.js";
 import type { AccessTokenClaims } from "../auth/access-token.js";
@@ -28,8 +28,11 @@ import { FRIENDS_REPOSITORY, type FriendRow, type FriendsRepository, type Reques
  * временем.
  */
 
-/** Строка списка со знаком у имени (T-0240); поля `emblem` нет — знака нет или источник знаков недоступен. */
-type Marked<T> = T & { emblem?: PublicEmblem };
+/**
+ * Строка списка со знаком у имени (T-0240) и обликом (T-0237); полей нет — знака и облика нет
+ * или источник недоступен.
+ */
+type Marked<T> = T & { emblem?: PublicEmblem; appearance?: string; avatarPhoto?: true };
 
 export interface FriendsView {
   friends: Marked<FriendRow>[];
@@ -108,7 +111,7 @@ export class FriendsService implements OnModuleInit {
     const claimableToday = Math.min(pending, Math.max(0, GIFT_RULES.maxClaimsPerDay - claimed));
     // Знак у имени — одним вызовом порта на все три списка; сбой порта экран друзей не роняет.
     const marks = (await this.identity?.of([...friends, ...incoming, ...outgoing].map((peer) => peer.accountId))) ?? new Map<string, PublicMark>();
-    const marked = <T extends { accountId: string }>(rows: T[]): Marked<T>[] => rows.map((row) => ({ ...row, ...emblemOf(marks.get(row.accountId)) }));
+    const marked = <T extends { accountId: string }>(rows: T[]): Marked<T>[] => rows.map((row) => ({ ...row, ...markOf(marks.get(row.accountId)) }));
     // Игрок увидел заявки на экране друзей — колокольчик про них гаснет (Р135).
     // Знак вкладки считает ожидающее ответа и от этого не меняется.
     await this.notifications.readFor(accountId, "friend_request");

@@ -5,6 +5,7 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { PrismaNotificationsRepository } from "../src/modules/notifications/notifications.repository.js";
 import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Лента уведомлений на живом Postgres (docs/17-testing-strategy.md §4.2;
@@ -22,7 +23,7 @@ describe.skipIf(DATABASE_URL === "")("уведомления на живом Pos
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(770_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Лента", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Лента", username: null },
       Date.now(),
     );
     return created.accountId;

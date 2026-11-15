@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { DomainError } from "../../common/domain-error.js";
-import { emblemOf, PublicIdentity, type PublicEmblem, type PublicMark } from "../../common/public-identity.js";
+import { markOf, PublicIdentity, type PublicEmblem, type PublicMark } from "../../common/public-identity.js";
 import { LEADERBOARD_STORE, type Board, type LeaderboardStore } from "./leaderboard.store.js";
 import { PrologueService } from "./prologue.service.js";
 import { RatingRestrictions } from "./rating-restrictions.js";
@@ -66,6 +66,10 @@ export interface LeaderboardView {
     supporter?: true;
     /** знак у имени (T-0240): выбранный игроком или по умолчанию; поля нет — знака нет или источник знаков недоступен */
     emblem?: PublicEmblem;
+    /** действующий облик героя (T-0237); поля нет — источник обликов недоступен */
+    appearance?: string;
+    /** в кружке аватара фото площадки, а не голова облика (T-0237) */
+    avatarPhoto?: true;
     /** очки эффективности лучшего забега — по ним ранжируется доска */
     points: number;
     /** время того же забега — подпись к очкам */
@@ -203,7 +207,7 @@ export class RunsViewService {
             photoUrl: row.photoUrl,
             ...(row.tester ? { tester: true as const } : {}),
             ...(row.supporter ? { supporter: true as const } : {}),
-            ...emblemOf(marks.get(entry.accountId)),
+            ...markOf(marks.get(entry.accountId)),
             points: entry.score,
             survivalSec: row.survivalSec,
             style: row.style,
@@ -241,7 +245,7 @@ export class RunsViewService {
       photoUrl: mine.photoUrl,
       ...(mine.tester ? { tester: true as const } : {}),
       ...(mine.supporter ? { supporter: true as const } : {}),
-      ...emblemOf(ownMark),
+      ...markOf(ownMark),
       points: mine.points,
       survivalSec: mine.survivalSec,
       style: mine.style,
