@@ -224,6 +224,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     const run = await finishedRun(account, patch);
     await service.onRecorded(run);
     await proofs.receive(account.accountId, run.runId, packed(run.runId));
+    await proofs.idle();
     return { account, run };
   }
 
@@ -236,6 +237,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     expect(await queue.has(jobIdOf(run.runId, 0))).toBe(false);
 
     await proofs.receive(account.accountId, run.runId, packed(run.runId));
+    await proofs.idle();
 
     expect(await queue.has(jobIdOf(run.runId, 0))).toBe(true);
     expect((await rowOf(run.runId))?.replay_queued_at).not.toBeNull();
@@ -262,6 +264,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     answers.set(run.runId, { ...matchOf(run.runId), verdict: "mismatch", divergedTick: 1800, reason: "свёртка минуты разошлась" });
     await service.onRecorded(run);
     await proofs.receive(account.accountId, run.runId, packed(run.runId));
+    await proofs.idle();
     await untilFinished(run.runId);
 
     await service.sweep();
@@ -317,6 +320,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     await service.sweep();
 
     expect(await rowOf(old.runId)).toMatchObject({ replay_verdict: "no_proof", verdict: "ok", ranked: true });
+      await proofs.idle();
     expect((await rowOf(fresh.runId))?.replay_verdict).toBe("pending");
     expect(events.some((event) => event.payload.runId === old.runId && event.payload.verdict === "no_proof")).toBe(true);
   }, TIMEOUT_MS);
@@ -333,6 +337,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
 
     expect(view.verdict).toBe("pending");
     expect(await rowOf(run.runId)).toMatchObject({ replay_verdict: "pending", replay_attempt: 1, replay_diverged_tick: null });
+    await proofs.idle();
     expect(await queue.has(jobIdOf(run.runId, 1))).toBe(true);
     const entry = roles.entries.find((candidate) => candidate.action === "players.run.replay");
     expect(entry).toMatchObject({ actorAccountId: admin.accountId, target: account.accountId, before: { replayVerdict: "match", divergedTick: null }, after: { runId: run.runId } });
@@ -364,3 +369,4 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     expect((await rowOf(run.runId))?.replay_verdict).toBe("match");
   }, TIMEOUT_MS);
 });
+    await proofs.idle();

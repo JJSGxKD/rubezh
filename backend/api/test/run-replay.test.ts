@@ -7,7 +7,8 @@ import type { EventsSink } from "../src/modules/events/events.sink.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import type { RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import type { RunProofsRepository, StoredProof } from "../src/modules/runs/run-proofs.repository.js";
-import { REPLAY_KEEP_DAYS, type ReplayFacts, type ReplayOutcome, type ReplayState } from "../src/modules/runs/run-replay-rules.js";
+import { RunProofsService } from "../src/modules/runs/run-proofs.service.js";
+import { jobIdOf, REPLAY_KEEP_DAYS, type ReplayFacts, type ReplayOutcome, type ReplayState } from "../src/modules/runs/run-replay-rules.js";
 import type { DueRun, ReplayRunRow, ResetResult, RunReplayRepository, SettleResult, Settlement, StoredReplay } from "../src/modules/runs/run-replay.repository.js";
 import { REPLAY_SNAPSHOT_MAX_BYTES, RunReplayService, type ReplayFactsReader } from "../src/modules/runs/run-replay.service.js";
 import type { FinishedReplayJob, ReplayJobPayload, ReplayQueue } from "../src/modules/runs/run-replay.job.js";
@@ -842,3 +843,81 @@ const _states: ReplayState[] = ["pending", "match", "mismatch", "content_mismatc
 const _verdicts: RunVerdict[] = ["ok", "suspicious", "rejected"];
 void _states;
 void _verdicts;
+
+describe("приём записи: постановка повтора не задерживает ответ", () => {
+  const proofBase64 = (runId: string): string =>
+    gzipSync(
+      Buffer.from(
+        JSON.stringify({
+          schema: "run-proof-v1",
+          runId,
+          seed: 123456,
+          mapId: "field",
+          difficultyId: "hard",
+          mode: "endless",
+          startingWeaponId: "spark",
+          contentHash: "abcd1234",
+          unitScale: 1,
+          loadout: { modifiers: { damage: 0.1 }, boosts: [], accountLevel: 5 },
+          input: { encoding: "rle-v1", ticks: 3600, data: "AAEC", truncated: false },
+          choices: [[600, "might"]],
+          continues: [],
+          checkpoints: [[3600, 12345]],
+          result: { ticks: 3600, survivalSec: 60, level: 3, enemiesKilled: 40, deathCause: "swarm_rat", checksum: 99 },
+        }),
+      ),
+    ).toString("base64");
+
+  /** Хранилище записей на памяти: забег свой, вставка проходит. */
+  function intake(): RunProofsService {
+    const repository: RunProofsRepository = {
+      ownRun: () => Promise.resolve({ contentHash: "abcd1234" }),
+      insert: () => Promise.resolve(true),
+      find: () => Promise.resolve(null),
+      deleteExpired: () => Promise.resolve(0),
+    };
+    return new RunProofsService(repository);
+  }
+
+  it("ответ приёма уходит, не дожидаясь слушателя: медленная постановка (очередь, база) игроку не слышна", async () => {
+    const proofs = intake();
+    let release: () => void = () => undefined;
+    let finished = false;
+    proofs.onStored("slow", async () => {
+      await new Promise<void>((resolve) => (release = resolve));
+      finished = true;
+    });
+
+    const receipt = await proofs.receive(ACCOUNT, RUN, proofBase64(RUN));
+
+    expect(receipt.status).toBe("stored");
+    expect(finished).toBe(false);
+    release();
+    await proofs.idle();
+    expect(finished).toBe(true);
+  });
+
+  it("упавший слушатель запись не отменяет и необработанной ошибки не оставляет", async () => {
+    const proofs = intake();
+    const seen: string[] = [];
+    proofs.onStored("broken", () => Promise.reject(new Error("очередь недоступна")));
+    proofs.onStored("next", (runId) => Promise.resolve(void seen.push(runId)));
+
+    await expect(proofs.receive(ACCOUNT, RUN, proofBase64(RUN))).resolves.toMatchObject({ status: "stored" });
+    await proofs.idle();
+
+    // Следующий слушатель после упавшего всё равно позван.
+    expect(seen).toEqual([RUN]);
+  });
+
+  it("запись не прошла проверку — слушателей никто не зовёт", async () => {
+    const proofs = intake();
+    const seen: string[] = [];
+    proofs.onStored("replay", (runId) => Promise.resolve(void seen.push(runId)));
+
+    await expect(proofs.receive(ACCOUNT, RUN, "не-base64!")).rejects.toMatchObject({ status: 422 });
+    await proofs.idle();
+
+    expect(seen).toEqual([]);
+  });
+});

@@ -49,6 +49,8 @@ export type ProofListener = (runId: string) => Promise<void>;
 export class RunProofsService {
   private readonly logger = new Logger("run-proofs");
   private readonly listeners: { name: string; listener: ProofListener }[] = [];
+  /** слушатели, запущенные приёмом и ещё не закончившие: на них ждут тесты и остановка, но не ответ игроку */
+  private readonly inflight = new Set<Promise<void>>();
 
   constructor(@Inject(RUN_PROOFS_REPOSITORY) private readonly repository: RunProofsRepository) {}
 
@@ -66,7 +68,7 @@ export class RunProofsService {
     try {
       const receipt = await this.accept(accountId, runId, encoded, now);
       this.outcome(receipt.status);
-      await this.emitStored(runId);
+      this.emitInBackground(runId);
       return receipt;
     } catch (error: unknown) {
       if (error instanceof RunProofInvalidError) this.outcome("invalid", error.kind);
@@ -107,6 +109,22 @@ export class RunProofsService {
     if (stored === null) return await this.accept(accountId, runId, encoded, now);
     if (await sameProof(stored.proof, packed, proof)) return { status: "duplicate", keepUntil: stored.keepUntil.toISOString() };
     throw new RunProofConflictError();
+  }
+
+  /**
+   * Слушатели зовутся уже после ответа: постановка повтора — чтение базы, распаковка записи,
+   * снимок контента и Redis — не то, чего игрок должен ждать на закрытии забега. Недоставленное
+   * (процесс остановили на середине, Redis недоступен) доведёт проход перепроверки: запись и
+   * забег в базе уже есть, и отметка постановки не занята или протухла.
+   */
+  private emitInBackground(runId: string): void {
+    const work: Promise<void> = this.emitStored(runId).finally(() => void this.inflight.delete(work));
+    this.inflight.add(work);
+  }
+
+  /** Дождаться слушателей, запущенных приёмом: тестам и остановке процесса; ответ приёма их не ждёт. */
+  async idle(): Promise<void> {
+    await Promise.allSettled([...this.inflight]);
   }
 
   /** Упавший слушатель запись не отменяет: она уже принята, а повтор поставит проход перепроверки. */
