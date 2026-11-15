@@ -332,7 +332,7 @@ function setup(panelValues: Record<string, SettingValue> = {}, kindOverrides: Pa
     redis as unknown as Redis,
   );
   service.onModuleInit();
-  const updater = new BotCardsUpdater(panel, liveCards, messaging, kinds, repository, queue as unknown as BotNotifyQueue, redis as unknown as Redis, service);
+  const updater = new BotCardsUpdater(liveCards, accounts, messaging, kinds, repository, queue as unknown as BotNotifyQueue, redis as unknown as Redis, service);
   updater.onModuleInit();
   const finalizer = new BotCardsFinalizer(CONFIG, kinds, repository, queue as unknown as BotNotifyQueue, redis as unknown as Redis);
   const answerer = new BotCardsAnswerer(
@@ -348,7 +348,7 @@ function setup(panelValues: Record<string, SettingValue> = {}, kindOverrides: Pa
     },
     service,
     {
-      queried: async (query) => {
+      queried: async (query: BotCardQuery) => {
         queries.push(query);
       },
     } as unknown as BotCardEvents,
@@ -554,7 +554,7 @@ describe("отправка карточки", () => {
     expect(await s.send(account.accountId, { origin: "bot" }, T0)).toBe("deferred");
     expect(s.port.sends).toEqual([]);
     expect(s.queue.of("card-send")).toEqual([
-      { name: "card-send", data: { accountId: account.accountId, kind: "season", origin: "bot" }, jobId: `card-send-${account.accountId}-season-${PERIOD_NOW}`, delayMs: 11 * 60 * MIN },
+      { name: "card-send", data: { accountId: account.accountId, kind: "season", origin: "bot" }, jobId: `card-send-${account.accountId}-season-${PERIOD_NOW}-late`, delayMs: 11 * 60 * MIN },
     ]);
   });
 

@@ -1,12 +1,15 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import type { Redis } from "ioredis";
 import { z } from "zod";
+import { withTimeout } from "../../common/with-timeout.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 
 /**
  * Протокол живой карточки (docs/35-stage4-plan.md Р199, tasks/T-0395): запрос
- * из карточки, состояние и ответ, имена заданий и ключи Redis. Чистые функции
- * без Nest, базы и Redis: данные из карточки приходят от клиента, поэтому
- * разбор строг и проверяется тестом без окружения.
+ * из карточки, состояние и ответ, имена заданий и ключи Redis. Разбор и сборка —
+ * чистые функции без Nest и базы: данные из карточки приходят от клиента, поэтому
+ * разбор строг и проверяется тестом без окружения. Лок Redis — общий для сервиса,
+ * правок и финализатора, поэтому живёт здесь же.
  */
 
 /** Версия протокола: состояние и ответ всегда несут `v: 1`. */
@@ -113,6 +116,30 @@ export const pausedKey = (platform: PlatformId): string => `bot-cards:paused:${p
 export const cardLockKey = (cardId: string): string => `bot-cards:card:${cardId}`;
 /** Кэш состояния для запросов «обновить»: одно состояние на аккаунт и вид. */
 export const stateCacheKey = (accountId: string, kind: string): string => `bot-card:state:${accountId}:${kind}`;
+
+const LOCK_TIMEOUT_MS = 3_000;
+
+/** Снимает лок только тот, кто его взял: операция, пережившая свой лок, чужой не снимет. */
+const RELEASE_SCRIPT = `
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+  return redis.call("DEL", KEYS[1])
+end
+return 0
+`;
+
+/**
+ * Лок `SET NX PX` с токеном. `null` — занят. Сбой Redis летит наружу: что делать без лока —
+ * решает вызывающий (отправка идёт дальше и полагается на индекс таблицы, правка уступает).
+ */
+export async function acquireLock(redis: Pick<Redis, "set">, key: string, ttlMs: number): Promise<string | null> {
+  const token = randomUUID();
+  const taken = await withTimeout(redis.set(key, token, "PX", ttlMs, "NX"), LOCK_TIMEOUT_MS, "лок карточек бота");
+  return taken === "OK" ? token : null;
+}
+
+export async function releaseLock(redis: Pick<Redis, "eval">, key: string, token: string): Promise<void> {
+  await withTimeout(redis.eval(RELEASE_SCRIPT, 1, key, token), LOCK_TIMEOUT_MS, "снятие лока карточек бота");
+}
 
 /** Данные задания — граница (Redis): разбираются схемой, а не приводятся. */
 const id = z.string().uuid();
