@@ -1,5 +1,6 @@
 import { ELEMENTS, type EnemyDef, type EnemyPattern, type EnemyRank } from "@bh/shared-types";
 import { ELEMENT_PHYSICAL, MAX_RESIST, MIN_RESIST } from "../sim/element-ids";
+import { BLINK_PHASE } from "./blink";
 
 /**
  * Возможности паттерна — то, что зависит от поведения, а не от конкретного
@@ -21,20 +22,26 @@ export interface PatternTraits {
   anchored: boolean;
   /** убить нельзя: удар отталкивает вместо урона, здоровье не читается (`sim/stalker-body.ts`) */
   unkillable: boolean;
+  /** фаза, в которой враг скрыт: не цель, не в сетке, не бьёт (`sim/hidden.ts`); −1 — не скрывается */
+  hiddenPhase: number;
+  /** единственная фаза, в которой враг бьёт касанием; −1 — бьёт в любой */
+  contactPhase: number;
 }
 
 export const PATTERN_TRAITS: Record<EnemyPattern, PatternTraits> = {
-  swarm: { radius: 7, contactDamage: true, solid: false, anchored: false, unkillable: false },
-  chase: { radius: 12, contactDamage: true, solid: false, anchored: false, unkillable: false },
-  dash: { radius: 10, contactDamage: true, solid: false, anchored: false, unkillable: false },
-  orbit: { radius: 8, contactDamage: true, solid: false, anchored: false, unkillable: false },
-  exploder: { radius: 9, contactDamage: false, solid: false, anchored: false, unkillable: false },
-  splitter: { radius: 13, contactDamage: true, solid: false, anchored: false, unkillable: false },
-  rush: { radius: 6, contactDamage: true, solid: false, anchored: false, unkillable: false },
+  swarm: { radius: 7, contactDamage: true, solid: false, anchored: false, unkillable: false, hiddenPhase: -1, contactPhase: -1 },
+  chase: { radius: 12, contactDamage: true, solid: false, anchored: false, unkillable: false, hiddenPhase: -1, contactPhase: -1 },
+  dash: { radius: 10, contactDamage: true, solid: false, anchored: false, unkillable: false, hiddenPhase: -1, contactPhase: -1 },
+  orbit: { radius: 8, contactDamage: true, solid: false, anchored: false, unkillable: false, hiddenPhase: -1, contactPhase: -1 },
+  exploder: { radius: 9, contactDamage: false, solid: false, anchored: false, unkillable: false, hiddenPhase: -1, contactPhase: -1 },
+  splitter: { radius: 13, contactDamage: true, solid: false, anchored: false, unkillable: false, hiddenPhase: -1, contactPhase: -1 },
+  rush: { radius: 6, contactDamage: true, solid: false, anchored: false, unkillable: false, hiddenPhase: -1, contactPhase: -1 },
+  // Кикимора (Р157): исчезает, пока на земле метка; бьёт только пока идёт на игрока.
+  blink: { radius: 11, contactDamage: true, solid: false, anchored: false, unkillable: false, hiddenPhase: BLINK_PHASE.hidden, contactPhase: BLINK_PHASE.chase },
   // Страж кольца: тело не пускает игрока, а место в строю он не бросает, куда бы ни ушёл игрок.
-  cordon: { radius: 14, contactDamage: true, solid: true, anchored: true, unkillable: false },
+  cordon: { radius: 14, contactDamage: true, solid: true, anchored: true, unkillable: false, hiddenPhase: -1, contactPhase: -1 },
   // Карачун (Р205): убить нельзя, удары его отталкивают; тело и числа — `sim/stalker-body.ts`.
-  stalker: { radius: 16, contactDamage: true, solid: false, anchored: false, unkillable: true },
+  stalker: { radius: 16, contactDamage: true, solid: false, anchored: false, unkillable: true, hiddenPhase: -1, contactPhase: -1 },
 };
 
 /**
@@ -98,6 +105,17 @@ export const TRAIL_BOUNDS = {
   damagePerSec: { min: 1, max: 20, label: "1…20" },
 } as const;
 
+/**
+ * Коридоры параметров `blink` (Р157): чаще 1,5 с враг не успевает быть врагом, реже 10 с он
+ * обычный преследователь; метка короче 0,3 с не читается, длиннее 1,5 с — враг не страшен;
+ * ближе 60 единиц он появляется на игроке, дальше 200 — не «рядом».
+ */
+export const BLINK_BOUNDS = {
+  blinkEverySec: { min: 1.5, max: 10, label: "1,5…10" },
+  telegraphSec: { min: 0.3, max: 1.5, label: "0,3…1,5" },
+  blinkDistance: { min: 60, max: 200, label: "60…200" },
+} as const;
+
 /** След врага, разложенный для симуляции: радиус уже в пикселях устройства, время — в секундах. */
 export interface EnemyTrail {
   everySec: number;
@@ -125,6 +143,8 @@ export interface ResolvedPatternParams {
   blastRadius: number;
   leadSec: number;
   runSec: number;
+  blinkEverySec: number;
+  blinkDistance: number;
   /** на кого распадается делящийся: индексы типов и сколько каждого */
   children: SplitChild[];
 }
@@ -150,6 +170,8 @@ const NEUTRAL_PARAMS: ResolvedPatternParams = {
   blastRadius: 0,
   leadSec: 0,
   runSec: 0,
+  blinkEverySec: 0,
+  blinkDistance: 0,
   children: [],
 };
 
@@ -172,6 +194,8 @@ export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam,
   exploder: { triggerDistance: 40, fuseSec: 0.9, blastRadius: 90 },
   splitter: { steeringPerSec: 3.2 },
   rush: { leadSec: 0.55, runSec: 2.6 },
+  // Шаг к игроку — как у преследователя: инерция читается, а число не отдано геймдизайнеру.
+  blink: { steeringPerSec: 3.2, blinkEverySec: 4, telegraphSec: 0.6, blinkDistance: 90 },
   cordon: {},
   stalker: {},
 };
@@ -185,6 +209,7 @@ const ALLOWED_PARAMS: Record<EnemyPattern, readonly string[]> = {
   exploder: ["triggerDistance", "fuseSec", "blastRadius"],
   splitter: ["children"],
   rush: ["leadSec", "runSec"],
+  blink: ["blinkEverySec", "telegraphSec", "blinkDistance"],
   cordon: [],
   stalker: [],
 };
@@ -197,6 +222,7 @@ const SCALED_PARAMS: readonly NumericParam[] = [
   "shrinkPerSec",
   "minRadius",
   "blastRadius",
+  "blinkDistance",
 ];
 
 /** Параметры, которые могут быть нулём; остальные строго положительны. */
@@ -240,6 +266,8 @@ export interface EnemyType {
   solid: boolean;
   anchored: boolean;
   unkillable: boolean;
+  hiddenPhase: number;
+  contactPhase: number;
   params: ResolvedPatternParams;
   /**
    * Множитель урона по стихиям, по индексу стихии (`sim/elements.ts`):
@@ -353,6 +381,9 @@ function findParamProblems(def: EnemyDef, byId: ReadonlyMap<string, EnemyDef>): 
     if (key === "children") continue;
     if (typeof value !== "number" || !Number.isFinite(value)) {
       problems.push(`враг ${def.id}: ${key} должен быть числом`);
+    } else if (def.pattern === "blink" && key in BLINK_BOUNDS) {
+      const bounds = BLINK_BOUNDS[key as keyof typeof BLINK_BOUNDS];
+      if (!(value >= bounds.min && value <= bounds.max)) problems.push(`враг ${def.id}: ${key} вне ${bounds.label}`);
     } else if (ZERO_ALLOWED.has(key) ? value < 0 : value <= 0) {
       problems.push(`враг ${def.id}: ${key} вне допустимых границ`);
     }
@@ -474,6 +505,8 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       solid: traits.solid,
       anchored: traits.anchored,
       unkillable: traits.unkillable,
+      hiddenPhase: traits.hiddenPhase,
+      contactPhase: traits.contactPhase,
       params: resolveParams(def, indexById, unitScale),
       resistMul: ELEMENTS.map((element) => (element === "physical" ? 1 : 1 - (def.resist?.[element] ?? 0))),
       element: def.element === undefined ? ELEMENT_PHYSICAL : ELEMENTS.indexOf(def.element),

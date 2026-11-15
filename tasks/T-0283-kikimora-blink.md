@@ -3,8 +3,8 @@ id: T-0283
 title: Кикимора — новый паттерн `blink`: исчезает и появляется рядом с игроком после метки на земле
 epic: E10
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0282]
@@ -28,6 +28,21 @@ shared:
   - packages/app-shell/test/**
   - CLAUDE.md
   - docs/32-balance.md
+  - docs/27-design-system-and-app-shell.md
+  - packages/core-game/src/game/sim/hidden.ts
+  - packages/core-game/src/game/sim/grid.ts
+  - packages/core-game/src/game/sim/step.ts
+  - packages/core-game/src/game/sim/create-world.ts
+  - packages/core-game/src/game/sim/pickups.ts
+  - packages/core-game/src/game/weapons/area-strike.ts
+  - packages/core-game/src/game/radar.ts
+  - packages/core-game/src/game/run/snapshot.ts
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/game/render/blink-look.ts
+  - packages/core-game/src/game/render/telegraphs.ts
+  - packages/core-game/src/game/render/shapes.ts
+  - packages/app-shell/src/i18n/ru-guide.json
+  - packages/app-shell/src/screens/guide/scenes.tsx
 runner: any
 executor: sonnet-5.5
 effort: high

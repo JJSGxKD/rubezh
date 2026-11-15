@@ -235,6 +235,8 @@ describe("контент таймлайна спавна", () => {
       "mire_shambler",
       "bog_lurker",
       "ice_spirit",
+      // Кикимора (T-0283) встала в самый конец: прежние типы не сдвинуты.
+      "kikimora",
     ]);
   });
 
@@ -409,8 +411,8 @@ describe("боссы бесконечного режима", () => {
     }
   });
 
-  it("смесь и стартовый набор кривой помещаются в пул из одиннадцати врагов", () => {
-    expect(ENDLESS_CURVE.pool).toHaveLength(11);
+  it("смесь и стартовый набор кривой помещаются в пул из двенадцати врагов", () => {
+    expect(ENDLESS_CURVE.pool).toHaveLength(12);
     expect(ENDLESS_CURVE.startTypes).toBeLessThanOrEqual(ENDLESS_CURVE.pool.length);
     expect(ENDLESS_CURVE.mixSize).toBeLessThanOrEqual(ENDLESS_CURVE.pool.length);
     expect(findTimelineProblems(TIMELINE, ENDLESS_CURVE, ENEMIES)).toEqual([]);

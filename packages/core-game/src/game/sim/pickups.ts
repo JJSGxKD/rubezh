@@ -332,7 +332,8 @@ function detonate(world: World): void {
   const victims = world.queryBuffer;
   let found = 0;
   for (let i = 0; i < enemies.count && found < victims.length; i++) {
-    if (enemies.alive[i] === 0) continue;
+    // Скрытого (Кикимора, пока горит метка) взрыв не берёт: его нет на поле.
+    if (enemies.alive[i] === 0 || world.hidden.mask[i] === 1) continue;
     // Неубиваемого взрыв не трогает: ни убить, ни толкнуть.
     if (world.enemyTypes[enemies.type[i]].unkillable) continue;
     const dx = enemies.x[i] - player.x;

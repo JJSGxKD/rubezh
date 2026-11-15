@@ -1,5 +1,7 @@
 import type Phaser from "phaser";
 import type { World } from "../sim/world";
+import type { ArtFrame } from "./art-atlas";
+import { blinkMarkRadius } from "./blink-look";
 import { WORLD_COLORS } from "./looks";
 import { ensureShapeTexture } from "./textures";
 
@@ -17,6 +19,9 @@ import { ensureShapeTexture } from "./textures";
  *   показывает, какой ширины шаг нужен: у элиты и босса она шире;
  * - стрелок — перед выстрелом тонкая линия прицела к игроку заполняется от
  *   стрелка. Заполнилась — снаряд вылетел;
+ * - метка появления Кикиморы — кольцо на земле в точке, где она встанет, оно сужается к концу
+ *   отсчёта; пока врага нет на поле, метка — единственное, что о нём говорит, поэтому её не прячет
+ *   выключатель «Телеграфы»;
  * - строй стражей — вспышка вокруг каждого стража в момент появления, она
  *   гаснет, пока страж не начал бить; внутри строя то же кольцо отмечает место
  *   элиты или босса до их выхода.
@@ -63,6 +68,27 @@ export class Telegraphs {
 
     const inner = this.take(RING_KEY, 0.5);
     inner.setPosition(x, y).setScale(Math.max(0.001, (radius * p) / textureRadius)).setAlpha(0.6 + 0.4 * p);
+  }
+
+  /**
+   * Метка появления: кольцо на земле сужается от широкого к телу врага, внутри — бледная заливка,
+   * которая к концу темнеет. `art` — кадр метки из атласа (в режиме арта вместо фигур): он выбирается
+   * по прогрессу снаружи, масштаб — масштаб атласа.
+   */
+  mark(x: number, y: number, bodyRadius: number, progress: number, art: ArtFrame | null, artScale: number): void {
+    if (art !== null) {
+      const sprite = this.take(art.texture, 0.5);
+      sprite.setTexture(art.texture, art.frame).setPosition(x, y).setScale(artScale).setAlpha(1);
+      return;
+    }
+    const textureRadius = RING_TEXTURE_UNITS * this.world.config.unitScale;
+    const p = clamp01(progress);
+
+    const ring = this.take(RING_KEY, 0.5);
+    ring.setPosition(x, y).setScale(blinkMarkRadius(bodyRadius, p) / textureRadius).setAlpha(0.5 + 0.45 * p);
+
+    const fill = this.take(FILL_KEY, 0.5);
+    fill.setPosition(x, y).setScale((bodyRadius * 1.15) / textureRadius).setAlpha(0.12 + 0.2 * p);
   }
 
   /**

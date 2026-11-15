@@ -69,6 +69,8 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
       return <rect x={-r * 0.85} y={-r * 0.85} width={r * 1.7} height={r * 1.7} fill={fill} />;
     case "triangle":
       return <polygon points={`0,${-r} ${r},${r} ${-r},${r}`} fill={fill} />;
+    case "lozenge":
+      return <polygon points={`0,${-r} ${r * 0.5},0 0,${r} ${-r * 0.5},0`} fill={fill} />;
     case "diamond":
       return <polygon points={`0,${-r} ${r * 0.75},0 0,${r} ${-r * 0.75},0`} fill={fill} />;
     case "hexagon":
@@ -436,6 +438,20 @@ export function EnemyScene(props: {
               <WorldShape shape={ENEMY_LOOKS[props.child ?? "swarm"].shape} color={ENEMY_LOOKS[props.child ?? "swarm"].color} r={5} />
             </At>
           ))}
+        </Stage>
+      );
+    case "blink":
+      // Статичная сцена: бледный след — где враг таял, кольцо рядом с игроком — где он встанет. Новой анимации нет.
+      return (
+        <Stage label={props.label}>
+          <Player x={px} y={py} />
+          <At x={36} y={py - 8}>
+            <g opacity={0.3}>{enemy}</g>
+          </At>
+          <At x={px - 34} y={py + 16}>
+            <circle r={size * 1.7} fill="none" stroke={hex(WORLD_COLORS.threat)} strokeOpacity={0.8} strokeWidth={1.5} strokeDasharray="3 2" />
+            <circle r={size * 0.9} fill={hex(WORLD_COLORS.threat)} fillOpacity={0.2} />
+          </At>
         </Stage>
       );
     case "cordon": {
