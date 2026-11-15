@@ -3,6 +3,7 @@ import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaDailyRepository } from "../src/modules/daily/daily.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Награда дня на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -19,7 +20,7 @@ describe.skipIf(DATABASE_URL === "")("награда дня на живом Post
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(780_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "День", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "День", username: null },
       Date.now(),
     );
     return created.accountId;

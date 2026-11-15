@@ -38,7 +38,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0249. VIP в подарок другу — сервер: заказ за звёзды, срок подарка, уведомление, возврат

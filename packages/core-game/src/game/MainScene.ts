@@ -20,7 +20,7 @@ import { applyDevCommand } from "./run/dev-commands";
 import { isPrologueWon } from "./run/prologue";
 import { restartSceneData } from "./run/restart-data";
 import { inspectWorld } from "./run/inspect";
-import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
+import { AD_REROLL_COMMAND, applyCardTool, BANISH_PREFIX, canAdReroll, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { takeChestEvents, type ChestCursor } from "./sim/chests";
 import { describePressureStart } from "./sim/pressure";
@@ -485,6 +485,14 @@ export class MainScene extends Phaser.Scene {
     this.applyCardToolCommand(REROLL_COMMAND);
   }
 
+  /**
+   * Переброс за рекламу (tasks/T-0199). Оболочка зовёт его только после того, как сервер записал
+   * показ: сцена о ролике не знает, правило «раз за забег» держит мир.
+   */
+  rerollOffersViaAd(): void {
+    this.applyCardToolCommand(AD_REROLL_COMMAND);
+  }
+
   /** Пропуск уровня: без улучшения, за долю опыта до следующего. */
   skipOffers(): void {
     this.applyCardToolCommand(SKIP_COMMAND);
@@ -511,6 +519,7 @@ export class MainScene extends Phaser.Scene {
       left: outcome.left,
       level,
       ...(outcome.item === null ? {} : { item: outcome.item }),
+      ...(outcome.viaAd === true ? { viaAd: true as const } : {}),
     });
     if (outcome.kind === "skip") {
       this.finishChoice();
@@ -927,6 +936,7 @@ export class MainScene extends Phaser.Scene {
       tools: { ...progression.tools },
       toolsTotal: { ...progression.toolsTotal },
       canReroll: canReroll(this.world),
+      canAdReroll: canAdReroll(this.world),
       refreshed,
     });
   }

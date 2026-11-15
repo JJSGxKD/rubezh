@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import type { AccountType, EntryLine } from "@bh/ledger";
+import { z } from "zod";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import type { JournalCursor } from "./ledger-cursor.js";
@@ -55,9 +56,9 @@ export interface NewLedgerEntry {
 
 /**
  * Что вышло со вставкой: записана; ключ источника уже занят (другой писатель успел раньше или это повтор);
- * исходная проводка уже сторнирована под другим ключом.
+ * исходная проводка уже сторнирована под другим ключом; месяц проводки закрыт (Р222, tasks/T-0468) — не записана.
  */
-export type InsertResult = "inserted" | "source_taken" | "already_reversed";
+export type InsertResult = "inserted" | "source_taken" | "already_reversed" | "period_closed";
 
 export const LEDGER_REPOSITORY = Symbol("LEDGER_REPOSITORY");
 
@@ -65,7 +66,10 @@ export interface LedgerRepository {
   /** Весь план счетов: типы по порядку объявления, внутри — по времени заведения. */
   accounts(): Promise<StoredLedgerAccount[]>;
   entryBySource(sourceKey: string): Promise<StoredLedgerEntry | null>;
-  /** Проводка и её строки — одной транзакцией. */
+  /**
+   * Проводка и её строки — одной транзакцией, в которой проверен и удержан замок месяца: закрытый месяц —
+   * `period_closed`, ничего не записано.
+   */
   insertEntry(entry: NewLedgerEntry, lines: readonly StoredLedgerLine[]): Promise<InsertResult>;
   /** Сумма строк по счетам — одним запросом; счёта без строк в карте нет. */
   balances(): Promise<Map<string, bigint>>;
@@ -75,6 +79,28 @@ export interface LedgerRepository {
 
 /** Нарушение уникальности — код Prisma; внешний ключ и прочее — настоящая ошибка и идёт наверх. */
 const UNIQUE_VIOLATION = "P2002";
+
+/**
+ * Транзакция вставки. Ожидание блокировки месяца идёт внутри неё, а закрытие держит строку месяца до тридцати
+ * секунд (`CLOSE_TX` в `periods/periods.repository.ts`), поэтому предел транзакции выше, чем у обычной записи.
+ */
+const INSERT_TX = { maxWait: 5_000, timeout: 40_000 } as const;
+
+const periodStatusRow = z.object({ status: z.string() });
+
+/**
+ * Замок закрытого месяца (Р222, tasks/T-0468): статус месяца читается под `FOR SHARE` в той же транзакции, что и
+ * вставка проводки. Закрытие берёт ту же строку под `FOR UPDATE`, и две блокировки конфликтуют: проводка, которая
+ * успела раньше, заставляет закрытие дождаться её коммита и увидеть её в отпечатке журнала; закрытие, которое успело
+ * раньше, заставляет проводку дождаться его коммита и прочитать уже `closed`. Проверка и вставка в разных
+ * транзакциях оставили бы проводке окно, чтобы лечь в месяц, закрытый между ними, — мимо снимка. Месяцу без строки
+ * (открытому) блокировать нечего: закрывают только месяц на сверке, а строку заводит сверка.
+ */
+async function isPeriodClosed(tx: Prisma.TransactionClient, period: string): Promise<boolean> {
+  const rows = await tx.$queryRaw<unknown[]>`SELECT status::text AS "status" FROM ledger_period WHERE period = ${period} FOR SHARE`;
+  const first = rows[0];
+  return first !== undefined && periodStatusRow.parse(first).status === "closed";
+}
 
 type EntryRow = Prisma.LedgerEntryGetPayload<{ include: { lines: true; original: { select: { sourceKey: true } } } }>;
 
@@ -123,21 +149,24 @@ export class PrismaLedgerRepository implements LedgerRepository {
 
   async insertEntry(entry: NewLedgerEntry, lines: readonly StoredLedgerLine[]): Promise<InsertResult> {
     try {
-      // Вложенное создание — одна транзакция: проводка без строк в журнал не попадёт.
-      await this.prisma.ledgerEntry.create({
-        data: {
-          entryId: entry.entryId,
-          sourceKey: entry.sourceKey,
-          at: entry.at,
-          period: entry.period,
-          memo: entry.memo,
-          reversalOf: entry.reversalOfId,
-          ...(entry.meta === null ? {} : { meta: entry.meta }),
-          createdBy: entry.createdBy,
-          lines: { create: lines.map((line) => ({ lineId: randomUUID(), accountId: line.accountId, amount: line.amount })) },
-        },
-      });
-      return "inserted";
+      return await this.prisma.$transaction(async (tx): Promise<InsertResult> => {
+        if (await isPeriodClosed(tx, entry.period)) return "period_closed";
+        // Вложенное создание: проводка без строк в журнал не попадёт.
+        await tx.ledgerEntry.create({
+          data: {
+            entryId: entry.entryId,
+            sourceKey: entry.sourceKey,
+            at: entry.at,
+            period: entry.period,
+            memo: entry.memo,
+            reversalOf: entry.reversalOfId,
+            ...(entry.meta === null ? {} : { meta: entry.meta }),
+            createdBy: entry.createdBy,
+            lines: { create: lines.map((line) => ({ lineId: randomUUID(), accountId: line.accountId, amount: line.amount })) },
+          },
+        });
+        return "inserted";
+      }, INSERT_TX);
     } catch (error: unknown) {
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== UNIQUE_VIOLATION) throw error;
       // Какой из двух уникальных ключей сработал, по тексту ошибки не гадаем: смотрим, занят ли ключ источника.

@@ -21,6 +21,7 @@ export const SCREEN_IDS = [
   "profile",
   "level",
   "history",
+  "emblems",
   "notifications",
   "changelog",
   "tasks",

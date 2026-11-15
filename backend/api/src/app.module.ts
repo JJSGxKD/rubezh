@@ -37,6 +37,7 @@ import { FlagsModule } from "./modules/flags/flags.module.js";
 import { BroadcastsModule } from "./modules/broadcasts/broadcasts.module.js";
 import { SettingsModule } from "./modules/settings/settings.module.js";
 import { ProxiesModule } from "./modules/proxies/proxies.module.js";
+import { SecretsCodexModule } from "./modules/secrets-codex/secrets-codex.module.js";
 import { SecretsModule } from "./modules/secrets/secrets.module.js";
 import { AdConversionsModule } from "./modules/ad-conversions/ad-conversions.module.js";
 import { TelegramPanelLoginModule } from "./platforms/telegram/telegram-panel-login.module.js";
@@ -74,6 +75,7 @@ import { BotMentionModule } from "./modules/bot-mention/bot-mention.module.js";
 import { ExternalIdentityModule } from "./modules/external-identity/external-identity.module.js";
 import { VkModule } from "./platforms/vk/vk.module.js";
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
+import { CodexModule } from "./modules/codex/codex.module.js";
 import { AppearanceModule } from "./modules/appearance/appearance.module.js";
 import { PlayersModule } from "./modules/players/players.module.js";
 import { RemindersModule } from "./modules/reminders/reminders.module.js";
@@ -164,6 +166,7 @@ export const APP_MODULES = [
   MediaModule,
   RestrictionsModule,
   TasksModule,
+  SecretsCodexModule,
   TestNoticeModule,
   AdsModule,
   ClientScriptsModule,
@@ -184,6 +187,7 @@ export const APP_MODULES = [
   ExternalIdentityModule,
   VkModule,
   AchievementsModule,
+  CodexModule,
   AppearanceModule,
   PlayersModule,
   BattlePassModule,

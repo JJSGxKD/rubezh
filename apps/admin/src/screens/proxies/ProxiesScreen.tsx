@@ -14,6 +14,7 @@ import { ProxyDialog } from "./ProxyDialog";
 import { PROXY_TABS, proxyTabOf, proxyTabRoute } from "./proxies-tabs";
 import { SubscriptionPanel } from "./SubscriptionPanel";
 import { TrafficPanel } from "./TrafficPanel";
+import { XrayCorePanel } from "./XrayCorePanel";
 
 /**
  * Прокси для исходящих запросов (docs/35-stage4-plan.md Р91, tasks/T-0065):
@@ -76,6 +77,7 @@ export function ProxiesScreen() {
       />
       {tab === "xray" ? <SubscriptionPanel canEdit={canEdit} /> : null}
       {tab === "traffic" ? <TrafficPanel /> : null}
+      {tab === "core" ? <XrayCorePanel canEdit={canEdit} /> : null}
       {tab === "manual" ? (
         <Panel
           title="Прокси"

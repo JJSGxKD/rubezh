@@ -3,12 +3,15 @@ import { AdminApi } from "../src/api/client";
 import {
   CATEGORY_TITLES,
   CLIENT_KINDS,
+  COMPUTED_TARGET_KINDS,
   EMBLEM_TIERS,
   EMBLEM_TIER_TITLES,
   FILTER_KEYS,
   KIND_TITLES,
   NO_ACHIEVEMENT_FIELDS,
+  STATE_KINDS,
   TASK_LIMIT_RANGE,
+  TIME_KINDS,
   TIER_TITLES,
   cadenceLabel,
   completionsLabel,
@@ -307,7 +310,7 @@ describe("ротация пула и фильтр цели", () => {
     expect(taskProblem(task({ taskId: "w_1", kind: "difficulty_survive_sec", filter: { difficulty: "hard" } }), true)).toBeNull();
     expect(taskProblem(task({ taskId: "w_1", kind: "runs", filter: { weapon: "spark" } }), true)).toMatch(/фильтр/);
     expect(taskProblem(task({ taskId: "w_1", kind: "boost_runs", filter: null }), true)).toBeNull();
-    expect(Object.keys(FILTER_KEYS).sort()).toEqual(["difficulty_runs", "difficulty_survive_sec", "element_runs", "weapon_runs"]);
+    expect(Object.keys(FILTER_KEYS).sort()).toEqual(["difficulty_runs", "difficulty_survive_sec", "element_kills", "element_runs", "weapon_runs"]);
   });
 
   it("виды по итогу забега (T-0126): боссы, элиты, сундуки, кристаллы, эволюции — форма принимает без фильтра и отклоняет с ним", () => {
@@ -549,7 +552,9 @@ describe("знаки у имени в форме (T-0235)", () => {
     expect(targetLabel(emblem())).toBe("—");
     expect(rewardLabel(emblem())).toBe("");
     expect(Object.keys(EMBLEM_TIER_TITLES)).toEqual([...EMBLEM_TIERS]);
-    expect(EMBLEM_TIERS).toEqual(["common", "uncommon", "rare", "epic", "legendary", "mythic", "team"]);
+    expect(EMBLEM_TIERS).toEqual(["common", "uncommon", "rare", "epic", "legendary", "mythic", "team", "partner"]);
+    expect(EMBLEM_TIER_TITLES.team).toBe("Команда");
+    expect(EMBLEM_TIER_TITLES.partner).toBe("Партнёр");
   });
 
   it("знаки статуса и сезона лежат среди достижений, в конце по месту", () => {
@@ -601,5 +606,35 @@ describe("знаки у имени в форме (T-0235)", () => {
     const list = await fetchTasks(new AdminApi(fetch));
     expect(list.ok && list.data.tasks[0]).toMatchObject({ taskId: "emb_vip", category: "status", emblemTier: "legendary" });
     expect(list.ok && list.data.tasks[1]).toMatchObject({ emblemTier: null });
+  });
+});
+
+describe("достижения v2 в панели (T-0322)", () => {
+  const achievement = (patch: Partial<TaskDef> = {}) =>
+    task({ taskId: "ach_fire_500", period: "achievement", kind: "element_kills", target: 500, coins: 100, category: "combat", filter: { element: "fire" }, ...patch });
+
+  it("у четырёх новых видов есть подписи, а испытания считаются в секундах", () => {
+    for (const kind of ["no_hit_sec", "no_kill_sec", "element_kills", "weapon_masters"]) expect(KIND_TITLES[kind], kind).toBeTypeOf("string");
+    expect(TIME_KINDS.has("no_hit_sec") && TIME_KINDS.has("no_kill_sec")).toBe(true);
+    expect(targetLabel(task({ kind: "no_hit_sec", target: 600 }))).toBe("10 мин");
+    expect(targetLabel(task({ kind: "no_kill_sec", target: 60 }))).toBe("1 мин");
+  });
+
+  it("убийства стихией требуют фильтр стихии, как и забеги со стихией", () => {
+    expect(FILTER_KEYS.element_kills).toBe("element");
+    expect(taskProblem(achievement(), true, [])).toBeNull();
+    expect(taskProblem(achievement({ filter: null }), true, [])).toMatch(/нужен фильтр: стихия/);
+    expect(taskProblem(achievement({ filter: { weapon: "spark" } }), true, [])).toMatch(/нужен фильтр: стихия/);
+  });
+
+  it("«Коллекционер»: цель считается сама — подпись вместо числа, срок закреплён «достижением», фильтра нет", () => {
+    expect(COMPUTED_TARGET_KINDS.has("weapon_masters")).toBe(true);
+    expect(COMPUTED_TARGET_KINDS.has("friends")).toBe(false);
+    expect(STATE_KINDS.has("weapon_masters")).toBe(true);
+    const collector = task({ taskId: "ach_collector", period: "achievement", kind: "weapon_masters", target: 7, coins: 800, category: "collection" });
+    expect(targetLabel(collector)).toBe("считается сама");
+    expect(withKind(task({ period: "weekly", tier: "easy", filter: { weapon: "spark" } }), "weapon_masters")).toMatchObject({ kind: "weapon_masters", period: "achievement", tier: null, filter: null });
+    expect(taskProblem(collector, true, [])).toBeNull();
+    expect(taskProblem(task({ taskId: "daily_x", kind: "weapon_masters", target: 7 }), true, [])).toMatch(/только у достижений/);
   });
 });

@@ -22,6 +22,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Рубеж на сервере (T-0121, Р102, Р105): форма итога, словарь событий, цифры,
@@ -74,7 +75,7 @@ function world() {
 }
 
 async function player(w: ReturnType<typeof world>, name: string): Promise<AccountRef> {
-  const account = await w.accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
+  const account = await w.accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
   return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
 }
 

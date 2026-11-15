@@ -7,6 +7,8 @@ import {
   CHANNEL_PLATFORMS,
   CHANNEL_PLATFORM_TITLES,
   CLIENT_KINDS,
+  COMPUTED_TARGET_KINDS,
+  COMPUTED_TARGET_TITLE,
   EMBLEM_KINDS,
   EMBLEM_TIERS,
   EMBLEM_TIER_TITLES,
@@ -277,8 +279,11 @@ export function TasksScreen() {
               </Field>
             ) : null}
             {partner || clientKind || emblemRow ? null : (
-              <Field label="Цель" hint={TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}>
-                <Input {...number("target")} min={1} />
+              <Field
+                label="Цель"
+                hint={COMPUTED_TARGET_KINDS.has(input.kind) ? "число включённых «Мастеров оружия»: новое оружие поднимает цель" : TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}
+              >
+                {COMPUTED_TARGET_KINDS.has(input.kind) ? <Input value={COMPUTED_TARGET_TITLE} readOnly /> : <Input {...number("target")} min={1} />}
               </Field>
             )}
           </FieldRow>
@@ -595,7 +600,7 @@ export function TasksScreen() {
 
 /** Редкость знака словом: цвета знаков игра берёт из своей палитры, панель их не рисует. */
 function EmblemTierBadge({ tier }: { tier: EmblemTier }) {
-  return <Badge tone={tier === "team" ? "info" : "neutral"}>{EMBLEM_TIER_TITLES[tier]}</Badge>;
+  return <Badge tone={tier === "team" ? "info" : tier === "partner" ? "warning" : "neutral"}>{EMBLEM_TIER_TITLES[tier]}</Badge>;
 }
 
 /**

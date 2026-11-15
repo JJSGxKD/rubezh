@@ -165,7 +165,7 @@ export function goalFilterParams(task: Pick<TaskItem, "kind"> & { filter?: TaskI
   const filter = task.filter ?? null;
   if (filter === null) return {};
   if (task.kind === "weapon_runs" && filter.weapon !== undefined) return { weapon: t(`weapon.${filter.weapon}.name`) };
-  if (task.kind === "element_runs" && filter.element !== undefined) return { element: t(`task.element.${filter.element}`) };
+  if ((task.kind === "element_runs" || task.kind === "element_kills") && filter.element !== undefined) return { element: t(`task.element.${filter.element}`) };
   if ((task.kind === "difficulty_runs" || task.kind === "difficulty_survive_sec") && filter.difficulty !== undefined) {
     return { difficulty: t(`difficulty.${filter.difficulty}.name`) };
   }

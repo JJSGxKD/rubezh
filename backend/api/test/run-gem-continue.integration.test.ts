@@ -31,6 +31,7 @@ import { starsProviders } from "./helpers/fake-stars-api.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Второй шанс за самоцветы на живом Postgres с настоящим кошельком и
@@ -58,7 +59,7 @@ describe.skipIf(DATABASE_URL === "")("второй шанс за самоцве�
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(760_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Самоцвет", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Самоцвет", username: null },
       Date.now(),
     );
     return created.accountId;
@@ -394,7 +395,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("второй шанс 
 
   async function player(gemsAmount: number): Promise<{ accountId: string; runId: string; headers: { authorization: string } }> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(850_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Http", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Http", username: null },
       Date.now(),
     );
     await wallet.grant({ accountId: created.accountId, resource: "gems", amount: gemsAmount, reason: "level_reward", idempotencyKey: `test:${randomUUID()}` });

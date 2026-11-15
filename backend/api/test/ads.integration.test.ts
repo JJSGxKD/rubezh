@@ -8,6 +8,7 @@ import { claimVerdict } from "../src/modules/ads/ads.service.js";
 import { REWARDED_VIDEO_PLACES } from "../src/modules/ads/interstitial-gate.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Реклама на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -36,7 +37,7 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(930_000_000 + Math.floor(Math.random() * 30_000_000)), displayName: "Реклама", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Реклама", username: null },
       Date.now(),
     );
     return created.accountId;

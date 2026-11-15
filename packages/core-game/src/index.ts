@@ -37,10 +37,12 @@ export {
   GEM_TIERS,
   HOOD_GEOMETRY,
   PICKUP_LOOKS,
+  SECRET_LOOKS,
   stageColor,
   stageCore,
   UNKILLABLE_LOOK,
   WORLD_COLORS,
+  type SecretSign,
   type ShapeKind,
   type ShapeLook,
 } from "./game/render/looks";

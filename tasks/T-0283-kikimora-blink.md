@@ -38,7 +38,7 @@ batch: 6
 
 # T-0283. Кикимора — новый паттерн `blink`: исчезает и появляется рядом с игроком после метки на земле
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0283.json)](README.md#значки-статуса) [![T-0282](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0282.json&label=T-0282)](T-0282-bog-lurker-puddles.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0283.json)](README.md#значки-статуса) [![T-0282](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0282.json&label=T-0282)](archive/T-0282-bog-lurker-puddles.md)
 
 ## Зачем
 

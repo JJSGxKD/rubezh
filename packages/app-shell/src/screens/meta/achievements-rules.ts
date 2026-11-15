@@ -7,7 +7,16 @@ import { isOpenAchievement, type AchievementItem, type OpenAchievement } from ".
  */
 
 /** Порядок секций витрины. */
-export const CATEGORY_ORDER = ["combat", "collection", "mastery", "friends"] as const;
+export const CATEGORY_ORDER = ["combat", "collection", "mastery", "friends", "status", "season"] as const;
+
+/**
+ * «Статус» и «Сезоны» — знаки у имени (tasks/T-0236): их держат по состоянию
+ * аккаунта, а не копят и не забирают. Карточка такого знака — без полосы
+ * прогресса и без «Забрать».
+ */
+export function isEmblemCategory(category: string): boolean {
+  return category === "status" || category === "season";
+}
 
 /** Любимых не больше стольких: по числу слотов в профиле (серверный `FAVORITES_MAX`). */
 export const FAVORITES_MAX = 3;
@@ -112,7 +121,7 @@ export function openedCount(items: readonly AchievementItem[]): number {
 /** Показываемая ступень карточки готова к забору. */
 function isReadyCard(card: AchievementCard): boolean {
   const shown = card.kind === "ladder" ? card.current : card.item;
-  return isOpenAchievement(shown) && shown.done && !shown.claimed;
+  return isOpenAchievement(shown) && !isEmblemCategory(shown.category) && shown.done && !shown.claimed;
 }
 
 /** Карточки с готовой наградой, в порядке `cards` — для группы «Можно забрать» (T-0373). */

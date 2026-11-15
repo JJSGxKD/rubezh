@@ -273,7 +273,7 @@ describe("реклама в панели", () => {
     ctx.repository.blockRows.push({ blockId: "legacy", networkKey: "adsgram", place: "wheel_spin", externalId: "task-9", success: "view", active: true, platforms: [], devices: [] });
     const view = await ctx.service.view(designer, 7, NOON);
     expect(view.profiles).toBe(AD_NETWORK_PROFILES);
-    expect(view.formats).toMatchObject({ wheel_spin: "rewarded", interstitial: "interstitial", task: "task" });
+    expect(view.formats).toMatchObject({ wheel_spin: "rewarded", card_reroll: "rewarded", interstitial: "interstitial", task: "task" });
     expect(view.networks.find((network) => network.networkKey === "richads")).toMatchObject({ missing: ["App ID (appId)"], problem: null });
     expect(view.blocks[0]?.problem).toMatch(/AdsGram: Block ID для этого места выглядит как «12345»/);
     // Тестовые показы панель видит, чтобы предупредить: сети за них не платят.
@@ -287,7 +287,7 @@ describe("реклама в панели", () => {
     const designer = await person(ctx, "703", "game_designer");
     const moderator = await person(ctx, "704", "moderator");
     const view = await ctx.service.view(designer, 7, NOON);
-    expect(view).toMatchObject({ days: 7, places: ["second_chance", "wheel_spin", "run_double", "task", "interstitial"] });
+    expect(view).toMatchObject({ days: 7, places: ["second_chance", "wheel_spin", "run_double", "card_reroll", "task", "interstitial"] });
     expect(view.networks.map((network) => network.networkKey)).toEqual(["adsgram", "richads", "taddy"]);
     expect(ctx.repository.funnelFrom).toEqual(new Date(NOON.getTime() - 7 * 86_400_000));
     // Пропуски VIP — за то же окно, что воронка (Р99).
