@@ -3,7 +3,7 @@ id: T-0327
 title: Второй сундук в кладе за ролик — сервер: место показа `clad_chest`, раз за забег, книга показов и сверка итога
 epic: E1
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -38,6 +38,20 @@ shared:
   - apps/admin/test/ads.test.ts
   - docs/07-monetization-and-ads.md
   - docs/21-diagrams.md
+  - docs/30-configuration-map.md
+  - docs/35-stage4-plan.md
+  - backend/api/test/wipe-runner.integration.test.ts
+  - backend/api/test/ads-daily-cap.test.ts
+  - backend/api/test/admin.test.ts
+  - backend/api/test/boards-by-viewer.test.ts
+  - backend/api/test/prologue.integration.test.ts
+  - backend/api/test/public-identity.test.ts
+  - backend/api/test/rating-prestige.test.ts
+  - backend/api/test/rating-restrictions.test.ts
+  - backend/api/test/rubezh-win.test.ts
+  - backend/api/test/runs.test.ts
+  - backend/api/test/seasons.test.ts
+  - backend/api/test/single-difficulty.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
