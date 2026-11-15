@@ -24,6 +24,7 @@ shared:
   - docs/07-monetization-and-ads.md
   - docs/30-configuration-map.md
   - backend/api/test/helpers/memory-ads.ts
+  - backend/api/test/ads.test.ts
   - backend/api/test/home.test.ts
   - backend/api/test/run-double.test.ts
   - backend/api/test/wheel.test.ts
