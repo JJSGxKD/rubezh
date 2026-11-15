@@ -3,7 +3,7 @@ id: T-0242
 title: Награда дня ×2 за ролик — новое место рекламы daily_double, сервер
 epic: E1
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
@@ -28,6 +28,11 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - backend/api/test/ads.test.ts
   - backend/api/test/ads-catalog.test.ts
+  - backend/api/test/ads-daily-cap.test.ts
+  - backend/api/test/ads-daily-cap.integration.test.ts
+  - backend/api/test/admin.test.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
   - apps/admin/src/api/ads.ts
   - apps/admin/test/ads.test.ts
   - packages/app-shell/src/state/ads-api.ts

@@ -1,7 +1,19 @@
+import "reflect-metadata";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
-import { AdDailyCapError, AdNotCompletedError, AdSessionClosedError } from "../src/modules/ads/ads-errors.js";
+import { Module } from "@nestjs/common";
+import type { NestFastifyApplication } from "@nestjs/platform-fastify";
+import type { Redis } from "ioredis";
+import { afterEach, describe, expect, it } from "vitest";
+import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
+import { createHttpApp } from "../src/http-app.js";
+import { REDIS } from "../src/infra/redis.js";
+import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
+import { AuthGuard } from "../src/modules/auth/auth.guard.js";
+import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import { DailyController } from "../src/modules/daily/daily.controller.js";
+import { DailyService } from "../src/modules/daily/daily.service.js";
+import { AdDailyCapError, AdNotCompletedError } from "../src/modules/ads/ads-errors.js";
 import { AdNetworkKeys } from "../src/modules/ads/ad-network-keys.js";
 import { PLACE_FORMAT, PLACE_TITLES } from "../src/modules/ads/ad-networks.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
@@ -13,6 +25,7 @@ import { DailyDoubleService, type DailyDoublePlayer } from "../src/modules/daily
 import type { DailyDoubleRecord, DailyDoubleRepository, DailyDoubleRow, DailyRepository, DailyState, RecordOutcome } from "../src/modules/daily/daily.repository.js";
 import type { ProgressService } from "../src/modules/progress/progress.service.js";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
+import { AUTH_ENV } from "./helpers/auth-env.js";
 import { FakeCreatives, MemoryAds, adBlock, interstitialGate } from "./helpers/memory-ads.js";
 import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { panelSettings } from "./helpers/settings.js";
@@ -41,7 +54,7 @@ function moscowDay(time: Date): number {
 }
 
 /** Награда дня в памяти: сколько дней забрано и в какие сутки забран последний. */
-class MemoryDaily implements Pick<DailyRepository, "state"> {
+class MemoryDaily implements DailyRepository {
   claimedDays = 0;
   lastDay: number | null = null;
 
@@ -53,6 +66,12 @@ class MemoryDaily implements Pick<DailyRepository, "state"> {
 
   async state(_accountId: string, time: Date): Promise<DailyState> {
     return { claimedDays: this.claimedDays, claimedToday: this.lastDay === moscowDay(time) };
+  }
+
+  async advance(_accountId: string, expected: number, time: Date): Promise<boolean> {
+    if (this.claimedDays !== expected || this.lastDay === moscowDay(time)) return false;
+    this.claim(time);
+    return true;
   }
 }
 
@@ -236,7 +255,7 @@ describe("удвоение", () => {
     const env = setup();
     env.daily.claim(NOON);
     const result = await env.service.double(PLAYER, await watched(env), NOON);
-    expect(result.credited).toEqual({ coins: 80, shards: 0 });
+    expect(result.credited).toEqual({ coins: dailyReward(1, 1).coins, shards: 0 });
     expect(env.wallet.grants.map((grant) => grant.resource)).toEqual(["coins"]);
   });
 
@@ -337,7 +356,7 @@ describe("удвоение", () => {
     const offer = await env.ads.offer({ accountId: STRANGER, platform: "telegram", device: "android" }, "daily_double", NOON);
     if (!offer.available) throw new Error("показа нет");
     await env.ads.report(STRANGER, offer.sessionId, { kind: "completed" }, NOON);
-    await expect(env.service.double(PLAYER, offer.sessionId, NOON)).rejects.toBeInstanceOf(AdSessionClosedError);
+    await expect(env.service.double(PLAYER, offer.sessionId, NOON)).rejects.toBeInstanceOf(AdNotCompletedError);
     expect(env.wallet.grants).toHaveLength(0);
     expect(env.doubles.rows).toHaveLength(0);
   });
@@ -346,7 +365,7 @@ describe("удвоение", () => {
     const env = setup({ blocks: [adBlock("adsgram", 10, { place: "daily_double" }), adBlock("adsgram", 10, { place: "wheel_spin" })] });
     claimedSeventh(env);
     const wheel = await watched(env, NOON, "wheel_spin");
-    await expect(env.service.double(PLAYER, wheel, NOON)).rejects.toBeInstanceOf(AdSessionClosedError);
+    await expect(env.service.double(PLAYER, wheel, NOON)).rejects.toBeInstanceOf(AdNotCompletedError);
     expect(env.wallet.grants).toHaveLength(0);
   });
 
@@ -356,7 +375,7 @@ describe("удвоение", () => {
     const offer = await env.ads.offer({ ...PLAYER, device: "android" }, "daily_double", NOON);
     if (!offer.available) throw new Error("показа нет");
     await expect(env.service.double(PLAYER, offer.sessionId, NOON)).rejects.toBeInstanceOf(AdNotCompletedError);
-    await expect(env.service.double(PLAYER, "AAAAAAAAAAAAAAAA", NOON)).rejects.toBeInstanceOf(AdSessionClosedError);
+    await expect(env.service.double(PLAYER, "AAAAAAAAAAAAAAAA", NOON)).rejects.toBeInstanceOf(AdNotCompletedError);
     expect(env.wallet.grants).toHaveLength(0);
   });
 
@@ -376,10 +395,11 @@ describe("удвоение", () => {
     const env = setup({ settings: panelSettings({ "ads.rewarded.daily-cap": 1 }) });
     claimedSeventh(env);
     const sessionId = await watched(env);
-    // Кап уже выбран: досмотрен ещё один ролик другого места.
-    env.adsRepository.blocks.push(adBlock("adsgram", 10, { place: "wheel_spin" }));
-    const other = await watched(env, NOON, "wheel_spin");
-    await env.ads.claim(ME, other, "wheel_spin", NOON);
+    // Кап уже выбран: другой ролик, выданный до этого, забран хозяином своего места.
+    const other = "cap-other-session1";
+    await env.adsRepository.createSession({ sessionId: other, accountId: ME, place: "wheel_spin", block: adBlock("adsgram", 10, { place: "wheel_spin" }), creative: null, createdAt: NOON, expiresAt: at(NOON, 30) });
+    await env.adsRepository.report(other, ME, { kind: "completed" }, at(NOON, 1));
+    await env.ads.claim(ME, other, "wheel_spin", at(NOON, 1));
 
     await expect(env.service.double(PLAYER, sessionId, at(NOON, 1))).rejects.toBeInstanceOf(AdDailyCapError);
     expect(env.doubles.rows).toHaveLength(0);
@@ -414,5 +434,73 @@ describe("удвоение", () => {
     const richest = dailyReward(35, 100);
     expect(richest.coins * 2).toBeLessThan(5_000);
     expect(richest.shards * 2).toBeLessThan(100);
+  });
+});
+
+describe("награда дня ×2 по HTTP", () => {
+  let app: NestFastifyApplication | null = null;
+  const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+  });
+
+  async function start(env: Setup): Promise<NestFastifyApplication> {
+    const daily = new DailyService(env.daily, { view: async () => ({ level: 1 }) } as unknown as ProgressService, env.wallet as unknown as WalletService);
+    @Module({
+      controllers: [DailyController],
+      providers: [
+        { provide: APP_CONFIG, useValue: loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv) },
+        { provide: REDIS, useValue: unavailableRedis },
+        { provide: DailyService, useValue: daily },
+        { provide: DailyDoubleService, useValue: env.service },
+        RateLimiter,
+        AuthGuard,
+      ],
+    })
+    class TestModule {}
+    app = await createHttpApp(TestModule, { logger: false });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+    return app;
+  }
+
+  it("без токена — 401; кривое тело — 400; до забора — 409 daily_not_claimed; после забора — удвоение и «удвоено»; вторая сессия — 409", async () => {
+    const env = setup({ blocks: [adBlock("adsgram", 10, { place: "daily_double" }), adBlock("richads", 20, { place: "daily_double" })] });
+    const server = await start(env);
+    const token = await signAccessToken({ accountId: ME, platform: "telegram", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+    const headers = { authorization: `Bearer ${token}` };
+    const double = (payload: unknown) => server.inject({ method: "POST", url: "/api/v1/daily/double", headers, payload: payload as object });
+    const session = () => watched(env, new Date());
+
+    expect((await server.inject({ method: "GET", url: "/api/v1/daily" })).statusCode).toBe(401);
+    expect((await server.inject({ method: "POST", url: "/api/v1/daily/double", payload: { sessionId: "AAAAAAAAAAAAAAAA" } })).statusCode).toBe(401);
+    for (const payload of [{}, { sessionId: "short" }, { sessionId: "AAAAAAAAAAAAAAAA", extra: 1 }, { sessionId: 7 }]) {
+      expect((await double(payload)).statusCode, JSON.stringify(payload)).toBe(400);
+    }
+
+    const before = await server.inject({ method: "GET", url: "/api/v1/daily", headers });
+    expect(before.json<{ data: { canClaim: boolean; double: unknown } }>().data).toMatchObject({ canClaim: true, double: { status: "unavailable" } });
+    const early = await double({ sessionId: await session() });
+    expect(early.statusCode).toBe(409);
+    expect(early.json<{ error: { code: string } }>().error.code).toBe("daily_not_claimed");
+
+    const claimed = await server.inject({ method: "POST", url: "/api/v1/daily/claim", headers });
+    expect(claimed.statusCode).toBe(200);
+    expect(claimed.json<{ data: { claimed: boolean; view: { double: unknown } } }>().data).toMatchObject({ claimed: true, view: { double: { status: "available", coins: 60, shards: 0 } } });
+
+    const first = await session();
+    const result = await double({ sessionId: first });
+    expect(result.statusCode).toBe(200);
+    expect(result.json<{ data: unknown }>().data).toEqual({ credited: { coins: 60, shards: 0 }, view: { status: "doubled", coins: 60, shards: 0 } });
+    const after = await server.inject({ method: "GET", url: "/api/v1/daily", headers });
+    expect(after.json<{ data: { double: unknown } }>().data.double).toEqual({ status: "doubled", coins: 60, shards: 0 });
+
+    const second = await double({ sessionId: await session() });
+    expect(second.statusCode).toBe(409);
+    expect(second.json<{ error: { code: string } }>().error.code).toBe("daily_already_doubled");
+    expect((await double({ sessionId: first })).statusCode).toBe(200);
+    expect(env.wallet.grants.filter((grant) => grant.source === "daily:1:double")).toHaveLength(1);
   });
 });

@@ -230,8 +230,8 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
     const { daily, double } = services();
     await atSeventhDay(me, daily);
 
-    await expect(double.double(player(me), await watched(stranger), at(NOON, 2))).rejects.toMatchObject({ code: "ad_session_closed" });
-    await expect(double.double(player(me), await watched(me, "wheel_spin"), at(NOON, 2))).rejects.toMatchObject({ code: "ad_session_closed" });
+    await expect(double.double(player(me), await watched(stranger), at(NOON, 2))).rejects.toMatchObject({ code: "ad_not_completed" });
+    await expect(double.double(player(me), await watched(me, "wheel_spin"), at(NOON, 2))).rejects.toMatchObject({ code: "ad_not_completed" });
     expect(await balances(me)).toEqual({ coins: 300, shards: 10 });
     expect(await doubleRepository.today(me, NOON)).toBeNull();
   });
