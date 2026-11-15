@@ -137,7 +137,7 @@ describe("проверка разметки при сохранении", () => 
 
   it("update: формат меняют явно; простой текст в оформленную — разбор, обратно — без разбора", async () => {
     const draft = await s.service.create(owner, { ...PLAIN, text: "**не закрыто" });
-    await expect(s.service.update(owner, draft.broadcastId, { ...PLAIN, format: "rich" })).rejects.toMatchObject({ message: "строка 1: незакрытый **" });
+    await expect(s.service.update(owner, draft.broadcastId, { ...PLAIN, format: "rich", text: "**не закрыто" })).rejects.toMatchObject({ message: "строка 1: незакрытый **" });
     const toRich = await s.service.update(owner, draft.broadcastId, { ...PLAIN, format: "rich", text: "**закрыто**" });
     expect(toRich.format).toBe("rich");
     expect((await s.service.update(owner, draft.broadcastId, { ...PLAIN, format: "plain", text: "**не закрыто" })).format).toBe("plain");
