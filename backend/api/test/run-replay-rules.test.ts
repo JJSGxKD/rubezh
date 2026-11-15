@@ -149,7 +149,7 @@ describe("выборка остальных", () => {
 });
 
 describe("что исход делает с забегом", () => {
-  const input = { verdict: "ok" as const, required: true, mismatchVerdict: "suspicious" as const };
+  const input = { verdict: "ok" as const, required: true, reasons: [] as string[], mismatchVerdict: "suspicious" as const };
 
   it("совпал — вердикт не меняется; обязательный забег хранит запись полгода, выборочный — как прежде", () => {
     expect(effectOf("match", input)).toEqual({ replayVerdict: "match", verdict: null, reason: null, unrank: false, keepProofDays: REPLAY_KEEP_DAYS, ourSide: false });
@@ -165,6 +165,32 @@ describe("что исход делает с забегом", () => {
 
   it("ключ «rejected» — отказ", () => {
     expect(effectOf("mismatch", { ...input, mismatchVerdict: "rejected" }).verdict).toBe("rejected");
+  });
+
+  it("повторное расхождение (после «Повторить снова») причину replay_mismatch второй раз не дописывает", () => {
+    const again = effectOf("mismatch", { ...input, verdict: "suspicious", reasons: ["replay_mismatch"] });
+    expect(again).toMatchObject({ verdict: "suspicious", reason: null, unrank: true });
+    // Чужие причины на это не влияют: своей причины у забега ещё нет.
+    expect(effectOf("mismatch", { ...input, verdict: "suspicious", reasons: ["manual"] }).reason).toBe("replay_mismatch");
+    // Отказ по ключу после подозрения от прежнего расхождения: вердикт растёт, причина остаётся одна.
+    expect(effectOf("mismatch", { ...input, verdict: "suspicious", reasons: ["replay_mismatch"], mismatchVerdict: "rejected" })).toMatchObject({ verdict: "rejected", reason: null });
+  });
+
+  it("ключ «observe» — только наблюдение: исход и запись остаются, вердикт, причина и рейтинг не меняются", () => {
+    const observed = effectOf("mismatch", { ...input, mismatchVerdict: "observe" });
+    expect(observed).toEqual({ replayVerdict: "mismatch", verdict: null, reason: null, unrank: false, keepProofDays: REPLAY_KEEP_DAYS, ourSide: false });
+    // Что бы ни стояло у забега, наблюдение его не трогает: ни строже, ни мягче.
+    for (const verdict of ["ok", "suspicious", "rejected", null] as const) {
+      expect(effectOf("mismatch", { ...input, verdict, mismatchVerdict: "observe" })).toEqual(observed);
+    }
+    // Выборочный забег — так же: запись разошедшегося нужна замеру расхождения движков.
+    expect(effectOf("mismatch", { ...input, required: false, mismatchVerdict: "observe" }).keepProofDays).toBe(REPLAY_KEEP_DAYS);
+  });
+
+  it("режим наблюдения касается только расхождения: остальные исходы те же", () => {
+    for (const outcome of ["match", "content_mismatch", "broken", "timeout", "not_replayable", "no_proof"] as const) {
+      expect(effectOf(outcome, { ...input, mismatchVerdict: "observe" })).toEqual(effectOf(outcome, input));
+    }
   });
 
   it("отказ раньше не смягчается подозрением: вердикт только строже", () => {
@@ -188,11 +214,13 @@ describe("что исход делает с забегом", () => {
     }
   });
 
-  it("ключ вердикта: «rejected» — отказ, всё остальное и пустое — подозрение", () => {
+  it("ключ вердикта: «rejected» — отказ, «suspicious» — подозрение, «observe» и всё незнакомое — только наблюдение", () => {
     expect(mismatchVerdictOf("rejected")).toBe("rejected");
     expect(mismatchVerdictOf("suspicious")).toBe("suspicious");
-    expect(mismatchVerdictOf("")).toBe("suspicious");
-    expect(mismatchVerdictOf("banned")).toBe("suspicious");
+    expect(mismatchVerdictOf("observe")).toBe("observe");
+    // Мусор в ключе не должен снимать честных игроков с рейтинга: незнакомое читается как наблюдение.
+    expect(mismatchVerdictOf("")).toBe("observe");
+    expect(mismatchVerdictOf("banned")).toBe("observe");
   });
 
   it("исходов семь, и «ожидает» среди них нет", () => {

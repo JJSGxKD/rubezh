@@ -24,6 +24,8 @@ import { panelSettings } from "./helpers/settings.js";
  */
 
 const HOUR = 3_600_000;
+/** Ключ панели «подозрение»: умолчание у ключа — observe, а тесты о снятии с рейтинга ставят его явно. */
+const SUSP_KEY = { [SETTINGS.replayMismatchVerdict.key]: "suspicious" } as const;
 const NOW = new Date("2026-11-14T12:00:00.000Z");
 const RUN = "0f8fad5b-d9cb-469f-a165-70867728950e";
 const ACCOUNT = "11111111-1111-4111-8111-111111111111";
@@ -510,8 +512,62 @@ describe("исход: что сервер делает с забегом", () =>
     expect(t.repository.proofs.get(RUN)?.keepUntil.getTime()).toBe(NOW.getTime() + 7 * 24 * HOUR);
   });
 
-  it("mismatch — подозрение с причиной replay_mismatch, забег ушёл из рейтинга, доски пересчитаны, тик записан", async () => {
+  it("умолчание ключа replay.mismatch-verdict — observe: сначала меряем расхождения, а не наказываем", () => {
+    expect(SETTINGS.replayMismatchVerdict.fallback).toBe("observe");
+    for (const value of ["observe", "suspicious", "rejected"]) expect(SETTINGS.replayMismatchVerdict.schema.safeParse(value).success).toBe(true);
+    expect(SETTINGS.replayMismatchVerdict.schema.safeParse("banned").success).toBe(false);
+  });
+
+  it("observe (умолчание) — расхождение только записано: исход, тик, запись 180 дней и событие; вердикт, причины, рейтинг и доски прежние", async () => {
     const { t, jobId } = await queued();
+    expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "mismatch", verdict: "ok", verdictReasons: [], ranked: true });
+    expect(t.repository.results.get(RUN)).toMatchObject({ divergedTick: 1800, at: NOW });
+    expect(t.unranked).toEqual([]);
+    expect(t.repository.proofs.get(RUN)?.keepUntil.getTime()).toBe(NOW.getTime() + REPLAY_KEEP_DAYS * 24 * HOUR);
+    expect(t.events.map((event) => event.payload)).toEqual([{ runId: RUN, verdict: "mismatch", divergedTick: 1800, durationMs: 812, clientOs: "ios" }]);
+    expect(t.logs.some((line) => line.includes("replay_outcome_total") && line.includes('"verdict":"mismatch"'))).toBe(true);
+    // Строка в разборе осталась: расхождение видно по исходу, а не по вердикту.
+    expect((await t.service.outcomes([RUN])).get(RUN)).toEqual({ verdict: "mismatch", divergedTick: 1800 });
+  });
+
+  it("observe не трогает и прежнее подозрение с отказом: ни строже, ни мягче", async () => {
+    for (const verdict of ["suspicious", "rejected"] as const) {
+      const { t, jobId } = await queued({}, { verdict, ranked: false, verdictReasons: ["manual"] });
+      t.queue.complete(jobId, verdictOf("mismatch"));
+      await t.service.sweep();
+      expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "mismatch", verdict, ranked: false, verdictReasons: ["manual"] });
+      expect(t.unranked).toEqual([]);
+    }
+  });
+
+  it("переключение ключа из панели действует на следующие исходы: прежний остался наблюдением, новый — подозрение", async () => {
+    const other = "9c2f0b61-3d1a-4f0e-8a77-0b1c2d3e4f50";
+    const t = setup();
+    t.repository.add({ replayVerdict: "pending", replayRequired: true });
+    t.repository.add({ runId: other, replayVerdict: "pending", replayRequired: true });
+    await t.service.onProofStored(RUN);
+    await t.service.onProofStored(other);
+    const [first, second] = [jobIdOf(RUN, 0), jobIdOf(other, 0)];
+
+    t.queue.complete(first, verdictOf("mismatch"));
+    await t.service.sweep();
+    expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "mismatch", verdict: "ok", ranked: true });
+
+    t.settings.set(SETTINGS.replayMismatchVerdict.key, "suspicious");
+    t.queue.complete(second, verdictOf("mismatch", { runId: other }));
+    await t.service.sweep();
+
+    expect(t.repository.rows.get(other)).toMatchObject({ replayVerdict: "mismatch", verdict: "suspicious", verdictReasons: ["replay_mismatch"], ranked: false });
+    expect(t.repository.rows.get(RUN)).toMatchObject({ verdict: "ok", ranked: true });
+    expect(t.unranked).toEqual([other]);
+  });
+
+  it("mismatch — подозрение с причиной replay_mismatch, забег ушёл из рейтинга, доски пересчитаны, тик записан", async () => {
+    const { t, jobId } = await queued(SUSP_KEY);
+    t.queue.complete(jobId, verdictOf("mismatch"));
+
+    await t.service.sweep();
+
     t.queue.complete(jobId, verdictOf("mismatch"));
 
     await t.service.sweep();
@@ -525,12 +581,27 @@ describe("исход: что сервер делает с забегом", () =>
   it("ключ replay.mismatch-verdict = rejected — отказ", async () => {
     const { t, jobId } = await queued({ [SETTINGS.replayMismatchVerdict.key]: "rejected" });
     t.queue.complete(jobId, verdictOf("mismatch"));
+  it("повторное расхождение после «Повторить снова» — причина replay_mismatch в забеге одна", async () => {
+    const { t, jobId } = await queued(SUSP_KEY);
+    t.queue.complete(jobId, verdictOf("mismatch"));
+    await t.service.sweep();
+    expect(t.repository.rows.get(RUN)).toMatchObject({ verdict: "suspicious", verdictReasons: ["replay_mismatch"], ranked: false });
+
+    await t.service.repeat(admin, RUN);
+    t.queue.complete(jobIdOf(RUN, 1), verdictOf("mismatch"));
+    await t.service.sweep();
+
+    expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "mismatch", verdict: "suspicious", verdictReasons: ["replay_mismatch"], ranked: false });
+    // Из рейтинга забег ушёл в первый раз и во второй раз доски не пересчитываются.
+    expect(t.unranked).toEqual([RUN]);
+  });
+
     await t.service.sweep();
     expect(t.repository.rows.get(RUN)).toMatchObject({ verdict: "rejected", ranked: false });
   });
 
   it("отказ, поставленный раньше, подозрением не смягчается", async () => {
-    const { t, jobId } = await queued({}, { verdict: "rejected", ranked: false });
+    const { t, jobId } = await queued(SUSP_KEY, { verdict: "rejected", ranked: false });
     t.queue.complete(jobId, verdictOf("mismatch"));
     await t.service.sweep();
     expect(t.repository.rows.get(RUN)?.verdict).toBe("rejected");
@@ -538,7 +609,7 @@ describe("исход: что сервер делает с забегом", () =>
   });
 
   it("решение модератора сильнее: исход записан, но вердикт, рейтинг и доски не тронуты", async () => {
-    const { t, jobId } = await queued({}, { reviewOutcome: "honest" });
+    const { t, jobId } = await queued(SUSP_KEY, { reviewOutcome: "honest" });
     t.queue.complete(jobId, verdictOf("mismatch"));
     await t.service.sweep();
     expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "mismatch", verdict: "ok", ranked: true, verdictReasons: [] });
@@ -563,7 +634,7 @@ describe("исход: что сервер делает с забегом", () =>
   });
 
   it("исход не по форме — тоже «broken»: чужой результат из Redis не кладётся в базу как есть", async () => {
-    const { t, jobId } = await queued();
+    const { t, jobId } = await queued(SUSP_KEY);
     t.queue.complete(jobId, { verdict: "банан" });
     await t.service.sweep();
     expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "broken", verdict: "ok" });
@@ -827,7 +898,7 @@ describe("чтение для панели", () => {
 
 describe("страховка слушателя", () => {
   it("сбой базы при решении не роняет приём забега: слушатель ловит ошибку, ответ игроку уже ушёл", async () => {
-    const t = setup();
+    const t = setup(SUSP_KEY);
     vi.spyOn(t.repository, "markPending").mockRejectedValueOnce(new Error("база недоступна"));
     t.repository.add();
     t.facts.value = { ...ordinary, boardPlace: 1 };

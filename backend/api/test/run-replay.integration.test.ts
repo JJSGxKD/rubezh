@@ -258,7 +258,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     expect(await queue.has(jobIdOf(run.runId, 0))).toBe(false);
   }, TIMEOUT_MS);
 
-  it("mismatch — подозрение с причиной replay_mismatch, тик расхождения записан, забег ушёл из рейтинга и из доски", async () => {
+  it("mismatch при умолчании (observe) — исход, тик и событие записаны, а вердикт, причины, рейтинг и доска прежние", async () => {
     const account = await player();
     const run = await finishedRun(account);
     answers.set(run.runId, { ...matchOf(run.runId), verdict: "mismatch", divergedTick: 1800, reason: "свёртка минуты разошлась" });
@@ -275,7 +275,39 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     expect(await board.best("hard", account.accountId, "common")).toBeNull();
     // Забег виден в очереди разбора, и исход читается пачкой.
     expect((await service.outcomes([run.runId])).get(run.runId)).toEqual({ verdict: "mismatch", divergedTick: 1800 });
-    expect((await service.view(run.runId)).replayed).toMatchObject({ checksum: 99 });
+  }, TIMEOUT_MS);
+
+  it("mismatch при ключе suspicious — подозрение с причиной replay_mismatch, тик записан, забег ушёл из рейтинга и из доски; повторное расхождение причину не дублирует", async () => {
+    settings.set(SETTINGS.replayMismatchVerdict.key, "suspicious");
+    try {
+      const account = await player();
+      const run = await finishedRun(account);
+      answers.set(run.runId, { ...matchOf(run.runId), verdict: "mismatch", divergedTick: 1800, reason: "свёртка минуты разошлась" });
+      await service.onRecorded(run);
+      await proofs.receive(account.accountId, run.runId, packed(run.runId));
+      await proofs.idle();
+      await untilFinished(run.runId);
+
+      await service.sweep();
+
+      const row = await rowOf(run.runId);
+      expect(row).toMatchObject({ replay_verdict: "mismatch", replay_diverged_tick: 1800, verdict: "suspicious", verdict_reasons: ["replay_mismatch"], ranked: false });
+      expect(row?.replayed_at).not.toBeNull();
+      expect(await board.best("hard", account.accountId, "common")).toBeNull();
+      // Забег виден в очереди разбора, и исход читается пачкой.
+      expect((await service.outcomes([run.runId])).get(run.runId)).toEqual({ verdict: "mismatch", divergedTick: 1800 });
+      expect((await service.view(run.runId)).replayed).toMatchObject({ checksum: 99 });
+
+      // «Повторить снова» и второе расхождение: причина в забеге одна.
+      const admin = await player();
+      await roles.grant(admin.accountId, "moderator", null);
+      await service.repeat(admin, run.runId);
+      await untilFinished(run.runId);
+      await service.sweep();
+      expect(await rowOf(run.runId)).toMatchObject({ replay_verdict: "mismatch", replay_attempt: 1, verdict: "suspicious", verdict_reasons: ["replay_mismatch"], ranked: false });
+    } finally {
+      settings.set(SETTINGS.replayMismatchVerdict.key, "observe");
+    }
   }, TIMEOUT_MS);
 
   it("ключ replay.mismatch-verdict = rejected — отказ", async () => {
@@ -292,7 +324,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
 
       expect(await rowOf(run.runId)).toMatchObject({ replay_verdict: "mismatch", verdict: "rejected", ranked: false });
     } finally {
-      settings.set(SETTINGS.replayMismatchVerdict.key, "suspicious");
+      settings.set(SETTINGS.replayMismatchVerdict.key, "observe");
     }
   }, TIMEOUT_MS);
 
@@ -339,7 +371,8 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     expect(await rowOf(run.runId)).toMatchObject({ replay_verdict: "pending", replay_attempt: 1, replay_diverged_tick: null });
     await proofs.idle();
     expect(await queue.has(jobIdOf(run.runId, 1))).toBe(true);
-    const entry = roles.entries.find((candidate) => candidate.action === "players.run.replay");
+    // Журнал общий на файл: свою строку ищем по забегу, а не берём первую попавшуюся.
+    const entry = roles.entries.find((candidate) => candidate.action === "players.run.replay" && (candidate.after as { runId?: string } | undefined)?.runId === run.runId);
     expect(entry).toMatchObject({ actorAccountId: admin.accountId, target: account.accountId, before: { replayVerdict: "match", divergedTick: null }, after: { runId: run.runId } });
 
     await untilFinished(run.runId);

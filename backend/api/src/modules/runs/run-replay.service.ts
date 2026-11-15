@@ -382,7 +382,12 @@ export class RunReplayService {
   /** Положить исход в забег. `false` — исход уже снят или относится к прошлой попытке: ничего не менялось. */
   private async apply(row: ReplayRunRow, attempt: number, outcome: Outcome): Promise<boolean> {
     const at = this.environment.now();
-    const effect = effectOf(outcome.verdict, { verdict: row.verdict, required: row.replayRequired, mismatchVerdict: mismatchVerdictOf(this.settings.get(SETTINGS.replayMismatchVerdict)) });
+    const effect = effectOf(outcome.verdict, {
+      verdict: row.verdict,
+      reasons: row.verdictReasons,
+      required: row.replayRequired,
+      mismatchVerdict: mismatchVerdictOf(this.settings.get(SETTINGS.replayMismatchVerdict)),
+    });
     const settled = await this.repository.settle({
       runId: row.runId,
       attempt,
@@ -402,7 +407,7 @@ export class RunReplayService {
     if (settled.demoted) await this.refreshBoards(row.runId);
     // Совпавшее — норма, и в лог оно идёт только метрикой; остальное — след для разбора с номером забега (в метки он не попадает).
     if (effect.ourSide) this.note("replay_our_side", { runId: row.runId, verdict: effect.replayVerdict, reason: outcome.reason?.slice(0, 200) ?? null }, "warn");
-    else if (effect.replayVerdict === "mismatch") this.note("replay_mismatch", { runId: row.runId, divergedTick: outcome.divergedTick, verdict: effect.verdict, unranked: settled.demoted });
+    else if (effect.replayVerdict === "mismatch") this.note("replay_mismatch", { runId: row.runId, divergedTick: outcome.divergedTick, verdict: effect.verdict, observed: effect.verdict === null, unranked: settled.demoted });
     await this.announce(row, effect.replayVerdict, outcome, at);
     return true;
   }

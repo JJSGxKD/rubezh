@@ -123,11 +123,17 @@ export function decideReplay(runId: string, facts: ReplayFacts, sampleRate: numb
   return NONE;
 }
 
-/** Каким вердиктом отвечает расхождение: ключ панели `replay.mismatch-verdict`; всё, кроме «rejected», — подозрение. */
-export type MismatchVerdict = "suspicious" | "rejected";
+/**
+ * Чем отвечает расхождение: ключ панели `replay.mismatch-verdict`. `observe` — только
+ * наблюдение: исход, тик и событие пишутся, вердикт и рейтинг забега не меняются (умолчание,
+ * пока не измерено, как часто честный забег расходится из-за движка: JavaScriptCore против V8,
+ * версия воркера позади клиента). `suspicious` и `rejected` — забег уходит из рейтинга.
+ */
+export type MismatchVerdict = "observe" | "suspicious" | "rejected";
 
+/** Незнакомое значение читается как наблюдение: мусор в ключе не должен снимать честных игроков с рейтинга. */
 export function mismatchVerdictOf(value: string): MismatchVerdict {
-  return value === "rejected" ? "rejected" : "suspicious";
+  return value === "rejected" || value === "suspicious" ? value : "observe";
 }
 
 const SEVERITY: Record<RunVerdict, number> = { ok: 0, suspicious: 1, rejected: 2 };
@@ -155,13 +161,15 @@ export interface OutcomeEffect {
 export interface OutcomeContext {
   /** вердикт забега сейчас */
   verdict: RunVerdict | null;
+  /** причины вердикта забега сейчас: повторное расхождение свою причину второй раз не дописывает */
+  reasons: readonly string[];
   /** повтор был обязательным */
   required: boolean;
   mismatchVerdict: MismatchVerdict;
 }
 
 /**
- * Вердикт и рейтинг меняет только расхождение. `content_mismatch`, `broken` и
+ * Вердикт и рейтинг меняет только расхождение, и то не в режиме `observe`. `content_mismatch`, `broken` и
  * `timeout` — сторона сервера (не тот снимок контента, упавший воркер, предел
  * времени): игрок не отвечает. `not_replayable` и `no_proof` вердикта не меняют,
  * а что они значат для наград и верха — решает T-0320.
@@ -173,8 +181,15 @@ export function effectOf(outcome: ReplayOutcome, context: OutcomeContext): Outco
       // Выборочному забегу долгое хранение ни к чему: проверенным верхним записи нужны, остальным — нет.
       return { ...base, keepProofDays: context.required ? REPLAY_KEEP_DAYS : null };
     case "mismatch":
-      // Запись разошедшегося нужна и разбору, и «Повторить снова», и замеру расхождения движков.
-      return { ...base, verdict: strictestVerdict(context.verdict, context.mismatchVerdict), reason: "replay_mismatch", unrank: true, keepProofDays: REPLAY_KEEP_DAYS };
+      // Запись разошедшегося нужна и разбору, и «Повторить снова», и замеру расхождения движков — в любом режиме.
+      if (context.mismatchVerdict === "observe") return { ...base, keepProofDays: REPLAY_KEEP_DAYS };
+      return {
+        ...base,
+        verdict: strictestVerdict(context.verdict, context.mismatchVerdict),
+        reason: context.reasons.includes("replay_mismatch") ? null : "replay_mismatch",
+        unrank: true,
+        keepProofDays: REPLAY_KEEP_DAYS,
+      };
     case "content_mismatch":
     case "broken":
     case "timeout":
