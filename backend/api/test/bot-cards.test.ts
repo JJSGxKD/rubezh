@@ -378,7 +378,7 @@ const lockKey = (accountId: string): string => `bot-cards:send:${accountId}:seas
 let warn: { mock: { calls: unknown[][] } };
 
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
   vi.setSystemTime(T0);
   warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
 });
@@ -861,7 +861,7 @@ describe("правки отправленных карточек", () => {
     const { account, row } = await sent(s);
     await s.service.touch(account.accountId, "season", new Date(T0.getTime() + 2 * MIN));
     await s.service.touch(account.accountId, "season", new Date(T0.getTime() + 5 * MIN));
-    expect(s.queue.of("card-edit")).toEqual([{ name: "card-edit", data: { cardId: row.id }, jobId: `card-edit-${row.id}`, delayMs: 8 * MIN }]);
+    expect(s.queue.of("card-edit")).toEqual([{ name: "card-edit", data: { cardId: row.id }, jobId: `card-edit-${row.id}-${String(T0.getTime())}`, delayMs: 8 * MIN }]);
   });
 
   it("прошло больше десяти минут — правка сразу; интервал берётся из bot.widget.edit-min-minutes", async () => {
@@ -905,6 +905,34 @@ describe("правки отправленных карточек", () => {
     const after = await s.repository.byId(row.id);
     expect(after).toMatchObject({ state: expected, stateHash: stateHash(expected), closedAt: null });
     expect(after?.updatedAt).toEqual(new Date(T0.getTime() + 11 * MIN));
+  });
+
+  it("касание во время правки не теряется: слот занят до вызова площадки, и новое задание ждёт интервал от начала правки", async () => {
+    const s = setup();
+    const { account, row } = await sent(s);
+    s.world.place = 2;
+    await s.service.touch(account.accountId, "season", T0);
+    vi.setSystemTime(new Date(T0.getTime() + 11 * MIN));
+    let release: () => void = () => undefined;
+    s.port.update = async (ref, state) => {
+      s.port.updates.push({ ref, state });
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return { status: "edited" };
+    };
+    const running = s.queue.run("card-edit");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.port.updates).toHaveLength(1);
+
+    // Состояние изменилось, пока площадка отвечает: прежнее задание уже выполняется, но слот занят — новое не теряется.
+    s.world.place = 1;
+    await s.service.touch(account.accountId, "season", new Date());
+    expect(s.queue.of("card-edit")).toHaveLength(1);
+    expect(s.queue.of("card-edit")[0]?.jobId).toBe(`card-edit-${row.id}-${String(T0.getTime() + 11 * MIN)}`);
+    expect(s.queue.of("card-edit")[0]?.delayMs).toBe(10 * MIN);
+    release();
+    await running;
   });
 
   it("card-edit с тем же хэшем — площадка не вызывается", async () => {
@@ -1204,6 +1232,17 @@ describe("финал периода", () => {
     };
     await expect(s.finalizer.tick(T0)).resolves.toMatchObject({ status: "done", queued: 0 });
     expect(warned("final_scan_failed")).toBe(1);
+  });
+
+  it("без входа игроков проход не запускается; со входом идёт по таймеру и снимается при остановке", () => {
+    const s = setup();
+    const idle = new BotCardsFinalizer(loadAppConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv), s.kinds, s.repository, s.queue as unknown as BotNotifyQueue, s.redis as unknown as Redis);
+    idle.onApplicationBootstrap();
+    expect(vi.getTimerCount()).toBe(0);
+    s.finalizer.onApplicationBootstrap();
+    expect(vi.getTimerCount()).toBe(1);
+    s.finalizer.onModuleDestroy();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("задание card-final не по схеме — ошибка; состояние длиннее 1024 байт — тоже", async () => {

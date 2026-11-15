@@ -119,7 +119,13 @@ export class BotCardsService implements OnModuleInit {
     const card = await this.repository.live(accountId, kindId);
     if (card === null) return;
     const gapMs = this.panel.get(SETTINGS.botWidgetEditMinMinutes) * 60_000;
-    await this.queue.addPaced(CARD_JOBS.edit, { cardId: card.id }, { jobId: pacedJobId(CARD_JOBS.edit, card.id), delayMs: Math.max(0, card.updatedAt.getTime() + gapMs - at.getTime()) });
+    // Время последней правки — в идентификаторе: пока задание ждёт, повторные касания сливаются в него, а касание
+    // во время самой правки (она занимает слот до вызова площадки) получает уже другой идентификатор и не теряется.
+    await this.queue.addPaced(
+      CARD_JOBS.edit,
+      { cardId: card.id },
+      { jobId: pacedJobId(CARD_JOBS.edit, card.id, String(card.updatedAt.getTime())), delayMs: Math.max(0, card.updatedAt.getTime() + gapMs - at.getTime()) },
+    );
   }
 
   /**

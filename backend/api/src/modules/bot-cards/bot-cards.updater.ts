@@ -63,6 +63,9 @@ export class BotCardsUpdater implements OnModuleInit {
       const json = encodeState(await kind.state(card.accountId, at));
       const hash = stateHash(json);
       if (hash === card.stateHash) return;
+      // Слот правки занимается до вызова площадки: состояние, изменившееся за время вызова, поставит новое
+      // задание (`touch` считает задержку от этого времени), а не потеряется под выполняющимся.
+      if (!(await this.repository.touched(card.id, card.state, card.stateHash, at))) return;
       const result = await this.apply(card, await port.update(refOf(card), json), at);
       if (result === "ok") await this.repository.touched(card.id, json, hash, at);
       else if (result === "dead") await this.repository.close(card.id, at);
