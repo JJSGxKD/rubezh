@@ -1,11 +1,13 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { withTimeout } from "../../common/with-timeout.js";
 import { REDIS } from "../../infra/redis.js";
 import { AppLinks } from "../../platforms/ports/app-links.js";
-import { Messengers, type SendOutcome } from "../../platforms/ports/messenger.js";
+import { Messengers, type OutgoingMessage, type SendOutcome } from "../../platforms/ports/messenger.js";
 import { AccountSettingsService } from "../account-settings/account-settings.service.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
+import { BotMessageEvents } from "../bot-messages/bot-message-events.js";
+import { BotMessagePolicy } from "../bot-messages/bot-message-policy.js";
 import { MessagingService } from "../messaging/messaging.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { isQuietHour, reminderWindowKey } from "../reminders/reminder-rules.js";
@@ -27,11 +29,15 @@ import { botMessageOf, REMINDER_OFF_ACTION } from "./bot-notify-texts.js";
  * - игрок выключил этот вид в настройках, а не выбирал — решает умолчание;
  * - потолок вида: второе сообщение за окно не уходит, оно ждёт в ленте; у
  *   напоминаний окно одно на все три вида и берётся из настроек;
+ * - правила звука и тихих часов (Р199, tasks/T-0394), когда включён
+ *   `bot.formats.enabled`: ночью дубль ждёт конца тихих часов (исход
+ *   `deferred`), со звуком — не больше `bot.loud-per-day` в сутки на игрока;
  * - блокировка при отправке — отметка у игрока, дальше ему не пишут ни
  *   уведомления, ни рассылки.
  *
  * Исход — в строку ленты (`notification.bot_outcome`): по нему видно, доходят
- * ли сообщения, а «заблокировали после» — по `account_messaging`.
+ * ли сообщения, а «заблокировали после» — по `account_messaging`. Каждое
+ * отправленное сообщение — ещё и событие `bot_message_sent`.
  */
 
 const TIMEOUT_MS = 3_000;
@@ -41,11 +47,17 @@ export interface BotNotifyJob {
   accountId: string;
   kind: string;
   payload: unknown;
+  /** задание уже ждало конца тихих часов: второй раз не откладывается, уходит без звука */
+  quietDeferred?: boolean;
 }
 
 export type SkipReason = "not_duplicated" | "no_account" | "banned" | "no_bot" | "not_allowed" | "opted_out" | "bad_payload" | "throttled" | "disabled" | "quiet_hours";
 
-export type BotDelivery = SendOutcome | { status: "skipped"; reason: SkipReason };
+export type BotDelivery =
+  | SendOutcome
+  | { status: "skipped"; reason: SkipReason }
+  /** сейчас тихие часы: очередь поставит задание заново через `afterSec` */
+  | { status: "deferred"; afterSec: number };
 
 @Injectable()
 export class BotNotifySender {
@@ -61,6 +73,9 @@ export class BotNotifySender {
     @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "get">,
     // Включатель, окно потолка и тихие часы напоминаний — настройки панели, читаются на каждую отправку.
     @Inject(SETTINGS_READER) private readonly panel: SettingsReader,
+    // Последними и необязательными: сборки отправителя без правил звука (тесты, до Р199) работают как раньше.
+    @Optional() @Inject(BotMessagePolicy) private readonly policy?: BotMessagePolicy,
+    @Optional() @Inject(BotMessageEvents) private readonly events?: BotMessageEvents,
   ) {}
 
   async deliver(job: BotNotifyJob, now = new Date()): Promise<BotDelivery> {
@@ -86,11 +101,19 @@ export class BotNotifySender {
     const text = botMessageOf(job.kind, job.payload, (startParam) => this.links.launch(account.platform, startParam));
     if (text === null) return skipped("bad_payload");
     // У каждого напоминания кнопка выхода: без неё игрок мог бы только терпеть.
-    const message = rule.reminder === true ? { ...text, action: REMINDER_OFF_ACTION } : text;
+    let message: OutgoingMessage = rule.reminder === true ? { ...text, action: REMINDER_OFF_ACTION } : text;
+    // Дубль — то, что бот пишет сам: звук и тихие часы решает политика. Решение до окна потолка:
+    // отложенное задание окна не занимает.
+    const decision = await this.policy?.decide({ accountId: job.accountId, origin: "bot", reminder: rule.reminder === true }, now);
+    if (decision?.action === "skip") return skipped("quiet_hours");
+    if (decision?.action === "wait" && job.quietDeferred !== true) return { status: "deferred", afterSec: Math.max(1, Math.ceil((decision.untilMs - now.getTime()) / 1000)) };
+    // Уже откладывали, а тихие часы всё ещё идут (их сдвинули настройкой): уходит, но без звука.
+    if (decision?.action === "wait" || (decision?.action === "send" && decision.silent)) message = { ...message, silent: true };
     if (!(await this.claim(job, rule))) return skipped("throttled");
 
     const outcome = await messenger.send(account.platformUserId, message);
     if (outcome.status === "retry") return outcome;
+    await this.events?.sent({ kind: job.kind, format: "text", outcome: eventOutcomeOf(outcome), topic: "none", silent: message.silent === true, platform: account.platform });
     if (outcome.status === "blocked") await this.messaging.platformChanged(account.platform, account.platformUserId, "blocked", now);
     await this.notifications.markBot(job.notificationId, outcome.status, now);
     return outcome;
@@ -110,6 +133,12 @@ export class BotNotifySender {
     if (taken === "OK") return true;
     return (await withTimeout(this.redis.get(key), TIMEOUT_MS, "окно дубля в бота")) === job.notificationId;
   }
+}
+
+/** Исход площадки в словаре события: запасной текст отличается от обычной отправки. */
+function eventOutcomeOf(outcome: Exclude<SendOutcome, { status: "retry" }>): "sent" | "blocked" | "failed" | "fallback" {
+  if (outcome.status === "sent") return outcome.fallback === true ? "fallback" : "sent";
+  return outcome.status;
 }
 
 function skipped(reason: SkipReason): BotDelivery {

@@ -110,6 +110,36 @@ jobs:
           -v "$PWD/backend/api/scripts/card-smoke.mjs:/app/backend/api/card-smoke.mjs:ro"
           rubezh-api:pr card-smoke.mjs
 
+  # Наш конфиг на ядре Xray из PR (docs/35-stage4-plan.md Р202, tasks/T-0417):
+  # check-config.sh собирает образ спутника и гоняет золотые конфиги через
+  # `xray run -test`. Нужен только PR, который меняет образ Xray или proxy-kit
+  # (в том числе PR обновления ядра от xray-bump.yml — он открыт токеном
+  # workflow и сам CI не запускает, гейт — закрыть и открыть заново); на
+  # остальных джоб зелёный за секунды. Обязательной проверкой не сделан.
+  xray-config:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Имя базовой ветки — через env: оно приходит из события, а не из нашего кода.
+      - name: Менялся ли образ Xray или proxy-kit
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -qE '^(infra/prod/xray/|packages/proxy-kit/)'; then
+            echo "xray=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "xray=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Конфиг на новом ядре
+        if: steps.changed.outputs.xray == 'true'
+        run: bash infra/prod/xray/check-config.sh
+
   # Версия по типу изменений в PR (docs/09-ci-cd.md §8.1): из main — стабильная
   # vX.Y.Z, из dev — предрелиз vX.Y.Z-rc.N. Доведён до тега, образа в GHCR,
   # GitHub Release и артефактов клиента и панели; выкат — job `deploy` ниже.

@@ -41,6 +41,7 @@ const REASON_TITLES: Readonly<Record<string, string>> = {
   level_rate: "уровни растут быстрее порога",
   unknown_content: "незнакомый отпечаток контента — сборка не из выпущенных",
   unpaid_continue: "второй шанс без оплаты",
+  unpaid_ad_reroll: "рекламный переброс не подтверждён показом",
   underpaid_continue: "второй шанс оплачен за меньшее время, чем прошло",
   unverified_time: "старт не дошёл — время забега не проверено",
   loadout_forged: "снимок снаряжения не подписан сервером",

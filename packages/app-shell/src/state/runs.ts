@@ -69,6 +69,8 @@ const finishFields = {
   countInRating: z.optional(z.boolean()),
   continues: z.optional(z.array(z.number())),
   boosts: z.optional(z.array(z.string())),
+  // Переброс за рекламу (T-0199): записи прошлых сборок его не знают — это забег без него.
+  adRerolls: z.optional(z.number()),
   passives: z.optional(z.array(z.object({ id: z.string(), level: z.number() }))),
   stats: z.optional(
     z.object({
@@ -89,6 +91,8 @@ const finishFields = {
       killsByElement: z.optional(z.partialRecord(z.enum(ELEMENTS), z.number())),
       // Встреченные враги для кодекса (T-0479): записи прошлых сборок их не знают.
       enemiesSeen: z.optional(z.array(z.string())),
+      // Найденные виды тайников для кодекса (T-0261): записи прошлых сборок их не знают.
+      secretsFound: z.optional(z.array(z.string())),
       // Очки эффективности (T-0293): журнал охоты, оценка сборки и сила на старте; записи прошлых сборок их не знают.
       huntLog: z.optional(z.array(z.object({ rank: z.enum(["elite", "boss"]), value: z.number(), aliveSec: z.number() }))),
       buildScore: z.optional(z.number()),
@@ -102,6 +106,9 @@ const TOP_KILLS = 5;
 
 /** Потолок списка встреченных врагов — тот же, что у сервера (`runFinishSchema`). */
 const MAX_ENEMIES_SEEN = 64;
+
+/** Потолок списка найденных видов тайников — тот же, что у сервера (`runFinishSchema`). */
+const MAX_SECRETS_FOUND = 12;
 
 const startEntrySchema = z.object({
   kind: z.literal("start"),
@@ -316,6 +323,8 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
     continues: [...result.continues],
     // Бусты — те, что применил движок: сервер сверит их с покупкой на забег.
     ...(result.boosts === undefined || result.boosts.length === 0 ? {} : { boosts: [...result.boosts] }),
+    // Рекламный переброс карточек: сервер сверит число с книгой показов — без него забег отклонят.
+    ...(result.adRerolls === undefined || result.adRerolls === 0 ? {} : { adRerolls: result.adRerolls }),
     passives: result.passives.map(({ id, level }) => ({ id, level })),
     stats: {
       damageTaken: Math.round(result.damageTaken),
@@ -335,6 +344,8 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
       killsByElement: result.killsByElement,
       // Потолок сервера — 64: лишнее обрезается здесь, иначе итог целиком уйдёт в отказ формы.
       ...(result.enemiesSeen === undefined ? {} : { enemiesSeen: result.enemiesSeen.slice(0, MAX_ENEMIES_SEEN) }),
+      // Видов шесть, потолок сервера — двенадцать: обрезка страхует итог от отказа формы.
+      ...(result.secrets === undefined ? {} : { secretsFound: result.secrets.found.slice(0, MAX_SECRETS_FOUND) }),
       // Для очков эффективности (T-0293): без них сервер считает оси охоты и сборки единицей, а полосу берёт среднюю.
       ...(result.huntLog === undefined ? {} : { huntLog: result.huntLog.map(({ rank, value, aliveSec }) => ({ rank, value, aliveSec })) }),
       ...(result.buildScore === undefined ? {} : { buildScore: result.buildScore }),

@@ -7,6 +7,7 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { admitsTask } from "../src/modules/tasks/network-task-rules.js";
 import { PrismaNetworkTasksRepository } from "../src/modules/tasks/network-tasks.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Задания рекламных сетей на живом Postgres (docs/35-stage4-plan.md WP13,
@@ -35,7 +36,7 @@ describe.skipIf(DATABASE_URL === "")("задания сетей на живом 
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(960_000_000 + Math.floor(Math.random() * 30_000_000)), displayName: "Задания сетей", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Задания сетей", username: null },
       Date.now(),
     );
     return created.accountId;

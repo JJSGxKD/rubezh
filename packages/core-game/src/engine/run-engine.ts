@@ -69,6 +69,9 @@ export function createRunEngine(): RunEngine {
         rerollOffers(): void {
           scene()?.rerollOffers();
         },
+        rerollOffersViaAd(): void {
+          scene()?.rerollOffersViaAd();
+        },
         skipOffers(): void {
           scene()?.skipOffers();
         },

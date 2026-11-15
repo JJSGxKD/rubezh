@@ -46,7 +46,7 @@ function rung(rungNo: number, patch: Partial<OpenAchievement> = {}): OpenAchieve
 }
 
 describe("groupByCategory", () => {
-  it("порядок категорий: бой, коллекция, мастерство, друзья; порядок внутри — как отдал сервер", () => {
+  it("порядок категорий: бой, коллекция, мастерство, друзья, статус, сезоны; порядок внутри — как отдал сервер", () => {
     const items = [
       open("m1", { category: "mastery" }),
       open("f1", { category: "friends" }),
@@ -54,13 +54,15 @@ describe("groupByCategory", () => {
       open("b1", { category: "combat" }),
       open("b2", { category: "combat" }),
       open("m2", { category: "mastery" }),
+      open("z1", { category: "season" }),
+      open("t1", { category: "status" }),
     ];
 
     const groups = groupByCategory(items);
 
-    expect(CATEGORY_ORDER).toEqual(["combat", "collection", "mastery", "friends"]);
-    expect(groups.map((group) => group.category)).toEqual(["combat", "collection", "mastery", "friends"]);
-    expect(groups.map((group) => group.items.map((item) => item.id))).toEqual([["b1", "b2"], ["c1"], ["m1", "m2"], ["f1"]]);
+    expect(CATEGORY_ORDER).toEqual(["combat", "collection", "mastery", "friends", "status", "season"]);
+    expect(groups.map((group) => group.category)).toEqual(["combat", "collection", "mastery", "friends", "status", "season"]);
+    expect(groups.map((group) => group.items.map((item) => item.id))).toEqual([["b1", "b2"], ["c1"], ["m1", "m2"], ["f1"], ["t1"], ["z1"]]);
   });
 
   it("пустая категория опущена; пустой список — пустая витрина", () => {
