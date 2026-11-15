@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { MissingRateError, fromMinorUnits, isCurrencyCode, payoutUsdPerUnit, type RatesSnapshot } from "@bh/fx";
 import { toMinor } from "@bh/ledger";
 import { ForbiddenError, ValidationError } from "../../../common/domain-error.js";
@@ -11,6 +11,8 @@ import type { FeeTemplate, FeeView } from "../ledger-chart.js";
 import { LedgerChartService } from "../ledger-chart.service.js";
 import { currencySpec } from "../ledger-currencies.js";
 import { decodeCursor, encodeCursor } from "../ledger-cursor.js";
+import { payoutColumnsOf } from "../payouts/payout-columns.js";
+import { PAYOUT_SUPPORT, type PayoutSupport } from "../payouts/payout-support.js";
 import { DEFAULT_JOURNAL_LIMIT, LedgerService, MAX_JOURNAL_LIMIT } from "../ledger.service.js";
 import {
   applyFeeTemplate,
@@ -19,6 +21,7 @@ import {
   operationSourceKey,
   roundUsd,
   type BuildProblem,
+  type BuildResult,
   type BuiltOperation,
   type ChartPlace,
   type EstimateBasis,
@@ -33,7 +36,7 @@ import {
   LedgerOperationTemplateTakenError,
   LedgerOperationVanishedError,
 } from "./operation-errors.js";
-import { NOTE_MAX, NOTE_MIN, operationInputSchema, splitInput, type OperationInput } from "./operation-input.js";
+import { NOTE_MAX, NOTE_MIN, operationInputSchema, splitInput, type BuildableInput, type OperationInput } from "./operation-input.js";
 import { inputOf, operationView, type OperationPage, type OperationView } from "./operation-view.js";
 import { operationSummary, type OperationCard } from "./operations-notify.js";
 import { OPERATIONS_REPOSITORY, type DecisionRecord, type OperationFilter, type OperationsRepository, type StoredOperation } from "./operations.repository.js";
@@ -44,6 +47,10 @@ import { OPERATIONS_REPOSITORY, type DecisionRecord, type OperationFilter, type 
  * удаляется, проведённая операция не меняется — исправление только сторно. Проводка идёт под ключом `op:<id>`,
  * поэтому повторное проведение — та же проводка, а не вторая. Право на изменение проверяет охранник маршрута
  * (`finance.entry.create`); здесь — кто может править чужой черновик и аудит каждого действия.
+ *
+ * Выплата за закрытый месяц (Р222, T-0469) — один из видов: данные месяца для сборщика, замок месяца на время
+ * проведения и сообщение «выплачено» даёт порт `PayoutSupport`. Проверка остатка и запись проводки идут под одним
+ * замком, поэтому две выплаты на весь долг не проходят вместе, а снятие закрытия не успевает между ними.
  */
 
 export type OperationActor = AccountRef;
@@ -89,6 +96,8 @@ export class OperationsService {
     private readonly roles: RolesService,
     private readonly approvals: OperationApprovals,
     private readonly media: MediaService,
+    // Необязателен: сборки учёта без выплат (тесты операций) выплат не проводят; в модуле порт всегда есть.
+    @Optional() @Inject(PAYOUT_SUPPORT) private readonly payouts?: PayoutSupport,
   ) {}
 
   /**
@@ -110,6 +119,7 @@ export class OperationsService {
       createdBy: actor.accountId,
       templateId: template?.templateId ?? null,
       templatePeriod: template?.period ?? null,
+      payout: payoutColumnsOf(prepared.input),
     });
     if (outcome === "template_taken") {
       // Уникальным остаётся только шаблон с периодом: без шаблона такого исхода быть не может.
@@ -130,7 +140,7 @@ export class OperationsService {
 
     const prepared = await this.prepare(operationId, raw);
     const { fields, note, link, receiptImage } = splitInput(prepared.input);
-    const updated = await this.repository.updateDraft(operationId, { kind: prepared.input.kind, input: fields, note, link, receiptImage, amountUsd: prepared.amountUsd });
+    const updated = await this.repository.updateDraft(operationId, { kind: prepared.input.kind, input: fields, note, link, receiptImage, amountUsd: prepared.amountUsd, payout: payoutColumnsOf(prepared.input) });
     // Между чтением и записью черновик успели провести или удалить.
     if (!updated) throw new LedgerOperationNotDraftError(operationId, (await this.repository.byId(operationId))?.status ?? "posted");
     await this.roles.audit({ actorAccountId: actor.accountId, action: "ledger.operation.update", target: operationId, before: { kind: stored.kind }, after: { kind: prepared.input.kind, amountUsd: prepared.amountUsd } });
@@ -202,7 +212,7 @@ export class OperationsService {
   /** Что мешает собрать проводку сейчас; пусто — можно ждать подтверждения и проводить. */
   private async problemsOf(operationId: string, input: OperationInput): Promise<readonly BuildProblem[]> {
     if (input.kind === "reversal") return commonProblems(input, new Date());
-    const result = buildOperation(operationId, input, await this.loadChart(), new Date());
+    const result = await this.build(operationId, input, await this.loadChart(), new Date());
     return result.ok ? [] : result.problems;
   }
 
@@ -216,6 +226,27 @@ export class OperationsService {
    * подтверждении: без него проводит автор черновика.
    */
   private async post(actor: OperationActor, stored: StoredOperation, decision?: DecisionRecord): Promise<OperationView> {
+    const input = inputOf(stored);
+    if (input.kind !== "payout") return (await this.postEntry(actor, stored, decision)).view;
+    // Выплата: остаток, подтверждение и проводка — под замком месяца. Пока ждали замок, эту же операцию могли провести
+    // (параллельный submit) или решить: читаем её заново и повтор отдаём как есть, а не отказом «больше остатка».
+    const support = this.payoutSupport();
+    let fresh = false;
+    const view = await support.exclusive(input.period, async () => {
+      const current = await this.stored(stored.operationId);
+      if (decision === undefined && current.status === "posted") return await this.view(current);
+      if (decision !== undefined && current.status !== "pending") throw new LedgerOperationNotPendingError(current.operationId, current.status);
+      const done = await this.postEntry(actor, current, decision);
+      fresh = done.fresh;
+      return done.view;
+    });
+    // Сообщение — после замка и только за ту проводку, которую записал этот вызов; повтор сообщения не заводит (ключ — операция).
+    if (fresh) await support.announcePaid(stored.operationId, input);
+    return view;
+  }
+
+  /** Собрать проводку и записать её с отметкой; `fresh` — проводку и отметку поставил этот вызов, а не повтор. */
+  private async postEntry(actor: OperationActor, stored: StoredOperation, decision?: DecisionRecord): Promise<{ view: OperationView; fresh: boolean }> {
     const operationId = stored.operationId;
     const input = inputOf(stored);
     const sourceKey = operationSourceKey(operationId);
@@ -227,7 +258,7 @@ export class OperationsService {
       if (problems.length > 0) throw invalid(problems);
       entryId = (await this.ledger.reverse(input.sourceKey, sourceKey, new Date(input.at), input.note, ledgerActor)).entryId;
     } else {
-      const result = buildOperation(operationId, input, await this.loadChart(), new Date());
+      const result = await this.build(operationId, input, await this.loadChart(), new Date());
       if (!result.ok) throw invalid(result.problems);
       built = result.built;
       await this.ensureAccounts(built);
@@ -250,7 +281,7 @@ export class OperationsService {
       const action = decision === undefined ? "ledger.operation.submit" : "ledger.operation.approve";
       await this.roles.audit({ actorAccountId: actor.accountId, action, target: operationId, after: { kind: stored.kind, entryId, sourceKey, ...(decision !== undefined && decision.note !== null ? { note: decision.note } : {}) } });
     }
-    return await this.get(operationId);
+    return { view: await this.get(operationId), fresh: outcome === "posted" };
   }
 
   /** Убрать черновик. Проведённую операцию и ту, что проводится прямо сейчас, не убрать. */
@@ -303,9 +334,20 @@ export class OperationsService {
       // Сторно меняет уже проведённое, и размер у него не оценить без строк исходной проводки: пусто — «не мелочь».
       return { input, amountUsd: null };
     }
-    const result = buildOperation(operationId, input, chart, now);
+    const result = await this.build(operationId, input, chart, now);
     if (!result.ok) throw invalid(result.problems);
     return { input, amountUsd: await this.estimateUsd(result.built.estimate, now) };
+  }
+
+  /** Сборка проводки: выплате сервис сначала читает данные закрытого месяца — сборщик остаётся чистой функцией. */
+  private async build(operationId: string, input: BuildableInput, chart: OperationsChart, now: Date): Promise<BuildResult> {
+    if (input.kind !== "payout") return buildOperation(operationId, input, chart, now);
+    return buildOperation(operationId, input, chart, now, await this.payoutSupport().facts(input, now));
+  }
+
+  private payoutSupport(): PayoutSupport {
+    if (this.payouts === undefined) throw new Error("Выплаты не подключены: сервису операций не передан порт выплат");
+    return this.payouts;
   }
 
   /**
