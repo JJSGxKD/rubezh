@@ -38,6 +38,11 @@ function payload<Shape extends z.ZodRawShape>(shape: Shape) {
 const amount = z.number().nonnegative();
 const ratio = z.number().min(0).max(1);
 
+// Модификатор забега (T-0122, Р105). Список — копия `RUN_MODIFIER_IDS` из
+// `runs/run-verdict.ts`: словарь не зависит от модулей; равенство держит
+// `run-modifiers.test.ts`. Метка Prometheus из него не делается.
+const runModifier = z.enum(["hurry", "inverse"]);
+
 // Покупка глазами клиента (docs/34-stage3-plan.md, WP5; магазин и VIP —
 // docs/35-stage4-plan.md, WP10): воронка от нажатия до выдачи. Суммы здесь —
 // разрез, а не выручка: выручку и возвраты считают по таблице `purchase`
@@ -83,6 +88,8 @@ const runOutcome = payload({
   contentHash: id,
   isNewRecord: z.boolean(),
   cheats: z.boolean(),
+  // Модификатор забега (tasks/T-0122): необязательный, версия прежняя.
+  modifier: runModifier.optional(),
   // Откуда забег: `update` — прерван обновлением игры и засчитан брошенным при
   // следующем запуске (tasks/T-0163). Необязательное: обычный исход поля не
   // несёт, версия прежняя.
@@ -159,6 +166,8 @@ export const EVENT_DICTIONARY = {
       screenMode: id,
       orientation: id,
       devMode: z.boolean(),
+      // Модификатор забега (tasks/T-0122): необязательный, версия прежняя.
+      modifier: runModifier.optional(),
       // Сила игрока (очки) и уровень давления на старте, класс устройства
       // (docs/22-analytics-and-metrics.md §3.3, T-0196). Необязательные: забег
       // разработчика и сборки до подстройки их не шлют, версия прежняя.
