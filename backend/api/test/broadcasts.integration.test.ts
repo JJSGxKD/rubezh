@@ -168,7 +168,7 @@ describe.skipIf(DATABASE_URL === "")("рассылки на живом Postgres"
     await prisma.broadcast.create({ data: { broadcastId: legacyId, title: "Старая", platform: "telegram", text: "Привет", segment, createdBy: author.accountId } });
     expect(await broadcasts.byId(legacyId)).toMatchObject({ format: "plain", testedHash: null });
 
-    await prisma.broadcast.update({ where: { broadcastId: legacyId }, data: { format: "markdown2" } });
+    await prisma.broadcast.update({ where: { broadcastId: legacyId }, data: { format: "html" } });
     expect((await broadcasts.byId(legacyId))?.format).toBe("plain");
 
     expect(await broadcasts.markTested(legacyId, "a".repeat(64))).toBe(true);
