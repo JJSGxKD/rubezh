@@ -9,6 +9,7 @@ import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { ADMIN_CSRF_HEADER, ADMIN_CSRF_VALUE, ADMIN_SESSION_COOKIE } from "../src/modules/admin/admin-cookie.js";
 import { AdminLedgerController } from "../src/modules/admin/admin-ledger.controller.js";
+import { AdminMyProjectController } from "../src/modules/admin/admin-my-project.controller.js";
 import { AdminMediaController } from "../src/modules/admin/admin-media.controller.js";
 import { AdminSessionController } from "../src/modules/admin/admin-session.controller.js";
 import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
@@ -30,6 +31,8 @@ import type { OperationInput } from "../src/modules/ledger/operations/operation-
 import type { OperationPage, OperationView } from "../src/modules/ledger/operations/operation-view.js";
 import type { OperationFilter } from "../src/modules/ledger/operations/operations.repository.js";
 import { OperationsService } from "../src/modules/ledger/operations/operations.service.js";
+import { PayoutNotices } from "../src/modules/ledger/payouts/payout-notices.js";
+import { PayoutsService } from "../src/modules/ledger/payouts/payouts.service.js";
 import { LedgerPeriodBlockedError } from "../src/modules/ledger/periods/period-errors.js";
 import type { PeriodListItem, PeriodReportView } from "../src/modules/ledger/periods/period-view.js";
 import { PeriodsService } from "../src/modules/ledger/periods/periods.service.js";
@@ -42,6 +45,7 @@ import type { CreateTemplateInput, UpdateTemplateInput } from "../src/modules/le
 import { TemplatesService, type DraftPeriodResult, type TemplateView } from "../src/modules/ledger/templates/templates.service.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import type { Role } from "../src/modules/roles/permissions.js";
+import { ProjectMonthService } from "../src/modules/stakeholders/project-month.service.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
@@ -50,15 +54,19 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryMedia } from "./helpers/memory-media.js";
+import { memoryNotifications } from "./helpers/memory-notifications.js";
 import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
+import { MemoryPayoutsRepository, closedSnapshot } from "./helpers/memory-payouts.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { panelSettings } from "./helpers/settings.js";
 
 /**
  * Журнал учёта в панели по HTTP (Р219, tasks/T-0457): `GET /admin/ledger/balances` и `GET /admin/ledger/journal`;
  * места хранения и статьи (Р220, tasks/T-0460): `/admin/ledger/places` и `/admin/ledger/articles`;
  * ручные операции (Р220, tasks/T-0461): `/admin/ledger/operations`;
  * месяцы учёта (Р222, tasks/T-0468): `/admin/ledger/periods`;
- * шаблоны повторяющихся расходов (Р220, tasks/T-0463): `/admin/ledger/templates`.
+ * шаблоны повторяющихся расходов (Р220, tasks/T-0463): `/admin/ledger/templates`;
+ * подтверждение отчёта участником и выплаты (Р222, tasks/T-0469): `/admin/my-project/periods` и `/admin/ledger/periods/:p/payouts`.
  * Настоящие охранники панели и права, сервис учёта подменён: что он считает и как пишет в базу, проверяют
  * `ledger-journal.test.ts` и интеграционный тест; здесь — кто и с какими параметрами пускается к журналу.
  */
@@ -394,8 +402,12 @@ describe("журнал учёта в панели по HTTP", () => {
     const templates = new FakeTemplates();
     const limiter = { consume: async () => true } as unknown as RateLimiter;
     const images = new MemoryMedia();
+    // Подтверждения и статус выплат — настоящий сервис на данных месяца в памяти: 403 «чужой месяц» решает его логика.
+    const payoutData = new MemoryPayoutsRepository();
+    const feed = memoryNotifications();
+    const financeChat: string[] = [];
     @Module({
-      controllers: [AdminSessionController, AdminLedgerController, AdminMediaController, MediaController],
+      controllers: [AdminSessionController, AdminLedgerController, AdminMyProjectController, AdminMediaController, MediaController],
       providers: [
         { provide: APP_CONFIG, useValue: cfg },
         { provide: REDIS, useValue: { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis },
@@ -411,6 +423,13 @@ describe("журнал учёта в панели по HTTP", () => {
         { provide: MEDIA_REPOSITORY, useValue: images },
         MediaService,
         { provide: TemplatesService, useValue: templates },
+        { provide: ProjectMonthService, useValue: {} },
+        {
+          provide: PayoutsService,
+          useFactory: (rolesService: RolesService) =>
+            new PayoutsService(payoutData, rolesService, panelSettings(), new PayoutNotices(feed.service, payoutData, { send: async (text: string) => void financeChat.push(text) }), { run: async <T>(_period: string, work: () => Promise<T>) => await work() }),
+          inject: [RolesService],
+        },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: RateLimiter, useValue: limiter },
         PanelLoginService,
@@ -438,7 +457,14 @@ describe("журнал учёта в панели по HTTP", () => {
       return await login(`dev-player-${id}:${name}`);
     };
 
-    return { ledger, fx, chart, operations, periods, templates, images, login, staff };
+    /** Человек с ролью и его аккаунт: нужен, когда аккаунт попадает в снимок месяца. */
+    const person = async (id: string, name: string, role: Role) => {
+      const account = await accounts.upsert({ platform: "telegram", platformUserId: `dev-player-${id}`, displayName: name, username: null, photoUrl: null }, Date.now());
+      await roles.grant(account.accountId, role, null);
+      return { accountId: account.accountId, cookie: await login(`dev-player-${id}:${name}`) };
+    };
+
+    return { ledger, fx, chart, operations, periods, templates, images, login, staff, person, payoutData, financeChat };
   }
 
   const headers = (cookie: string) => ({ cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
@@ -750,6 +776,7 @@ describe("журнал учёта в панели по HTTP", () => {
     income: { kind: "income", note: "Выплата AdsGram за октябрь", at: "2026-11-10", to: "bank.rub", article: "ads_adsgram", amount: "120.40", forMonth: "2026-10", link: "https://example.com/report" },
     loan: { kind: "loan", note: "Заём на рекламу", at: "2026-11-10", to: "bank.rub", lender: "Иван Петров", amount: "100000", premium: "10000", repaymentBp: 2500 },
     reversal: { kind: "reversal", note: "Оплатили с другого счёта", at: "2026-11-10", sourceKey: "op:00000000-0000-4000-8000-0000000000a1" },
+    payout: { kind: "payout", note: "Выплата за ноябрь", at: "2026-12-04", payee: "stakeholder:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", period: "2026-11", from: "bank.rub", amount: "15980.40", overrideReason: "уехал, договорились устно" },
   };
 
   it("операции читает тот, кто видит журнал: финансы и владелец — 200, маркетолог, администратор и участник проекта — 403", async () => {
@@ -1266,5 +1293,137 @@ describe("журнал учёта в панели по HTTP", () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json<{ error: { code: string; message: string } }>().error).toMatchObject({ code: "ledger_template_invalid", message: "Расходы месяца создаются не раньше прошлого месяца" });
+  });
+
+  // ---- Подтверждение отчёта участником и выплаты (Р222, tasks/T-0469) ----
+
+  const MY = "/api/v1/admin/my-project/periods";
+  const myGet = (path: string, cookie: string) => app!.inject({ method: "GET", url: `${MY}${path}`, headers: headers(cookie) });
+  const myPost = (path: string, cookie: string, payload: unknown) => app!.inject({ method: "POST", url: `${MY}${path}`, headers: headers(cookie), payload: payload as object });
+  const CLOSED_AT = new Date("2026-12-02T10:00:00.000Z");
+
+  /** Ноябрь закрыт: долг 15 980,40 ₽ у участника с аккаунтом `owedTo`. */
+  function closeNovember(ctx: Awaited<ReturnType<typeof start>>, owedTo: string): void {
+    ctx.payoutData.close("2026-11", closedSnapshot({ period: "2026-11", closedAt: CLOSED_AT, payouts: [{ accountId: owedTo, rubMinor: 1_598_040n, name: "Алиса" }] }), CLOSED_AT);
+    ctx.payoutData.accountNames.set(owedTo, "Алиса");
+  }
+
+  it("участник подтверждает свой месяц: 200, решение записано, в ответе его строка отчёта", async () => {
+    const ctx = await start();
+    const alice = await ctx.person("1101", "Алиса", "stakeholder");
+    closeNovember(ctx, alice.accountId);
+
+    const response = await myPost("/2026-11/confirm", alice.cookie, { decision: "confirmed" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ data: { mine: { owedRub: string; confirmation: { status: string } } } }>().data.mine).toMatchObject({ owedRub: "15980.40", confirmation: { status: "confirmed" } });
+    expect(ctx.payoutData.confirmationRows.get(`2026-11|${alice.accountId}`)).toMatchObject({ status: "confirmed" });
+  });
+
+  it("чужой месяц — 403: у другого участника в ноябре нет доли, а подтверждение Алисы он не запишет и не прочтёт", async () => {
+    const ctx = await start();
+    const alice = await ctx.person("1102", "Алиса", "stakeholder");
+    const boris = await ctx.person("1103", "Борис", "stakeholder");
+    closeNovember(ctx, alice.accountId);
+
+    for (const response of [await myPost("/2026-11/confirm", boris.cookie, { decision: "confirmed" }), await myPost("/2026-11/confirm", boris.cookie, { decision: "disputed", comment: "Не согласен" }), await myGet("/2026-11", boris.cookie)]) {
+      expect(response.statusCode).toBe(403);
+    }
+    expect(ctx.payoutData.confirmationRows.size).toBe(0);
+  });
+
+  it("финансы, маркетолог и администратор — 403: подтверждает только тот, у кого право «свой расчёт»; без сессии — 401", async () => {
+    const ctx = await start();
+    const alice = await ctx.person("1104", "Алиса", "stakeholder");
+    closeNovember(ctx, alice.accountId);
+    const others = [await ctx.staff("1105", "Финансы", "finance"), await ctx.staff("1106", "Маркетолог", "marketer"), await ctx.staff("1107", "Администратор", "admin")];
+
+    for (const cookie of others) {
+      expect((await myPost("/2026-11/confirm", cookie, { decision: "confirmed" })).statusCode).toBe(403);
+      expect((await myGet("/2026-11", cookie)).statusCode).toBe(403);
+    }
+    expect((await app!.inject({ method: "POST", url: `${MY}/2026-11/confirm`, payload: { decision: "confirmed" } })).statusCode).toBe(401);
+    expect((await app!.inject({ method: "GET", url: `${MY}/2026-11` })).statusCode).toBe(401);
+    expect(ctx.payoutData.confirmationRows.size).toBe(0);
+  });
+
+  it("свой отчёт: водопад из снимка и статус; месяц не закрыт — 409", async () => {
+    const ctx = await start();
+    const alice = await ctx.person("1108", "Алиса", "stakeholder");
+    closeNovember(ctx, alice.accountId);
+
+    const own = await myGet("/2026-11", alice.cookie);
+    expect(own.statusCode).toBe(200);
+    expect(own.json<{ data: { period: string; mine: { remainingRub: string }; report: { currency: string } } }>().data).toMatchObject({ period: "2026-11", mine: { remainingRub: "15980.40" }, report: { currency: "USD" } });
+
+    ctx.payoutData.setStatus("2026-11", "review");
+    const open = await myGet("/2026-11", alice.cookie);
+    expect([open.statusCode, open.json<{ error: { code: string } }>().error.code]).toEqual([409, "ledger_period_status"]);
+    expect((await myPost("/2026-11/confirm", alice.cookie, { decision: "confirmed" })).statusCode).toBe(409);
+  });
+
+  it("спор: комментарий обязателен, уходит в поток «Бухгалтерия»; после выплаты решение не меняется — 409", async () => {
+    const ctx = await start();
+    const alice = await ctx.person("1109", "Алиса", "stakeholder");
+    closeNovember(ctx, alice.accountId);
+
+    expect((await myPost("/2026-11/confirm", alice.cookie, { decision: "disputed" })).statusCode).toBe(400);
+    const disputed = await myPost("/2026-11/confirm", alice.cookie, { decision: "disputed", comment: "В расходах лишняя строка" });
+    expect(disputed.statusCode).toBe(200);
+    expect(ctx.financeChat).toHaveLength(1);
+    expect(ctx.financeChat[0]).toContain("В расходах лишняя строка");
+
+    ctx.payoutData.payoutRows.push({ operationId: "op-1", period: "2026-11", payee: `stakeholder:${alice.accountId}`, accountId: `liability.stakeholder.${alice.accountId}.RUB`, currency: "RUB", minor: 100n, overrideReason: null, at: new Date() });
+    const late = await myPost("/2026-11/confirm", alice.cookie, { decision: "confirmed" });
+    expect([late.statusCode, late.json<{ error: { code: string } }>().error.code]).toEqual([409, "ledger_confirmation_paid"]);
+  });
+
+  it.each([
+    ["месяц не «ГГГГ-ММ»", "/2026-13/confirm", { decision: "confirmed" }],
+    ["решение не из списка", "/2026-11/confirm", { decision: "maybe" }],
+    ["без решения", "/2026-11/confirm", {}],
+    ["лишнее поле — схема строгая", "/2026-11/confirm", { decision: "confirmed", amount: "1" }],
+    ["комментарий не строкой", "/2026-11/confirm", { decision: "confirmed", comment: 5 }],
+    ["комментарий длиннее 1000 знаков", "/2026-11/confirm", { decision: "confirmed", comment: "я".repeat(1_001) }],
+  ])("подтверждение: %s — 400, ничего не записано", async (_title, path, body) => {
+    const ctx = await start();
+    const alice = await ctx.person("1110", "Алиса", "stakeholder");
+    closeNovember(ctx, alice.accountId);
+
+    expect((await myPost(path, alice.cookie, body)).statusCode).toBe(400);
+    expect(ctx.payoutData.confirmationRows.size).toBe(0);
+  });
+
+  it("статус выплат месяца — финансам и владельцу: по участнику долг, подтверждение, можно ли платить; остальным 403", async () => {
+    const ctx = await start();
+    const alice = await ctx.person("1111", "Алиса", "stakeholder");
+    closeNovember(ctx, alice.accountId);
+    await ctx.payoutData.saveConfirmation({ period: "2026-11", accountId: alice.accountId, status: "disputed", comment: "Не согласен", decidedAt: new Date("2026-12-03T10:00:00.000Z") });
+    const finance = await ctx.staff("1112", "Финансы", "finance");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    for (const cookie of [finance, owner]) {
+      const response = await get("/periods/2026-11/payouts", cookie);
+      expect(response.statusCode).toBe(200);
+      expect(response.json<{ data: { status: { participants: unknown[] } } }>().data.status.participants).toEqual([
+        expect.objectContaining({ accountId: alice.accountId, owedRub: "15980.40", confirmation: expect.objectContaining({ status: "disputed" }), gate: expect.objectContaining({ state: "override" }) }),
+      ]);
+    }
+    for (const cookie of [alice.cookie, await ctx.staff("1113", "Маркетолог", "marketer")]) expect((await get("/periods/2026-11/payouts", cookie)).statusCode).toBe(403);
+    expect((await get("/periods/2026-13/payouts", finance)).statusCode).toBe(400);
+    ctx.payoutData.setStatus("2026-11", "review");
+    expect((await get("/periods/2026-11/payouts", finance)).statusCode).toBe(409);
+  });
+
+  it("выплата проходит маршрутом операций: вид `payout` разобран строго, получатель и причина владельца доходят до сервиса", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    expect((await send("POST", "/operations", owner, BODIES.payout)).statusCode).toBe(200);
+    expect(ctx.operations.calls[0]?.args).toEqual([BODIES.payout]);
+    for (const bad of [{ ...(BODIES.payout as object), payee: "partner:1" }, { ...(BODIES.payout as object), period: "2026-13" }, { ...(BODIES.payout as object), overrideReason: "ок" }]) {
+      expect((await send("POST", "/operations", owner, bad)).statusCode).toBe(400);
+    }
+    expect(ctx.operations.calls).toHaveLength(1);
   });
 });
