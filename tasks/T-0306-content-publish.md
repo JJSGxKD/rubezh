@@ -4,7 +4,7 @@ title: Публикация контента — версия сначала к�
 epic: E7
 priority: P2
 status: done
-owner: claude-61 / sonnet-5.5 / extra
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0305]
