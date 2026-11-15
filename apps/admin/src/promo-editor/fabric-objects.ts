@@ -57,7 +57,6 @@ const metas = new WeakMap<FabricObject, Meta>();
 
 export const metaOf = (object: FabricObject): Meta | undefined => metas.get(object);
 
-/** Цвета заглушки: холст — не интерфейс, но заглушка должна читаться на любом фоне. */
 /** Цвет выделения — токен акцента панели: холст рисует ручки в том же тоне, что кнопки вокруг. */
 function accentColor(): string {
   if (typeof document === "undefined") return "#ffb22e";
@@ -65,6 +64,7 @@ function accentColor(): string {
   return value === "" ? "#ffb22e" : value;
 }
 
+/** Цвета заглушки: холст — не интерфейс, но заглушка должна читаться на любом фоне. */
 const PLACEHOLDER = { fill: "#3a3560", stroke: "#a99fcb" } as const;
 
 interface ResolvedImage {
