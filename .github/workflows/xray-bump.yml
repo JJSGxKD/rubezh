@@ -1,0 +1,162 @@
+# Обновление ядра Xray по версии выпуска (docs/35-stage4-plan.md Р202,
+# docs/09-ci-cd.md §8.1, tasks/T-0417).
+#
+# Запускает кнопка «Обновить» во вкладке «Ядро Xray» панели (сервер, ключ
+# github.xray-update) или человек из вкладки Actions. Workflow берёт digest
+# образа выпуска, правит Dockerfile спутника и XRAY_CORE_MAX, прогоняет наш
+# конфиг на новом ядре (check-config.sh) и открывает PR в dev. На прод ядро
+# уезжает выпуском после вливания PR.
+#
+# Работает, только когда файл уже лежит в main: GitHub запускает
+# workflow_dispatch по файлу из ветки по умолчанию.
+#
+# Вход — недоверенный: версия попадает в `run:` лишь через переменную
+# окружения VERSION и сначала проверяется скриптом по строгой форме, до любых
+# сетевых действий. Правка файлов — scripts/ops/xray-bump.mjs, а не sed.
+#
+# PR открыт токеном workflow, поэтому CI на нём сам не стартует (правило
+# GitHub, как у синка main → dev): гейт запускается закрытием и повторным
+# открытием PR.
+
+name: Xray bump
+
+run-name: Ядро Xray ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Версия выпуска XTLS/Xray-core без «v», например 26.11.5
+        required: true
+        type: string
+
+# Ветка и PR делает токен workflow; больше прав не нужно, и ключ сервера
+# сюда не попадает.
+permissions:
+  contents: write
+  pull-requests: write
+
+# Два запуска подряд не должны открыть два одинаковых PR; второй ждёт первого.
+concurrency:
+  group: xray-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        # С -o pipefail: сбой docker в конвейере с jq не должен пройти молча.
+        shell: bash
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Проверить версию
+        run: node scripts/ops/xray-bump.mjs check-version "$VERSION"
+
+      - name: Проверить выпуск
+        id: release
+        run: |
+          url="$(gh api "repos/XTLS/Xray-core/releases/tags/v$VERSION" --jq 'select(.prerelease == false and .draft == false) | .html_url')" || url=""
+          if [ -z "$url" ]; then
+            echo "::error::Выпуск v$VERSION не найден или помечен pre-release"
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Нужно ли обновление
+        id: need
+        run: |
+          current="$(node scripts/ops/xray-bump.mjs current)"
+          branch="$(node scripts/ops/xray-bump.mjs branch "$VERSION")"
+          if [ "$current" = "$VERSION" ]; then
+            echo "::notice::Ядро уже $VERSION"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          existing="$(gh pr list --head "$branch" --base dev --state open --json url --jq '.[0].url // empty')"
+          if [ -n "$existing" ]; then
+            echo "::notice::PR уже открыт: $existing"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
+          echo "previous=$current" >> "$GITHUB_OUTPUT"
+
+      # Digest индекса всех платформ, а не одной: образ спутника собирается и
+      # на сервере, и у разработчиков (docs/09-ci-cd.md §12).
+      - name: Digest образа
+        id: digest
+        if: steps.need.outputs.run == 'true'
+        run: |
+          digest="$(docker buildx imagetools inspect "ghcr.io/xtls/xray-core:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)" || digest=""
+          if [ -z "$digest" ]; then
+            echo "::error::Образа ghcr.io/xtls/xray-core:$VERSION нет"
+            exit 1
+          fi
+          node scripts/ops/xray-bump.mjs check-digest "$digest"
+          echo "value=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Правка версии
+        if: steps.need.outputs.run == 'true'
+        env:
+          DIGEST: ${{ steps.digest.outputs.value }}
+        run: node scripts/ops/xray-bump.mjs apply "$VERSION" "$DIGEST"
+
+      # Итог — в вывод шага, без continue-on-error: провал проверки не должен
+      # остановить запуск до того, как откроется PR с хвостом лога.
+      - name: Проверка конфига
+        id: check
+        if: steps.need.outputs.run == 'true'
+        run: |
+          if bash infra/prod/xray/check-config.sh > "$RUNNER_TEMP/check.log" 2>&1; then echo "ok=true"; else echo "ok=false"; fi >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/check.log"
+
+      - name: Коммит и ветка
+        if: steps.need.outputs.run == 'true'
+        run: |
+          branch="$(node scripts/ops/xray-bump.mjs branch "$VERSION")"
+          title="$(node scripts/ops/xray-bump.mjs title "$VERSION")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git commit -am "$title"
+          # Ветка могла остаться от закрытого PR: пересоздаём её с нуля.
+          git push --force origin "$branch"
+
+      - name: PR
+        if: steps.need.outputs.run == 'true'
+        env:
+          DIGEST: ${{ steps.digest.outputs.value }}
+          PREVIOUS: ${{ steps.need.outputs.previous }}
+          RELEASE_URL: ${{ steps.release.outputs.url }}
+          CHECK_OK: ${{ steps.check.outputs.ok }}
+        run: |
+          branch="$(node scripts/ops/xray-bump.mjs branch "$VERSION")"
+          title="$(node scripts/ops/xray-bump.mjs title "$VERSION")"
+          body="$RUNNER_TEMP/body.md"
+          node scripts/ops/xray-bump.mjs body "$VERSION" "$PREVIOUS" "$DIGEST" "$RELEASE_URL" "$CHECK_OK" "$RUNNER_TEMP/check.log" > "$body"
+          draft=()
+          if [ "$CHECK_OK" != "true" ]; then draft=(--draft); fi
+          url="$(gh pr create --base dev --head "$branch" --title "$title" --body-file "$body" --label "release: patch" "${draft[@]}")"
+          number="${url##*/}"
+          node scripts/ops/xray-bump.mjs body "$VERSION" "$PREVIOUS" "$DIGEST" "$RELEASE_URL" "$CHECK_OK" "$RUNNER_TEMP/check.log" "$number" > "$body"
+          gh pr edit "$number" --body-file "$body"
+          echo "::notice::PR открыт: $url"
+
+      - name: Конфиг не принят
+        if: steps.need.outputs.run == 'true' && steps.check.outputs.ok != 'true'
+        run: |
+          echo "::error::check-config.sh не прошёл на ядре $VERSION — PR открыт черновиком"
+          exit 1

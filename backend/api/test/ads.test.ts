@@ -677,7 +677,7 @@ describe("межстраничная по площадкам (WP12, часть 1
     repository.purchases.push({ accountId: ME, paidAt: at(NOON, -60) });
     expect((await service.offer(viewer, "interstitial", NOON)).available).toBe(false);
     expect((await service.offer(viewer, "interstitial", at(NOON, 23 * 60))).available).toBe(true);
-    expect(REWARDED_VIDEO_PLACES).toEqual(["second_chance", "wheel_spin", "run_double"]);
+    expect(REWARDED_VIDEO_PLACES).toEqual(["second_chance", "wheel_spin", "run_double", "card_reroll"]);
   });
 
   it("ролик за награду на экране держит паузу, а невыданный — нет", async () => {

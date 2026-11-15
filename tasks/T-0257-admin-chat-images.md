@@ -24,7 +24,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/mockups/bot-images-v2.html
-batch: 4
+batch: 5
 ---
 
 # T-0257. Сводка дня и тревоги в чате администраторов картинкой

@@ -446,7 +446,7 @@ describe("панель по HTTP", () => {
     expect(data.flags.map((flag: { key: string }) => flag.key)).toEqual(["aa.first", "ads.interstitial"]);
     expect(data).toMatchObject({ flag: "ads.interstitial", from: changed.toISOString(), split: { share: { players: 10 }, rest: { players: 90 } } });
     expect(funnel.splits[0]?.rule).toMatchObject({ key: "ads.interstitial", platforms: ["telegram"], percent: 10 });
-    expect(funnel.splits[0]?.rewardedPlaces).toEqual(["second_chance", "wheel_spin", "run_double"]);
+    expect(funnel.splits[0]?.rewardedPlaces).toEqual(["second_chance", "wheel_spin", "run_double", "card_reroll"]);
 
     // Флаг меняли давно — период не длиннее года.
     const old = await server.inject({ method: "GET", url: `${url}?flag=aa.first`, headers: { cookie } });
