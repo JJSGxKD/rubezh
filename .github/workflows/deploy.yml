@@ -50,6 +50,32 @@ jobs:
         with:
           ref: ${{ inputs.version }}
 
+      # Контент игры из кода (docs/19-content-admin.md §4.5, tasks/T-0306): выгружается до того, как на
+      # диске появится ключ доступа, — установка зависимостей исполняет чужие скрипты, и ключ им видеть
+      # незачем. Релиз без выгрузки (старый тег, на который откатывают выкат) шаг пропускает: вернуть
+      # прежнюю версию API не должно упираться в то, чего в ней ещё нет.
+      - name: Есть ли выгрузка контента
+        id: content
+        run: |
+          if [ -f scripts/content/run-export.mjs ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "в ${VERSION} нет выгрузки контента — версия из кода не заводится"; fi
+        env:
+          VERSION: ${{ inputs.version }}
+
+      - if: steps.content.outputs.present == 'true'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - if: steps.content.outputs.present == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - if: steps.content.outputs.present == 'true'
+        name: Выгрузка контента
+        run: |
+          pnpm install --frozen-lockfile
+          node scripts/content/run-export.mjs --out dist/content
+
       # Ключ — из секрета во временный файл; отпечаток сервера закреплён
       # секретом, а не принимается при первом входе: иначе подмена адреса
       # получила бы и конфигурацию, и команду выката.
@@ -84,3 +110,15 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           VERSION: ${{ inputs.version }}
+
+      # Версия «из кода» — после выката: миграции применены при старте нового API, он уже здоров. Файлы
+      # выгрузки уходят в контейнер потоком тара, а не томом: ничего не остаётся ни на сервере, ни в
+      # образе. Заводится версия, а указателем «в игре» она становится, только если там тоже версия из
+      # кода, — выложенное из панели выкат не затирает (`content-adopt.ts`). Повтор выката безопасен: тот
+      # же хэш ничего не меняет. Упал шаг — игра работает на прежнем контенте, шаг можно перезапустить.
+      - if: steps.content.outputs.present == 'true'
+        name: Версия контента из кода
+        run: |
+          tar -czf - -C dist/content . | ssh -i ~/.ssh/deploy -o BatchMode=yes "deploy@${DEPLOY_HOST}" 'cd /srv/rubezh/app && docker compose exec -T api sh -c "rm -rf /tmp/content-export && mkdir -p /tmp/content-export && tar -xzf - -C /tmp/content-export && node dist/cli/content-import.js /tmp/content-export"'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
