@@ -21,6 +21,9 @@ fixtures="$root/packages/proxy-kit/test/fixtures/xray"
 image="rubezh-xray-check"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+# mktemp -d даёт каталог 0700, а Xray в образе работает не от root: без прав на чтение
+# «permission denied» на каждый файл. На Windows права тома не проверяются — там не видно.
+chmod 755 "$work"
 
 # Windows (bash из комплекта Git): путь тома docker нужен в виде C:/…, а /c/… внутри команды не переписывать.
 export MSYS_NO_PATHCONV=1
@@ -49,6 +52,7 @@ for file in "$fixtures"/*.json; do
     -e "s|ECHCONFIG[0-9]*|$ech|g" \
     -e "s|VLESSENCKEY[0-9]*|$enckey|g" \
     "$file" > "$work/$name"
+  chmod 644 "$work/$name"
   if docker run --rm --entrypoint xray --volume "$mount:/c:ro" "$image" run -test -c "/c/$name" > "$work/$name.log" 2>&1; then
     echo "ok     $name"
   else
