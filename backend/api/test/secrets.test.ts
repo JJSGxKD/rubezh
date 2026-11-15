@@ -323,6 +323,17 @@ describe("ключи в панели", () => {
     expect(secrets.get(SECRETS.adsgramRewardSecret)).not.toBe(value);
   });
 
+  it("секрет Callback API VK создаётся латиницей и цифрами: ключ без знаков base64url, в аудите — только знаки", async () => {
+    const { admin, secrets, rolesRepository, owner } = await panel({ PUBLIC_API_URL: "https://api.example.test/" });
+    const created = await admin.generate(owner, "vk.callback-secret");
+    const value = secrets.get(SECRETS.vkCallbackSecret) ?? "";
+    expect(value).toMatch(/^[A-Za-z0-9]{40}$/);
+    expect(created).toMatchObject({ reveal: `https://api.example.test/api/v1/vk/callback — секретный ключ: ${value}`, absolute: true });
+    const [entry] = await rolesRepository.recentAudit(10);
+    expect(entry).toMatchObject({ action: "secrets.generate", target: "vk.callback-secret" });
+    expect(JSON.stringify(entry)).not.toContain(value);
+  });
+
   it("без PUBLIC_API_URL адрес — путь, начало дописывает человек; ключ сервиса создать нельзя", async () => {
     const { admin, owner } = await panel();
     await expect(admin.generate(owner, "adsgram.reward-secret")).resolves.toMatchObject({ reveal: expect.stringMatching(/^\/api\/v1\/ads\/adsgram\/reward\/[A-Za-z0-9_-]{43}\/\[userId\]$/), absolute: false });

@@ -1,3 +1,4 @@
+import type { Scoring } from "../rating/rating-switch.js";
 import type { RecordedRun } from "../runs/runs-hooks.js";
 import type { FeedEvent } from "./feed-events.js";
 
@@ -22,18 +23,19 @@ export function isFeedRun(run: RecordedRun): boolean {
  * События забега. Рекорд недели решает вызывающий: для этого нужна таблица
  * недели, а здесь её нет.
  */
-export function feedEventsOf(run: RecordedRun, rules: { longRunSec: number }, weekRecord: boolean): FeedEvent[] {
+export function feedEventsOf(run: RecordedRun, rules: { longRunSec: number }, weekRecord: boolean, scoring: Scoring = "time"): FeedEvent[] {
   if (!isFeedRun(run)) return [];
   const atMs = run.finishedAt.getTime();
   const events: FeedEvent[] = [];
-  if (run.survivalSec >= rules.longRunSec) events.push({ id: `${run.runId}:long_run`, kind: "long_run", accountId: run.accountId, atMs, seconds: run.survivalSec });
-  if (weekRecord) events.push({ id: `${run.runId}:week_record`, kind: "week_record", accountId: run.accountId, atMs, seconds: run.survivalSec });
+  if (run.survivalSec >= rules.longRunSec) events.push({ id: `${run.runId}:long_run`, kind: "long_run", accountId: run.accountId, atMs, seconds: run.survivalSec, points: null });
+  // Очки несёт только рекорд недели по очкам; время остаётся для старых клиентов.
+  if (weekRecord) events.push({ id: `${run.runId}:week_record`, kind: "week_record", accountId: run.accountId, atMs, seconds: run.survivalSec, points: scoring === "points" ? (run.points ?? null) : null });
   // Боссы и редкие сундуки — из счётчиков итога (tasks/T-0175). Неправдоподобные
   // счётчики приходят сюда как null, поэтому событий из них не бывает; на вид —
   // одно событие на забег, сколько бы боссов и сундуков в нём ни было.
   const counters = run.counters;
-  if (counters !== null && counters.bossKills > 0) events.push({ id: `${run.runId}:boss`, kind: "boss", accountId: run.accountId, atMs, seconds: null });
-  if (counters !== null && counters.rareChests > 0) events.push({ id: `${run.runId}:chest`, kind: "chest", accountId: run.accountId, atMs, seconds: null });
+  if (counters !== null && counters.bossKills > 0) events.push({ id: `${run.runId}:boss`, kind: "boss", accountId: run.accountId, atMs, seconds: null, points: null });
+  if (counters !== null && counters.rareChests > 0) events.push({ id: `${run.runId}:chest`, kind: "chest", accountId: run.accountId, atMs, seconds: null, points: null });
   return events;
 }
 

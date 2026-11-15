@@ -9,7 +9,7 @@ import type { FeedItem } from "../src/state/feed-api";
 const NOW = Date.parse("2026-10-21T12:00:00.000Z");
 
 function item(id: string, overrides: Partial<FeedItem> = {}): FeedItem {
-  return { id, kind: "boss", name: "Игрок", atMs: NOW - 1_000, seconds: null, ...overrides };
+  return { id, kind: "boss", name: "Игрок", atMs: NOW - 1_000, seconds: null, points: null, ...overrides };
 }
 
 describe("сколько держится событие", () => {
@@ -77,6 +77,8 @@ describe("слова события", () => {
   });
 
   it("босс и сундук — только имя", () => {
+    expect(feedTextOf(item("a", { kind: "week_record", name: "Ян", seconds: 725, points: 2340 }))).toEqual({ key: "feed.weekRecordPoints", params: { name: "Ян", points: 2340 } });
+    expect(feedTextOf(item("a", { kind: "week_record", name: "Ян", seconds: 725, points: null }))).toEqual({ key: "feed.weekRecord", params: { name: "Ян", time: "12:05" } });
     expect(feedTextOf(item("a", { kind: "boss", name: "Ян" }))).toEqual({ key: "feed.boss", params: { name: "Ян" } });
     expect(feedTextOf(item("a", { kind: "chest", name: "Ян" }))).toEqual({ key: "feed.chest", params: { name: "Ян" } });
   });

@@ -9,7 +9,7 @@ import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { PLACE_FORMAT } from "../src/modules/ads/ad-networks.js";
-import { ADS_CATALOG_REPOSITORY, type AdBlockDef, type AdFunnelRow, type AdNetworkRow, type AdPassRow, type AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
+import { ADS_CATALOG_REPOSITORY, type AdBlockDef, type AdCatalogBlock, type AdFunnelRow, type AdNetworkRow, type AdPassRow, type AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
 import { AdsToolsController } from "../src/modules/ads/ads-tools.controller.js";
 import { AdsToolsService } from "../src/modules/ads/ads-tools.service.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
@@ -39,12 +39,11 @@ class MemoryCatalog implements AdsCatalogRepository {
   networksRows: AdNetworkRow[] = [
     { networkKey: "richads", name: "RichAds", active: true, priority: 30, keys: { pubId: "792361", appId: "1396", secret: "не отдавать" } },
     { networkKey: "adsgram", name: "AdsGram", active: true, priority: 10, keys: {} },
-    { networkKey: "adsonar", name: "AdSonar", active: false, priority: 20, keys: { appId: "app_abc" } },
     { networkKey: "taddy", name: "Taddy", active: true, priority: 5, keys: {} },
   ];
   blockRows: AdBlockDef[] = [
     { blockId: BLOCK_ID, networkKey: "adsgram", place: "wheel_spin", externalId: "1234", success: "view", active: true, platforms: ["telegram"], devices: [] },
-    { blockId: OTHER_NETWORK_BLOCK, networkKey: "adsonar", place: "second_chance", externalId: "rewarded_x", success: "view", active: false, platforms: [], devices: [] },
+    { blockId: OTHER_NETWORK_BLOCK, networkKey: "richads", place: "second_chance", externalId: "rewarded_x", success: "view", active: false, platforms: [], devices: [] },
     { blockId: INTERSTITIAL_BLOCK, networkKey: "adsgram", place: "interstitial", externalId: "5678", success: "view", active: true, platforms: ["telegram"], devices: [] },
     { blockId: "00000000-0000-4000-8000-000000000004", networkKey: "adsgram", place: "task", externalId: "9", success: "view", active: true, platforms: [], devices: [] },
     { blockId: "00000000-0000-4000-8000-000000000005", networkKey: "taddy", place: "wheel_spin", externalId: null, success: "view", active: true, platforms: [], devices: [] },
@@ -54,8 +53,11 @@ class MemoryCatalog implements AdsCatalogRepository {
     return this.networksRows.map((row) => ({ ...row }));
   }
 
-  async blocks(): Promise<AdBlockDef[]> {
-    return this.blockRows.map((row) => ({ ...row }));
+  /** отметка архива блока (Р200): ISO-время по `blockId`, литералы `blockRows` её не несут */
+  archived = new Map<string, string>();
+
+  async blocks(): Promise<AdCatalogBlock[]> {
+    return this.blockRows.map((row) => ({ ...row, archivedAt: this.archived.get(row.blockId) ?? null }));
   }
 
   async updateNetwork(): Promise<boolean> {
@@ -72,6 +74,10 @@ class MemoryCatalog implements AdsCatalogRepository {
 
   async updateBlock(): Promise<boolean> {
     throw new Error("проверка рекламы блоки не правит");
+  }
+
+  async setBlockArchived(): Promise<never> {
+    throw new Error("проверка рекламы блоки в архив не убирает");
   }
 
   async passes(): Promise<AdPassRow[]> {
@@ -142,17 +148,16 @@ describe("проверка рекламы командой", () => {
       }
     });
 
-    it("только SDK-сети: Taddy и формат task не входят, выключенное остаётся с active: false", async () => {
+    it("только SDK-сети: Taddy и формат task не входят, выключенный блок остаётся с active: false", async () => {
       const { app: server, as } = await start();
       const { headers } = await as("owner");
       const body = (await server.inject({ method: "GET", url: "/api/v1/tools/ads/catalog", headers })).json() as { data: { networks: { network: string; active: boolean; formats: string[] }[]; blocks: { blockId: string; network: string; place: string; format: string; active: boolean }[] } };
 
-      expect(body.data.networks.map((network) => network.network)).toEqual(["adsgram", "adsonar", "richads"]);
-      expect(body.data.networks.find((network) => network.network === "adsonar")).toMatchObject({ active: false, formats: ["rewarded", "interstitial"] });
+      expect(body.data.networks.map((network) => network.network)).toEqual(["adsgram", "richads"]);
       expect(body.data.networks.some((network) => network.network === "taddy")).toBe(false);
 
       expect(body.data.blocks.some((block) => block.format === "task" || block.network === "taddy")).toBe(false);
-      expect(body.data.blocks.find((block) => block.blockId === OTHER_NETWORK_BLOCK)).toMatchObject({ network: "adsonar", active: false });
+      expect(body.data.blocks.find((block) => block.blockId === OTHER_NETWORK_BLOCK)).toMatchObject({ network: "richads", active: false });
       for (const block of body.data.blocks) expect(block.format).toBe(PLACE_FORMAT[block.place as keyof typeof PLACE_FORMAT]);
     });
 
@@ -169,6 +174,17 @@ describe("проверка рекламы командой", () => {
       const body = (await server.inject({ method: "GET", url: "/api/v1/tools/ads/catalog", headers })).json() as { data: { blocks: { blockId: string; network: string; place: string }[] } };
       const order = body.data.blocks.map((block) => `${block.network}:${block.place}:${block.blockId}`);
       expect(order).toEqual([...order].sort());
+    });
+
+    it("блок из архива в каталог проверки не попадает (Р200): остальные блоки на месте", async () => {
+      const catalog = new MemoryCatalog();
+      catalog.archived.set(BLOCK_ID, "2026-11-09T12:00:00.000Z");
+      const { app: server, as } = await start(catalog);
+      const { headers } = await as("owner");
+      const body = (await server.inject({ method: "GET", url: "/api/v1/tools/ads/catalog", headers })).json() as { data: { blocks: { blockId: string }[] } };
+      const ids = body.data.blocks.map((block) => block.blockId);
+      expect(ids).not.toContain(BLOCK_ID);
+      expect(ids).toEqual(expect.arrayContaining([OTHER_NETWORK_BLOCK, INTERSTITIAL_BLOCK]));
     });
 
     it("пустой каталог — пустые списки", async () => {

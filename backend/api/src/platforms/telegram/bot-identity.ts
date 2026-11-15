@@ -18,6 +18,7 @@ export class BotIdentity implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger("bot");
   private readonly stop = new AbortController();
   private botUsername: string | null = null;
+  private botTopicsEnabled = false;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -29,6 +30,11 @@ export class BotIdentity implements OnApplicationBootstrap, OnModuleDestroy {
   /** `null` — имя ещё не узнали или бот выключен. */
   get username(): string | null {
     return this.botUsername;
+  }
+
+  /** Включены ли темы в личке с ботом (`has_topics_enabled`); `false`, пока не узнали. */
+  get topicsEnabled(): boolean {
+    return this.botTopicsEnabled;
   }
 
   /** Ссылка на Mini App через бота; `null` — имя бота неизвестно. */
@@ -47,7 +53,8 @@ export class BotIdentity implements OnApplicationBootstrap, OnModuleDestroy {
       .getMe(this.stop.signal)
       .then((me) => {
         this.botUsername = me.username;
-        this.logger.log(JSON.stringify({ module: "bot", event: "identity", username: me.username }));
+        this.botTopicsEnabled = me.topicsEnabled;
+        this.logger.log(JSON.stringify({ module: "bot", event: "identity", username: me.username, topicsEnabled: me.topicsEnabled }));
       })
       .catch((error: unknown) => {
         // Без имени бот работает: кнопка игры просто уйдёт адресом Mini App.

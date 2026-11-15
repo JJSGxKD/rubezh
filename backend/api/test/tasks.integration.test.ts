@@ -15,6 +15,7 @@ import { Prisma } from "../src/generated/prisma/client.js";
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 import { webp } from "./helpers/webp-samples.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Задания на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -37,7 +38,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(960_000_000 + Math.floor(Math.random() * 30_000_000)), displayName: "Задания", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Задания", username: null },
       Date.now(),
     );
     return created.accountId;
@@ -410,6 +411,21 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     const [left] = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM task_participant WHERE account_id = ${me}::uuid`;
     expect(Number(left?.n)).toBe(0);
     expect((await repository.completions()).get(task.taskId)).toBe(1);
+  });
+  it("заказчик: поля пишутся и читаются каталогом, CHECK держит связи", async () => {
+    const task = await limitedTask(null);
+    expect((await repository.catalog()).find((candidate) => candidate.taskId === task.taskId)).toMatchObject({ customer: null, payModel: null, rate: null, holdDays: 0 });
+    const sold: TaskDef = { ...task, customer: "Канал «Игровой угол»", payModel: "rs", rate: 1_250, holdDays: 7 };
+    expect(await repository.update(sold, await account(), NOON)).toBe(true);
+    expect((await repository.catalog()).find((candidate) => candidate.taskId === task.taskId)).toMatchObject({ customer: "Канал «Игровой угол»", payModel: "rs", rate: 1_250, holdDays: 7 });
+
+    const id = task.taskId;
+    await expect(prisma.$executeRaw`UPDATE task_def SET pay_model = NULL WHERE task_id = ${id}`).rejects.toThrow();
+    await expect(prisma.$executeRaw`UPDATE task_def SET rate = NULL WHERE task_id = ${id}`).rejects.toThrow();
+    await expect(prisma.$executeRaw`UPDATE task_def SET hold_days = 2 WHERE task_id = ${id}`).rejects.toThrow();
+    const runTask = (await repository.catalog()).find((candidate) => candidate.params === null);
+    await expect(prisma.$executeRaw`UPDATE task_def SET customer = 'X', pay_model = 'cpa', rate = 5 WHERE task_id = ${runTask?.taskId ?? ""}`).rejects.toThrow();
+
   });
   it("картинка задания: читается каталогом и меняется правкой; пока на неё ссылаются, не удаляется; у цели забега её нет", async () => {
     const bytes = Buffer.concat([webp("square96"), Buffer.from(String(Date.now()))]);

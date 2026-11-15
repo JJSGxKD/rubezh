@@ -2,6 +2,7 @@ import type { EnemyPattern } from "@bh/shared-types";
 import { isElite } from "../patterns";
 import { createDirection, directionInArc, randomDirection, type Direction } from "./directions";
 import type { Rng } from "./rng";
+import { stalkerAlive } from "./stalker-body";
 import { vectorLength } from "./vector";
 import { clampToBounds, spawnEnemy, type World } from "./world";
 
@@ -221,7 +222,7 @@ function createPopulationSpawner(
       // популяцию разом и даёт выброс во времени кадра, который не имеет
       // отношения к устойчивому FPS.
       let budget = 8;
-      while (world.enemies.aliveCount < target && budget-- > 0) {
+      while (world.enemies.aliveCount - stalkerAlive(world) < target && budget-- > 0) {
         const typeIndex = pickWeightedType(world, weights);
         if (typeIndex < 0 || spawnRandomOnRing(world, typeIndex) < 0) return;
       }

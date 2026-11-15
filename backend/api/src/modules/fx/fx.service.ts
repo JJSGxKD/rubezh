@@ -4,6 +4,7 @@ import {
   CURRENCIES,
   Decimal,
   FRESHNESS_POLICY,
+  buildSnapshot,
   freshness,
   manualRate,
   manualToRate,
@@ -23,7 +24,8 @@ import { FeatureSwitches } from "../settings/feature-switches.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { effectiveTariff, usedShare } from "./fx-limits.js";
 import { FxRefreshBusyError, FxRefreshLimitError, FxRefreshPausedError, FxRefresher, fxSources, type RefreshNowResult } from "./fx.refresher.js";
-import { FX_STORE, type FxStore, type SourceLimit } from "./fx.store.js";
+import { rateAt, ratesAt, type FxHistoryStore, type RateOnDate, type RateQuery } from "./fx-history.js";
+import { FX_HISTORY_STORE, FX_STORE, type FxStore, type SourceLimit } from "./fx.store.js";
 
 /**
  * Курсы для панели и для слоя цен (docs/35-stage4-plan.md, §3.12): обзор со
@@ -119,6 +121,7 @@ export class FxService {
     private readonly switches: FeatureSwitches,
     // Только «Обновить сейчас»; проход по расписанию сервису не нужен.
     @Inject(FxRefresher) private readonly refresher: Pick<FxRefresher, "refreshNow">,
+    @Inject(FX_HISTORY_STORE) private readonly history: FxHistoryStore,
   ) {}
 
   async overview(now = new Date()): Promise<FxOverview> {
@@ -338,9 +341,27 @@ export class FxService {
     };
   }
 
+  /** Курс на прошлую дату из истории (Р222): `null` — курса нет, `stale` — он старый. */
+  async rateAt(currency: CurrencyCode, at: Date): Promise<RateOnDate | null> {
+    return await rateAt(this.history, currency, at);
+  }
+
+  /** Курсы на много дат — для оценки проводок закрытия месяца; порядок ответов — порядок запросов. */
+  async ratesAt(queries: readonly RateQuery[]): Promise<(RateOnDate | null)[]> {
+    return await ratesAt(this.history, queries);
+  }
+
   /** Снимок на сейчас — на него сошлются цена и платёж (часть 3 WP9). */
   async snapshot(now = new Date()): Promise<RatesSnapshot> {
     return await takeSnapshot(this.store, now);
+  }
+
+  /**
+   * Курсы на сейчас без записи снимка (T-0453): для просмотров, на которые ссылаться не нужно — кабинет участника
+   * считает выручку по курсу выплаты на каждый просмотр, и писать строку в базу на каждый из них нельзя.
+   */
+  async peek(now = new Date()): Promise<Omit<RatesSnapshot, "id">> {
+    return await buildSnapshot(this.store, now);
   }
 }
 

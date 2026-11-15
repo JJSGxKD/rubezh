@@ -1,5 +1,6 @@
 import { decodeBase64 } from "./internal/base64.js";
 import type { ProxyNode, SkipReason } from "./node.js";
+import type { RoutingSummary } from "./routing.js";
 import { parseShareLink } from "./share-link.js";
 import { looksLikeJson, parseXrayJson } from "./xray-json/document.js";
 
@@ -22,6 +23,8 @@ export interface SubscriptionParse {
   skipped: SkippedLink[];
   /** ссылок (выходов) оказалось больше `maxLinks`: остальные не разбирались */
   truncated: boolean;
+  /** своя маршрутизация из JSON-конфигов; у ссылок и base64 — `null` (заголовок `routing` разбирает `parseRoutingHeader`) */
+  routing: RoutingSummary | null;
 }
 
 /** Тело подписки — не тот формат, который мы умеем (Clash, sing-box, чужой JSON), либо пустое. */
@@ -50,7 +53,7 @@ export function parseSubscription(body: string, options: { maxLinks?: number } =
   if (looksLikeJson(text)) {
     const json = parseXrayJson(text, maxLinks);
     if (json.kind !== "ok") throw new SubscriptionFormatError(json.kind);
-    return { format: "json", nodes: json.nodes, skipped: json.skipped, truncated: json.truncated };
+    return { format: "json", nodes: json.nodes, skipped: json.skipped, truncated: json.truncated, routing: json.routing };
   }
 
   let format: SubscriptionParse["format"] = "plain";
@@ -74,7 +77,7 @@ export function parseSubscription(body: string, options: { maxLinks?: number } =
     }
     skipped.push({ index, scheme: /^([a-z][a-z0-9+.-]*):\/\//i.exec(link)?.[1]?.toLowerCase() ?? "unknown", reason: result.reason, detail: result.detail });
   });
-  return { format, nodes: [...nodes.values()], skipped, truncated: links.length > maxLinks };
+  return { format, nodes: [...nodes.values()], skipped, truncated: links.length > maxLinks, routing: null };
 }
 
 /** Строки со ссылками: пустые, `#`-комментарии и строки без `://` пропускаются молча. */

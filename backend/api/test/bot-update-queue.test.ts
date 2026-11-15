@@ -3,7 +3,7 @@ import { UnrecoverableError, type Queue } from "bullmq";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { BotRouter, type DispatchResult } from "../src/platforms/telegram/bot-router.js";
-import { BotUpdateQueue, isUrgent } from "../src/platforms/telegram/bot-update-queue.js";
+import { BotUpdateQueue, isUrgent, jobOptionsFor } from "../src/platforms/telegram/bot-update-queue.js";
 import type { TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 
@@ -92,6 +92,27 @@ describe("срочные обновления", () => {
       },
     };
     expect(isUrgent(refunded)).toBe(false);
+  });
+
+  it("запросы виджета срочные: карточка ждёт ответа 15 секунд", () => {
+    const from = { id: 7, is_bot: false };
+    const widgetQuery: TelegramUpdate = {
+      update_id: 5,
+      widget_query: { id: "wq-1", from, chat_instance: "ci-1", type: { type: "data" }, data: "open" },
+    };
+    const sharedQuery: TelegramUpdate = {
+      update_id: 6,
+      shared_widget_query: { id: "sq-1", from, type: { type: "data" }, data: "open", widget_id: "w1" },
+    };
+    expect(isUrgent(widgetQuery)).toBe(true);
+    expect(isUrgent(sharedQuery)).toBe(true);
+    expect(jobOptionsFor(widgetQuery)).toMatchObject({ jobId: "update-5", priority: 1, attempts: 1 });
+    expect(jobOptionsFor(sharedQuery)).toMatchObject({ jobId: "update-6", priority: 1, attempts: 1 });
+  });
+
+  it("сообщение — приоритет 2 и пять попыток, оплата повторяется как прежде", () => {
+    expect(jobOptionsFor(message(3))).toMatchObject({ jobId: "update-3", priority: 2, attempts: 5 });
+    expect(jobOptionsFor(preCheckout(1))).toMatchObject({ priority: 1, attempts: 5 });
   });
 });
 

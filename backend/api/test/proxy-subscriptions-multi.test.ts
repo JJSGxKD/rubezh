@@ -128,6 +128,10 @@ function rig(options: { slotCount?: number; settings?: Record<string, SettingVal
         trafficUsedBytes: null,
         trafficTotalBytes: null,
         expiresAt: null,
+        routingSource: null,
+        routingDirect: null,
+        routingBlock: null,
+        routingHints: [],
         updatedBy: ACTOR.accountId,
         updatedAt: NOW,
         createdAt: at((order += 1)),
@@ -197,6 +201,9 @@ describe("правила подписок", () => {
       latencyMs: 100,
       lastProbeAt: NOW,
       nextProbeAt: NOW,
+      network: null,
+      security: null,
+      flow: null,
       ...patch,
     });
     const dropped = (nodes: StoredNode[], quota: number): string[] => trimToQuota(nodes, quota).map((item) => item.nodeKey);
@@ -407,7 +414,7 @@ describe("выключение подписки целиком", () => {
     const r = rig();
     await r.add("a", { enabled: false });
     r.serve("a", bodyOf("a1.example.org"));
-    r.repository.nodes = [{ subscriptionKey: "a", nodeKey: "aaaa", slot: 0, protocol: "vless", name: "x", country: "DE", host: "x.example.org", state: "unknown", failures: 0, latencyMs: null, lastProbeAt: null, nextProbeAt: NOW }];
+    r.repository.nodes = [{ subscriptionKey: "a", nodeKey: "aaaa", slot: 0, protocol: "vless", name: "x", country: "DE", host: "x.example.org", state: "unknown", failures: 0, latencyMs: null, lastProbeAt: null, nextProbeAt: NOW, network: null, security: null, flow: null }];
 
     expect(await r.sync.refresh("a", NOW)).toEqual({ status: "disabled" });
     await r.scheduler.tick(at(60));
@@ -716,7 +723,7 @@ describe("кнопки «не чаще раза в минуту» — у каж�
     await r.add("a");
     await r.add("b");
     const later = at(99_999);
-    const row = (subscriptionKey: string, nodeKey: string, slot: number): StoredNode => ({ subscriptionKey, nodeKey, slot, protocol: "vless", name: nodeKey, country: "DE", host: `${nodeKey}.example.org`, state: "healthy", failures: 0, latencyMs: 10, lastProbeAt: NOW, nextProbeAt: later });
+    const row = (subscriptionKey: string, nodeKey: string, slot: number): StoredNode => ({ subscriptionKey, nodeKey, slot, protocol: "vless", name: nodeKey, country: "DE", host: `${nodeKey}.example.org`, state: "healthy", failures: 0, latencyMs: 10, lastProbeAt: NOW, nextProbeAt: later, network: null, security: null, flow: null });
     r.repository.nodes = [row("a", "aaaa", 0), row("b", "bbbb", 1)];
 
     await r.service.probe(ACTOR, "a", at(10));
@@ -870,7 +877,7 @@ describe("расписание по подпискам", () => {
     await r.add("main", { lastRefreshAt: NOW, lastRefreshOk: true });
     r.serve("main", bodyOf("m1.example.org", "m2.example.org"));
     r.repository.nodes = [
-      { subscriptionKey: "main", nodeKey: "aaaaaaaaaaaaaaaa", slot: 0, protocol: "vless", name: "x", country: "DE", host: "m1.example.org", state: "healthy", failures: 0, latencyMs: 40, lastProbeAt: NOW, nextProbeAt: at(300) },
+      { subscriptionKey: "main", nodeKey: "aaaaaaaaaaaaaaaa", slot: 0, protocol: "vless", name: "x", country: "DE", host: "m1.example.org", state: "healthy", failures: 0, latencyMs: 40, lastProbeAt: NOW, nextProbeAt: at(300), network: null, security: null, flow: null },
     ];
 
     await r.scheduler.tick(at(60));

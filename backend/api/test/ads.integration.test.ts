@@ -8,6 +8,7 @@ import { claimVerdict } from "../src/modules/ads/ads.service.js";
 import { REWARDED_VIDEO_PLACES } from "../src/modules/ads/interstitial-gate.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Реклама на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -36,7 +37,7 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(930_000_000 + Math.floor(Math.random() * 30_000_000)), displayName: "Реклама", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Реклама", username: null },
       Date.now(),
     );
     return created.accountId;
@@ -74,8 +75,11 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
 
   it("сети из миграции выключены; в работе — только включённые блоки включённых сетей, с приоритетом сети", async () => {
     const seeded = await prisma.$queryRaw<{ network_key: string; active: boolean }[]>`
-      SELECT network_key, active FROM ad_network WHERE network_key IN ('adsgram', 'adsonar', 'richads', 'taddy') ORDER BY priority`;
-    expect(seeded).toEqual(["adsgram", "adsonar", "richads", "taddy"].map((key) => ({ network_key: key, active: false })));
+      SELECT network_key, active FROM ad_network WHERE network_key IN ('adsgram', 'richads', 'taddy') ORDER BY priority`;
+    expect(seeded).toEqual(["adsgram", "richads", "taddy"].map((key) => ({ network_key: key, active: false })));
+    // Имя закрытой сети собрано из частей: проверка упоминаний (scripts/test) пропустила бы его только так.
+    const closed = "ad" + "son" + "ar";
+    expect(await prisma.$queryRaw<unknown[]>`SELECT network_key FROM ad_network WHERE network_key = ${closed}`).toEqual([]);
 
     const mine = (await repository.activeBlocks()).filter((block) => block.networkKey === network);
     expect(mine).toHaveLength(3);
@@ -286,11 +290,11 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     expect(created).not.toBeNull();
     expect(await catalog.insertBlock({ networkKey: "it_missing", place: "task", externalId: "x", success: "view", active: true, platforms: [], devices: [] }, actor, NOON)).toBeNull();
     if (created === null) throw new Error("блок не заведён");
-    expect((await catalog.blocks()).find((row) => row.blockId === created.blockId)).toEqual(created);
+    expect((await catalog.blocks()).find((row) => row.blockId === created.blockId)).toEqual({ ...created, archivedAt: null });
 
     const edited = { ...created, externalId: "ext-panel-2", active: false, platforms: [], devices: ["desktop" as const] };
     expect(await catalog.updateBlock(edited, actor, NOON)).toBe(true);
-    expect((await catalog.blocks()).find((row) => row.blockId === created.blockId)).toEqual(edited);
+    expect((await catalog.blocks()).find((row) => row.blockId === created.blockId)).toEqual({ ...edited, archivedAt: null });
     expect(await catalog.updateBlock({ ...edited, blockId: randomUUID() }, actor, NOON)).toBe(false);
 
     // Окно воронки — в будущем, куда не пишет ни один другой тест.

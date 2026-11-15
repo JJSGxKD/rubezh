@@ -56,6 +56,25 @@ describe("перечень прав и состав ролей", () => {
     }
   });
 
+  it("лента платежей payments.view — у владельца и администратора, у остальных ролей её нет, финансам тоже (T-0429, Р209)", () => {
+    for (const role of ROLES) {
+      expect(ROLE_PERMISSIONS[role].includes("payments.view"), role).toBe(role === "owner" || role === "admin");
+    }
+  });
+
+  it("компенсация за сбой оплаты payments.compensate — только у владельца, администратору её не дают (T-0429, Р209)", () => {
+    expect(ROLES.filter((role) => ROLE_PERMISSIONS[role].includes("payments.compensate"))).toEqual(["owner"]);
+  });
+
+  it("менять доли участников проекта stakeholders.manage — только у владельца: финансы и участник доли видят, но не правят (T-0452, Р217)", () => {
+    expect(ROLES.filter((role) => ROLE_PERMISSIONS[role].includes("stakeholders.manage"))).toEqual(["owner"]);
+    expect(ROLE_PERMISSIONS.stakeholder).toEqual(["revenue.split.own.view"]);
+  });
+
+  it("журнал учёта ledger.view — у владельца и финансов; администратору, участнику и маркетологу бухгалтерию не показываем (T-0457, Р219)", () => {
+    expect(ROLES.filter((role) => ROLE_PERMISSIONS[role].includes("ledger.view"))).toEqual(["owner", "finance"]);
+  });
+
   it("правила фильтра имён names.edit — у владельца, администратора и модератора, у остальных ролей нет (T-0338)", () => {
     for (const role of ROLES) {
       expect(ROLE_PERMISSIONS[role].includes("names.edit"), role).toBe(role === "owner" || role === "admin" || role === "moderator");

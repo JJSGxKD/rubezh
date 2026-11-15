@@ -30,7 +30,7 @@ batch: 5
 
 # T-0405. «Что нового» — черновик оформленной рассылки из опубликованной версии журнала одной кнопкой
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0405.json)](README.md#значки-статуса) [![T-0403](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0403.json&label=T-0403)](T-0403-rich-broadcasts-server.md) [![T-0404](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0404.json&label=T-0404)](T-0404-rich-broadcasts-panel.md) [![T-0356](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0356.json&label=T-0356)](T-0356-admin-list-first-form-in-dialog.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0405.json)](README.md#значки-статуса) [![T-0403](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0403.json&label=T-0403)](T-0403-rich-broadcasts-server.md) [![T-0404](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0404.json&label=T-0404)](T-0404-rich-broadcasts-panel.md) [![T-0356](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0356.json&label=T-0356)](archive/T-0356-admin-list-first-form-in-dialog.md)
 
 ## Зачем
 

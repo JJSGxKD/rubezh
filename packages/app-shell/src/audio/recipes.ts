@@ -147,6 +147,15 @@ export const SOUND_RECIPES = {
       { kind: "hiss", dur: 0.02, seed: 21, filter: "lowpass", f0: 1800, peak: 0.15, decay: 0.015 },
     ],
   },
+  // Груз «Кистеня»: глухой низкий удар, ниже и тише камня оберега, — бьёт
+  // редко, поэтому звук тяжёлый, но не громче оберега (docs/31).
+  flail: {
+    bus: "weapons", level: 0.4, voices: 1, gap: 0.2, send: 0.1, dur: 0.16, variants: 3, pitch: [1, 0.944, 1.059],
+    layers: [
+      { kind: "tone", wave: "triangle", f0: 150, f1: 80, glide: 0.07, peak: 0.34, decay: 0.12 },
+      { kind: "hiss", dur: 0.03, seed: 61, filter: "lowpass", f0: 900, peak: 0.14, decay: 0.025 },
+    ],
+  },
   // Игла «Жала»: шипение и стеклянный щелчок в полосе 3–5 кГц — выше «Искры»
   // и «Ножа», поэтому в общей подложке оружия его слышно отдельно.
   sting: {
@@ -221,6 +230,35 @@ export const SOUND_RECIPES = {
       { kind: "hiss", dur: 0.05, seed: 111, filter: "highpass", f0: 1500, peak: 0.4, decay: 0.04 },
       { kind: "tone", f0: 90, f1: 42, glide: 0.6, peak: 0.4, decay: 0.7 },
       { kind: "swell", wave: "sawtooth", f0: 55, f1: 49, glide: 0.8, t: 0.05, attack: 0.05, hold: 0.3, release: 0.6, peak: 0.12, detune: [0, 9], filter: { type: "lowpass", f0: 400, f1: 150, glide: 0.8, q: 2 } },
+    ],
+  },
+
+  // Карачун: предвестие — полторы секунды на то, чтобы понять, откуда он выйдет
+  // (Р205). Это начало угрозы, а не атака врага, поэтому звучит. Не рог: нет
+  // низа и пилы, только шипящий выдох с полосой, что поднимается к концу, и
+  // треск инея щелчками — не спутать с телеграфом рывка и рогом элиты.
+  stalkerOmen: {
+    bus: "threats", level: 0.5, voices: 1, gap: 1.2, send: 0.5, duck: 1.2, dur: 1.6, variants: 1,
+    layers: [
+      { kind: "hiss", dur: 1.6, seed: 201, filter: "bandpass", f0: 1400, f1: 4200, glide: 1.5, q: 2.5, attack: 1.3, peak: 0.34, decay: 0.3 },
+      { kind: "hiss", t: 0.4, dur: 1.2, seed: 202, filter: "highpass", f0: 6500, attack: 0.9, peak: 0.08, decay: 0.25 },
+      { kind: "tone", wave: "sine", f0: 880, f1: 1760, glide: 1.5, attack: 1.2, peak: 0.04, decay: 0.3 },
+      { kind: "hiss", t: 0.95, dur: 0.02, seed: 211, filter: "highpass", f0: 7000, peak: 0.22, decay: 0.015 },
+      { kind: "hiss", t: 1.12, dur: 0.02, seed: 212, filter: "highpass", f0: 7600, peak: 0.26, decay: 0.015 },
+      { kind: "hiss", t: 1.27, dur: 0.02, seed: 213, filter: "highpass", f0: 7000, peak: 0.28, decay: 0.015 },
+      { kind: "hiss", t: 1.38, dur: 0.02, seed: 214, filter: "highpass", f0: 8000, peak: 0.3, decay: 0.015 },
+      { kind: "hiss", t: 1.47, dur: 0.02, seed: 215, filter: "highpass", f0: 7400, peak: 0.3, decay: 0.015 },
+    ],
+  },
+
+  // Касание Карачуна звучит поверх обычного `hurt`: глухой тяжёлый удар с
+  // ледяным призвуком — «это не крыса» слышно сразу.
+  stalkerStrike: {
+    bus: "player", level: 0.6, voices: 1, gap: 0.3, send: 0.2, duck: 0.4, dur: 0.4, variants: 1,
+    layers: [
+      { kind: "tone", f0: 95, f1: 42, glide: 0.16, peak: 0.7, decay: 0.26 },
+      { kind: "hiss", dur: 0.14, seed: 221, filter: "lowpass", f0: 700, f1: 200, glide: 0.12, peak: 0.4, decay: 0.12 },
+      { kind: "bell", f: 2637, t: 0.02, peak: 0.1, decay: 0.28, ratio: 3.5, index: 0.8 },
     ],
   },
 

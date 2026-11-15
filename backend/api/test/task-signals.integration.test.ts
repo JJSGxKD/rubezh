@@ -10,6 +10,7 @@ import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js"
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
 import type { GrantInput, WalletService } from "../src/modules/wallet/wallet.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Задания по сигналу клиента на живом Postgres (T-0375; адрес —
@@ -47,7 +48,7 @@ describe.skipIf(DATABASE_URL === "")("сигнал клиента на живо�
 
   async function account(): Promise<AccountRef> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(930_000_000 + Math.floor(Math.random() * 30_000_000)), displayName: "Сигнал", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Сигнал", username: null },
       Date.now(),
     );
     return { accountId: created.accountId, platform: "telegram", platformUserId: created.platformUserId };

@@ -150,8 +150,8 @@ function formatRow(m) {
   return [m.scene, m.ground, life, `${(m.changedShare.max * 100).toFixed(1)}%`, flashes, String(m.displayObjects.max), p95].join("\t");
 }
 
-/** Запуск; возвращает код выхода. */
-export async function run(options, log = console.log) {
+/** Запуск; возвращает код выхода. `collect` (если задан) получает замеры и пути файлов для fx:check. */
+export async function run(options, log = console.log, collect = null) {
   try {
     const response = await fetch(options.base, { signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS) }).catch((error) => {
       if (isLocalUrl(options.base) && String(error?.cause?.code ?? "").includes("CERT")) return { ok: true };
@@ -185,6 +185,10 @@ export async function run(options, log = console.log) {
         try {
           const metrics = await shootScene(browser, decoder, options, scene, ground);
           rows.push(formatRow(metrics));
+          if (collect !== null) {
+            collect.scenes.push(metrics);
+            collect.files.push(join(options.out, `${scene}-${ground}.png`));
+          }
           if (metrics.flashes.warning !== null) warnings.push(`${scene}-${ground}: ${metrics.flashes.warning}`);
           if (metrics.lifeNote !== null) warnings.push(`${scene}-${ground}: ${metrics.lifeNote}`);
           log(`лист ${join(options.out, `${scene}-${ground}.png`)}`);
@@ -195,6 +199,7 @@ export async function run(options, log = console.log) {
       }
       try {
         await recordVideo(browser, options, scene);
+        if (collect !== null) collect.files.push(join(options.out, `${scene}.webm`));
         log(`видео ${join(options.out, `${scene}.webm`)}`);
       } catch (error) {
         // Видео нужно человеку, а не замерам: без кодека ffmpeg листы и JSON остаются верными.

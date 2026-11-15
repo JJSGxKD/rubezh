@@ -14,7 +14,7 @@ import { FLAG_PLATFORMS } from "./flags";
  * правила проверяет сервер; панель лишь не даёт отправить заведомо неверное.
  */
 
-export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "task", "interstitial"] as const;
+export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "card_reroll", "task", "interstitial"] as const;
 export type AdPlace = (typeof AD_PLACES)[number];
 export const AD_SUCCESS = ["view", "click", "cpa"] as const;
 export type AdSuccess = (typeof AD_SUCCESS)[number];
@@ -29,6 +29,7 @@ export const PLACE_TITLES: Record<AdPlace, string> = {
   second_chance: "Второй шанс",
   wheel_spin: "Крутка колеса",
   run_double: "Удвоение за забег",
+  card_reroll: "Переброс карточек",
   task: "Задания",
   interstitial: "Между забегами",
 };
@@ -137,6 +138,8 @@ const blockSchema = z.object({
   devices: z.array(z.enum(AD_DEVICES)),
   /** блок не по профилю сети — выдача его пропускает */
   problem: z.string().nullable().default(null),
+  /** ISO-время, когда блок убрали «В архив» (Р200); `null` — не в архиве; сервер до архива поля не отдавал */
+  archivedAt: z.string().nullable().default(null),
 });
 export type AdBlock = z.infer<typeof blockSchema>;
 
@@ -203,6 +206,16 @@ export function reorderNetworks(api: AdminApi, ids: readonly string[]): Promise<
 export function saveBlock(api: AdminApi, block: AdBlockInput): Promise<ApiResult<AdBlock>> {
   const externalId = block.externalId?.trim() ?? "";
   return api.request("/ads/blocks", { method: "POST", body: { ...block, externalId: externalId === "" ? null : externalId }, schema: blockSchema });
+}
+
+/** «В архив» (Р200): сервер выключает блок и ставит отметку; повтор отвечает тем же блоком. */
+export function archiveBlock(api: AdminApi, blockId: string): Promise<ApiResult<AdBlock>> {
+  return api.request(`/ads/blocks/${encodeURIComponent(blockId)}/archive`, { method: "POST", schema: blockSchema });
+}
+
+/** «Вернуть» из архива (Р200): отметка снята, блок остаётся выключенным. */
+export function unarchiveBlock(api: AdminApi, blockId: string): Promise<ApiResult<AdBlock>> {
+  return api.request(`/ads/blocks/${encodeURIComponent(blockId)}/unarchive`, { method: "POST", schema: blockSchema });
 }
 
 export function profileOf(view: Pick<AdsView, "profiles">, networkKey: string): AdNetworkProfile | undefined {

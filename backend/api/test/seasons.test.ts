@@ -42,6 +42,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Недельный сезон рейтинга: правила без базы (tasks/T-0110). Границы недели —
@@ -301,7 +302,7 @@ describe("RunsService.setRanked: слушатели узнают о смене �
     const roles = new RolesService(config, rolesRepository, accounts);
     const service = new RunsService(config, runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating, undefined, survivalScorer());
     const player = async (name: string) => {
-      const created = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
+      const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
       return { accountId: created.accountId, platform: created.platform, platformUserId: created.platformUserId };
     };
     const moderator = await player("модератор");
@@ -492,7 +493,7 @@ describe("единая сложность в сезонах (T-0191, Р126)", ()
     const { repository, asked } = repositoryOf(rows);
     const rating = { boardsFor: async () => ALL_BOARDS, separate: async () => [] as string[] };
     const restrictions = { restrictedAccounts: async () => [] as string[], status: async () => null };
-    const projection = new SeasonsProjection(schedule, store as unknown as SeasonBoardStore, repository, new RunsHooks(), new RestrictionsHooks(), restrictions as never, rating as never);
+    const projection = new SeasonsProjection(schedule, store as unknown as SeasonBoardStore, repository, new RunsHooks(), new RestrictionsHooks(), restrictions as never, rating as never, { set: async () => "OK", eval: async () => 1 } as never);
     return { schedule, store, asked, projection };
   }
 

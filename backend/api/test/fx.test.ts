@@ -5,6 +5,7 @@ import { DomainError, ForbiddenError, ValidationError } from "../src/common/doma
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { FxAlertNotifier, fxAlertText, type FxAlertApi } from "../src/modules/admin-notify/fx-alert-notifier.js";
 import { manualRateSchema, sourceLimitSchema, sourceUsedSchema } from "../src/modules/fx/dto/fx.dto.js";
+import type { FxHistoryStore } from "../src/modules/fx/fx-history.js";
 import { FxHooks, type FxAlert } from "../src/modules/fx/fx-hooks.js";
 import { FxRefreshBusyError, FxRefreshLimitError, FxRefreshPausedError, FxRefresher, fxSources } from "../src/modules/fx/fx.refresher.js";
 import { FxService, FxSourceNotFoundError, type RefreshNowResult } from "../src/modules/fx/fx.service.js";
@@ -95,6 +96,8 @@ function gramSource(usd: string): RateSource & { calls: number } {
 
 /** Обновление «сейчас» в тестах, которым оно не нужно: звать его нельзя. */
 const NO_REFRESHER = { refreshNow: async () => Promise.reject(new Error("обновление не ожидалось")) };
+/** Курс на дату этим тестам не нужен: история — в `fx-history.test.ts`. */
+const NO_HISTORY = {} as FxHistoryStore;
 
 describe("проход курсов по расписанию", () => {
   it("идёт под локом и снимает только свой лок", async () => {
@@ -179,7 +182,7 @@ describe("источники из окружения", () => {
 describe("заданные курсы", () => {
   function setup() {
     const roles = new MemoryRolesRepository();
-    const service = new FxService(new MemoryFxStore(), environmentSecrets(config()), new RolesService(config(), roles, new MemoryAccountRepository()), switchesOf(config()), NO_REFRESHER);
+    const service = new FxService(new MemoryFxStore(), environmentSecrets(config()), new RolesService(config(), roles, new MemoryAccountRepository()), switchesOf(config()), NO_REFRESHER, NO_HISTORY);
     return { service, roles };
   }
   const owner: AccountRef = { accountId: randomUUID(), platform: "telegram", platformUserId: OWNER_ID };
@@ -205,7 +208,7 @@ describe("заданные курсы", () => {
 
   it("ручной курс рыночной валюты — запасной: в обзоре помечен, «в работе» только пока рыночного курса нет (T-0064)", async () => {
     const store = new MemoryFxStore();
-    const service = new FxService(store, environmentSecrets(config()), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), switchesOf(config()), NO_REFRESHER);
+    const service = new FxService(store, environmentSecrets(config()), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), switchesOf(config()), NO_REFRESHER, NO_HISTORY);
     const rub = { currency: "RUB" as const, purpose: "price" as const, price: "0.011", quote: "USD" as const, expiresInDays: 7, note: "источники легли" };
 
     const saved = await service.setManual(owner, rub, NOW);
@@ -221,7 +224,7 @@ describe("заданные курсы", () => {
 
   it("цена звезды в рублях показывается и в долларах по курсу рубля, без курса — честное «нет»", async () => {
     const store = new MemoryFxStore();
-    const service = new FxService(store, environmentSecrets(config()), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), switchesOf(config()), NO_REFRESHER);
+    const service = new FxService(store, environmentSecrets(config()), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), switchesOf(config()), NO_REFRESHER, NO_HISTORY);
     const rub = { ...input, purpose: "price" as const, price: "1.72", quote: "RUB" as const };
     expect((await service.setManual(owner, rub, NOW)).usdPerUnit).toBeNull();
 
@@ -388,7 +391,7 @@ describe("«Обновить сейчас» (T-0064)", () => {
 
     function serviceWith(refresher: Pick<FxRefresher, "refreshNow">) {
       const roles = new MemoryRolesRepository();
-      const service = new FxService(new MemoryFxStore(), environmentSecrets(cfgOwner()), new RolesService(cfgOwner(), roles, new MemoryAccountRepository()), switchesOf(cfgOwner()), refresher);
+      const service = new FxService(new MemoryFxStore(), environmentSecrets(cfgOwner()), new RolesService(cfgOwner(), roles, new MemoryAccountRepository()), switchesOf(cfgOwner()), refresher, NO_HISTORY);
       return { service, roles };
     }
 
@@ -591,7 +594,7 @@ describe("лимиты источников в панели", () => {
     const roles = new MemoryRolesRepository();
     const store = new MemoryFxStore();
     const cfg = demo();
-    const service = new FxService(store, environmentSecrets(cfg), new RolesService(cfg, roles, new MemoryAccountRepository()), switchesOf(cfg), NO_REFRESHER);
+    const service = new FxService(store, environmentSecrets(cfg), new RolesService(cfg, roles, new MemoryAccountRepository()), switchesOf(cfg), NO_REFRESHER, NO_HISTORY);
     const seed = (used: number, nextPollAt = new Date(NOW.getTime() + 60_000), month = "2026-09") =>
       store.saveSourceState("coingecko", { usage: { month, used, pausedUntil: null }, nextPollAt });
     const view = async () => (await service.overview(NOW)).sources.find((source) => source.source === "coingecko");

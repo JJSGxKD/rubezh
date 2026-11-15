@@ -206,7 +206,8 @@ export function SeasonTab(props: {
   const board = state.status === "ready" ? state.board : null;
   const scoring = weekScoring(board, data);
   const myDivision = divisionId(board?.me?.division ?? data.division[SEASON_DIFFICULTY]);
-  const noFriends = circle === "friends" && board !== null && board.entries.every((entry) => entry.isMe);
+  const notice = circle === "friends" && board !== null ? friendsNotice(board) : null;
+  const myRow = board?.entries.find((entry) => entry.isMe);
   const bestPoints = data.minePoints[SEASON_DIFFICULTY] ?? board?.me?.points ?? null;
   const best = scoring === "points" ? (bestPoints === null ? null : { kind: "points" as const, value: bestPoints }) : mine === null ? null : { kind: "time" as const, value: mine };
   // Граница дивизиона видна только на общей доске: у друзей «место» и «размер доски» другие.
@@ -252,13 +253,16 @@ export function SeasonTab(props: {
           </div>
         </div>
       ) : null}
-      {board === null ? null : noFriends ? (
-        <div className="surface-sunken grid justify-items-center gap-3 rounded-lg p-4 text-center">
-          <p className="text-sm text-text-muted">{t("season.friends.empty")}</p>
-          <Button track="invite_friends" onClick={props.onInvite}>
-            {t("season.friends.invite")}
-          </Button>
-        </div>
+      {board === null ? null : notice !== null ? (
+        <>
+          {notice === "idle" && myRow !== undefined ? props.list({ entries: [myRow], scoring, podium: false }) : null}
+          <div className="surface-sunken grid justify-items-center gap-3 rounded-lg p-4 text-center">
+            <p className="text-sm text-text-muted">{t(notice === "idle" ? "season.friends.idle" : "season.friends.empty")}</p>
+            <Button track={notice === "idle" ? "open_friends" : "invite_friends"} onClick={props.onInvite}>
+              {t(notice === "idle" ? "season.friends.open" : "season.friends.invite")}
+            </Button>
+          </div>
+        </>
       ) : circle === "division" ? (
         <DivisionList division={myDivision} board={board} scoring={scoring} list={props.list} />
       ) : board.entries.length === 0 ? (
@@ -277,6 +281,18 @@ export function SeasonTab(props: {
       ) : null}
     </div>
   );
+}
+
+/**
+ * Что сказать в таблице друзей, где кроме меня никого нет (Р213): `none` —
+ * друзей правда нет, `idle` — друзья есть, но на этой неделе не играли.
+ * Сервер без `friendCount` — прежнее поведение: пусто значит «нет».
+ */
+export function friendsNotice(board: SeasonBoard): "none" | "idle" | null {
+  const alone = board.entries.every((entry) => entry.isMe);
+  if (board.friendCount === 0) return "none";
+  if (!alone) return null;
+  return board.friendCount === undefined || board.friendCount === null ? "none" : "idle";
 }
 
 /**

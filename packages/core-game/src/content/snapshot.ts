@@ -18,6 +18,7 @@ import type {
   PressureDef,
   SecretsDef,
   SiegeDef,
+  StalkerDef,
   TimelineSegmentDef,
   WeaponDef,
 } from "@bh/shared-types";
@@ -29,11 +30,13 @@ import { DIFFICULTIES } from "./difficulty";
 import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
 import { MAPS } from "./maps";
+import { RUN_MODIFIERS } from "./modifiers";
 import { PRESSURE } from "./pressure";
 import { PROLOGUE } from "./prologue";
 import { RUBEZH } from "./rubezh";
 import { SECRETS } from "./secrets";
 import { SIEGE } from "./siege";
+import { STALKER } from "./stalker";
 import { ENEMY_STAGES } from "./stages";
 import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "./unlocks";
 import { LEVEL_CURVE, LIMITS, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
@@ -98,6 +101,8 @@ export interface ContentSnapshot {
   pressure: PressureDef;
   /** осада стоящего: строй и элиты вокруг того, кто долго стоит на месте (Р197, T-0392) */
   siege: SiegeDef;
+  /** неубиваемый преследователь: тело — толчки вместо урона, касание долей здоровья (Р205, T-0421) */
+  stalker: StalkerDef;
   /** коридоры для отчёта симуляции; в хэш не входят */
   balanceTargets: BalanceTargetsDef;
 }
@@ -131,6 +136,7 @@ export const CONTENT_SNAPSHOT: ContentSnapshot = {
   limits: LIMITS,
   pressure: PRESSURE,
   siege: SIEGE,
+  stalker: STALKER,
   balanceTargets: { ...BALANCE_TARGETS, evolutionPowerRatio: EVOLUTION_POWER_RATIO },
 };
 
@@ -142,7 +148,8 @@ export const CONTENT_SNAPSHOT: ContentSnapshot = {
  * Считается по полям, влияющим на забег, в порядке `ContentSnapshot`. Версия
  * схемы и коридоры калибровки в него не входят: правка цели отчёта не должна
  * объявлять новую версию баланса. Рубеж (`RUBEZH`) в снимке не лежит, но на забег
- * влияет: отметка и страж входят в хэш, а за ними — пролог (`PROLOGUE`).
+ * влияет: отметка и страж входят в хэш, а за ними — пролог (`PROLOGUE`) и модификаторы
+ * забега (`RUN_MODIFIERS`, T-0119).
  *
  * Порядок ключей внутри объектов — порядок записи в `JSON.stringify`, и хэш
  * умолчания обязан остаться прежним, поэтому он от порядка зависит. Копия
@@ -178,8 +185,10 @@ export function hashSnapshot(snapshot: ContentSnapshot): string {
     snapshot.limits,
     snapshot.pressure,
     snapshot.siege,
+    snapshot.stalker,
     RUBEZH,
     PROLOGUE,
+    RUN_MODIFIERS,
   ]);
 
   // FNV-1a: короткая, без зависимостей и без криптографических претензий.

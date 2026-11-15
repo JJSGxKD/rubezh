@@ -15,6 +15,13 @@ import type { Difficulty } from "../runs/run-rules.js";
  * стартом (runs.service.ts), — а не из того, что прислал клиент как «награду».
  */
 
+/**
+ * Числа забега, лестницы уровней и награды дня — ключи каталога настроек
+ * `rewards.*` с пометкой «деньги» (tasks/T-0310): правятся в панели заявкой со
+ * вторым участником. Постоянные ниже — умолчания ключей и то, что считается,
+ * пока настроек нет (тесты, процесс без базы).
+ */
+
 /** Короче — не забег, а «нажал и вышел»: награды нет, иначе её фармили бы. */
 export const MIN_REWARDED_SEC = 30;
 
@@ -36,6 +43,15 @@ export const DIFFICULTY_REWARD_MUL: Record<Difficulty, number> = { easy: 1, norm
  * `RUBEZH_REWARD_MUL` держит тест `rubezh-win.test.ts`. Число стартовое.
  */
 export const RUBEZH_REWARD_MUL = 2;
+
+/** Порог и потолки награды за забег: читаются из настроек на каждом начислении. */
+export interface RunRewardLimits {
+  minSec: number;
+  maxCoins: number;
+  maxXp: number;
+}
+
+export const DEFAULT_RUN_REWARD_LIMITS: RunRewardLimits = { minSec: MIN_REWARDED_SEC, maxCoins: MAX_COINS_PER_RUN, maxXp: MAX_XP_PER_RUN };
 
 export const MAX_LEVEL = 100;
 
@@ -67,17 +83,17 @@ export type RunRewardDecision = { coins: number; xp: number; skipped: null } | {
  * приговор, и честный игрок с необычным забегом не должен терять монеты.
  * Злоупотребление ловят потолки кошелька и разбор. Отклонённый — нет.
  */
-export function runReward(run: RewardableRun): RunRewardDecision {
+export function runReward(run: RewardableRun, limits: RunRewardLimits = DEFAULT_RUN_REWARD_LIMITS): RunRewardDecision {
   if (run.cheats) return { coins: 0, xp: 0, skipped: "cheats" };
   if (run.verdict === "rejected") return { coins: 0, xp: 0, skipped: "rejected" };
-  if (run.survivalSec < MIN_REWARDED_SEC) return { coins: 0, xp: 0, skipped: "too_short" };
+  if (run.survivalSec < limits.minSec) return { coins: 0, xp: 0, skipped: "too_short" };
 
   const minutes = run.survivalSec / 60;
   // Множители складываются до округления, потолки — после них.
   const mul = DIFFICULTY_REWARD_MUL[run.difficulty] * (rubezhPaid({ cleared: run.rubezhCleared === true, verdict: run.verdict, cheats: run.cheats, skipped: null }) ? RUBEZH_REWARD_MUL : 1);
   const coins = Math.round((COINS_PER_MINUTE * minutes + (COINS_PER_100_KILLS * run.enemiesKilled) / 100) * mul);
   const xp = Math.round((XP_PER_MINUTE * minutes + XP_PER_RUN_LEVEL * Math.max(0, run.level - 1)) * mul);
-  return { coins: Math.min(coins, MAX_COINS_PER_RUN), xp: Math.min(xp, MAX_XP_PER_RUN), skipped: null };
+  return { coins: Math.min(coins, limits.maxCoins), xp: Math.min(xp, limits.maxXp), skipped: null };
 }
 
 /**
@@ -98,16 +114,101 @@ export function levelForXp(xp: number): number {
   return level;
 }
 
+/**
+ * Лестница наград за уровень — список ступеней «с уровня:монет за уровень:
+ * самоцветов:раз в сколько уровней», например `1:50:10:5; 20:80:20:10`.
+ * Ступень действует со своего уровня до следующей: монеты — `монет за
+ * уровень × номер уровня`, самоцветы — на каждом уровне, кратном «раз в».
+ * Умолчание — прежняя формула: 50 монет за уровень и 10 самоцветов раз в
+ * пять уровней. Самоцветы бесплатно — немного (Р2): основной их источник —
+ * покупка.
+ */
+export interface LevelLadderStep {
+  fromLevel: number;
+  coinsPerLevel: number;
+  gems: number;
+  gemsEvery: number;
+}
+
+export type LevelLadder = readonly LevelLadderStep[];
+
+export const DEFAULT_LEVEL_LADDER_TEXT = "1:50:10:5";
+
+export const LEVEL_LADDER_MAX_STEPS = 8;
+export const LEVEL_LADDER_COINS_MAX = 1_000;
+export const LEVEL_LADDER_GEMS_MAX = 100;
+
+export const LEVEL_LADDER_FORMAT = "с уровня:монет за уровень:самоцветов:раз в сколько уровней, ступени через «;», например 1:50:10:5; 20:80:20:10";
+
+/** Разбор лестницы: `text` — канонический вид (пробелы и порядок знаков приведены), по нему «было» сравнивается строкой. */
+export type LadderParse<T> = { ok: true; ladder: T; text: string } | { ok: false; problem: string };
+
+const WHOLE = /^\d{1,9}$/;
+
+function whole(text: string): number | null {
+  return WHOLE.test(text.trim()) ? Number(text.trim()) : null;
+}
+
+export function formatLevelLadder(ladder: LevelLadder): string {
+  return ladder.map((step) => `${String(step.fromLevel)}:${String(step.coinsPerLevel)}:${String(step.gems)}:${String(step.gemsEvery)}`).join("; ");
+}
+
+/** Первая ступень с первого уровня, уровни по возрастанию, числа в пределах. */
+export function parseLevelLadder(text: string): LadderParse<LevelLadder> {
+  const parts = text.split(";").map((part) => part.trim());
+  if (parts[0] === undefined || parts[0] === "") return { ok: false, problem: `Лестница пуста. Формат: ${LEVEL_LADDER_FORMAT}` };
+  if (parts.length > LEVEL_LADDER_MAX_STEPS) return { ok: false, problem: `Ступеней не больше ${String(LEVEL_LADDER_MAX_STEPS)}` };
+  const ladder: LevelLadderStep[] = [];
+  for (const part of parts) {
+    const fields = part.split(":").map(whole);
+    const [fromLevel, coinsPerLevel, gems, gemsEvery] = fields;
+    if (fields.length !== 4 || fromLevel == null || coinsPerLevel == null || gems == null || gemsEvery == null) {
+      return { ok: false, problem: `Ступень «${part}» не разобрана: четыре целых неотрицательных числа через «:». Формат: ${LEVEL_LADDER_FORMAT}` };
+    }
+    if (fromLevel < 1 || fromLevel > MAX_LEVEL) return { ok: false, problem: `Ступень «${part}»: уровень от 1 до ${String(MAX_LEVEL)}` };
+    if (coinsPerLevel > LEVEL_LADDER_COINS_MAX) return { ok: false, problem: `Ступень «${part}»: монет за уровень не больше ${String(LEVEL_LADDER_COINS_MAX)}` };
+    if (gems > LEVEL_LADDER_GEMS_MAX) return { ok: false, problem: `Ступень «${part}»: самоцветов не больше ${String(LEVEL_LADDER_GEMS_MAX)}` };
+    if (gemsEvery < 1 || gemsEvery > MAX_LEVEL) return { ok: false, problem: `Ступень «${part}»: «раз в сколько уровней» от 1 до ${String(MAX_LEVEL)}` };
+    ladder.push({ fromLevel, coinsPerLevel, gems, gemsEvery });
+  }
+  if (ladder[0]?.fromLevel !== 1) return { ok: false, problem: "Первая ступень начинается с первого уровня" };
+  for (let index = 1; index < ladder.length; index++) {
+    if ((ladder[index]?.fromLevel ?? 0) <= (ladder[index - 1]?.fromLevel ?? 0)) return { ok: false, problem: "Уровни ступеней идут по возрастанию, без повторов" };
+  }
+  return { ok: true, ladder, text: formatLevelLadder(ladder) };
+}
+
+const DEFAULT_LEVEL_LADDER: LevelLadder = [{ fromLevel: 1, coinsPerLevel: 50, gems: 10, gemsEvery: 5 }];
+
+/** Лестница из настройки. Битое значение не роняет начисление: действует прежняя лестница. */
+export function levelLadderOf(text: string): LevelLadder {
+  const parsed = parseLevelLadder(text);
+  return parsed.ok ? parsed.ladder : DEFAULT_LEVEL_LADDER;
+}
+
 export interface LevelReward {
   coins: number;
   gems: number;
 }
 
-/**
- * Награда за уровень: монеты растут с уровнем, самоцветы — раз в пять
- * уровней. Самоцветы бесплатно — немного (Р2): основной их источник —
- * покупка.
- */
-export function levelReward(level: number): LevelReward {
-  return { coins: 50 * level, gems: level % 5 === 0 ? 10 : 0 };
+/** Награда за достижение уровня по лестнице; без аргумента — умолчание. */
+export function levelReward(level: number, ladder: LevelLadder = DEFAULT_LEVEL_LADDER): LevelReward {
+  let step: LevelLadderStep | undefined;
+  for (const candidate of ladder) {
+    if (candidate.fromLevel <= level) step = candidate;
+  }
+  if (step === undefined) return { coins: 0, gems: 0 };
+  return { coins: step.coinsPerLevel * level, gems: level % step.gemsEvery === 0 ? step.gems : 0 };
+}
+
+/** Самая большая награда за один уровень: предупреждение о потолке кошелька сравнивает её. */
+export function maxLevelReward(ladder: LevelLadder): LevelReward {
+  let coins = 0;
+  let gems = 0;
+  for (let level = 1; level <= MAX_LEVEL; level++) {
+    const reward = levelReward(level, ladder);
+    coins = Math.max(coins, reward.coins);
+    gems = Math.max(gems, reward.gems);
+  }
+  return { coins, gems };
 }

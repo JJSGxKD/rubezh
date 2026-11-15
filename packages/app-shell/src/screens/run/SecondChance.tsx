@@ -126,6 +126,9 @@ export function useSecondChanceStages(props: SecondChanceProps): { adStage: AdCo
   };
 }
 
+/** Две равные ячейки: `1fr` с минимумом по содержимому давал колонку шире соседней (Р210). */
+const PAIR_COLS = "grid-cols-[minmax(0,1fr)_minmax(0,1fr)]";
+
 /**
  * «Второй шанс» на экране смерти: продолжить забег за рекламу, самоцветы или
  * звёзды — все враги вокруг исчезают, здоровье восстанавливается
@@ -193,7 +196,7 @@ export function SecondChance(props: SecondChanceProps = {}): ReactNode {
           <p className="mt-0.5 text-xs text-text-muted">{t("run.continue.text")}</p>
         </div>
       </div>
-      <div className={`mt-3 grid gap-2 ${showGems ? "grid-cols-2" : wide ? "grid-cols-1" : "grid-cols-2"}`}>
+      <div className={`@container mt-3 grid items-start gap-2 ${showGems ? PAIR_COLS : wide ? "grid-cols-1" : PAIR_COLS}`}>
         {placeholder ? (
           <>
             <Button track="continue_ad" variant="secondary" block disabled ariaLabel={t("run.continue.ad")}>
@@ -219,9 +222,9 @@ export function SecondChance(props: SecondChanceProps = {}): ReactNode {
           </div>
         )}
         {gemStage === null ? null : props.gemsFor !== undefined ? (
-          <GemContinue result={props.gemsFor} locked={adBusy || starsBusy} primary={!showAd} className={gemsAlone ? "col-span-full" : ""} />
+          <GemContinue result={props.gemsFor} locked={adBusy || starsBusy} primary={!showAd} paired={showStars} className={gemsAlone ? "col-span-full" : ""} />
         ) : (
-          <GemContinueView stage={gemStage} locked={adBusy || starsBusy} primary={!showAd} onBuy={() => undefined} className={gemsAlone ? "col-span-full" : ""} />
+          <GemContinueView stage={gemStage} locked={adBusy || starsBusy} primary={!showAd} paired={showStars} onBuy={() => undefined} className={gemsAlone ? "col-span-full" : ""} />
         )}
         {!showStars ? null : (
           <div className={`contents ${showGems && starsAlone ? "[&>button]:col-span-full" : ""}`}>

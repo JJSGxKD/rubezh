@@ -12,6 +12,7 @@ import { PrismaSessionsRepository } from "../src/modules/attribution/sessions.re
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
 import { PrismaLinksRepository } from "../src/modules/links/links.repository.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Постбэки в s2s-сети и партнёру на живом Postgres (tasks/T-0070, docs/35-stage4-plan.md Р86, Р96):
@@ -165,7 +166,7 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
       networkParams: params,
     });
     const account = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 99_000_000)), displayName: "Из рекламы", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Из рекламы", username: null, photoUrl: null },
       Date.now(),
     );
     // Роль — до первой сессии: пока касания нет, чужой проход по общей схеме аккаунта не видит.
@@ -177,7 +178,7 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
   /** Новичок по прямой ссылке: аккаунт заведён сейчас, первая сессия — запуск `l-<код>`. */
   async function playerFromDirect(code: string, startParam: string = `l-${code}`) {
     const account = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 99_000_000)), displayName: "По прямой", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "По прямой", username: null, photoUrl: null },
       Date.now(),
     );
     await launch(account.accountId, "link", startParam, code);

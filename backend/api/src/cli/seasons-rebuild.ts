@@ -44,7 +44,7 @@ async function main(): Promise<void> {
     // Нужны только доски аккаунта и кому отдельная доска: обход и слушатели рейтинга здесь не запускаются.
     const hooks = new RestrictionsHooks();
     const rating = new RatingRestrictions(config, redis, new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), restrictions, hooks, settings);
-    const projection = new SeasonsProjection(new SeasonSchedule(settings), new RedisSeasonBoardStore(redis), new PrismaSeasonsRepository(prisma), new RunsHooks(), hooks, restrictions, rating);
+    const projection = new SeasonsProjection(new SeasonSchedule(settings), new RedisSeasonBoardStore(redis), new PrismaSeasonsRepository(prisma), new RunsHooks(), hooks, restrictions, rating, redis);
     const counts = await projection.rebuild();
     const since = new SeasonSchedule(settings).ratingSince();
     console.log(`отсечка рейтинга: ${since === null ? "нет" : since.toISOString().slice(0, 10)}`);

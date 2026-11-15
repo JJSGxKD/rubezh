@@ -29,6 +29,8 @@ const URL_SECRET = "https://sub.example.com/api/v1/client/tok-9f8e7d6c5b4a?key=S
 const UUID = "11111111-1111-4111-8111-111111111111";
 const NOW = new Date("2026-11-02T12:00:00.000Z");
 
+const NO_ROUTING = { source: "none", direct: 0, block: 0, hints: [] };
+
 const link = (index: number): string => `vless://${UUID}@n${String(index)}.example.org:443?type=ws&security=tls&sni=n${String(index)}.example.org&path=%2Fws#%5BDE%5D%20${String(index)}`;
 
 describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("подписка Xray на живых Postgres и Redis", () => {
@@ -50,6 +52,10 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("подписка Xray 
     trafficUsedBytes: null,
     trafficTotalBytes: null,
     expiresAt: null,
+    routingSource: null,
+    routingDirect: null,
+    routingBlock: null,
+    routingHints: [],
     updatedBy: ACTOR_ID,
     updatedAt: NOW,
     createdAt: NOW,
@@ -303,7 +309,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("подписка Xray 
 
     it("save без смены адреса правит только поля формы и не затирает итог обновления; нет подписки — false", async () => {
       await repository.create(row("main"));
-      await repository.applyRefresh("main", { at: NOW, ok: true, note: "3 узла", nodes: [], providerIntervalHours: 12, trafficUsedBytes: 5n, trafficTotalBytes: 50n, expiresAt: null });
+      await repository.applyRefresh("main", { at: NOW, ok: true, note: "3 узла", nodes: [], providerIntervalHours: 12, trafficUsedBytes: 5n, trafficTotalBytes: 50n, expiresAt: null, routing: NO_ROUTING });
 
       const saved = await repository.save({ ...row("main"), name: "Новое имя", enabled: false, countries: ["FR"], updatedAt: new Date(NOW.getTime() + 9000) });
 
@@ -331,15 +337,83 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("подписка Xray 
       await repository.create(row("main"));
       await repository.create(row("second", { createdAt: new Date(NOW.getTime() + 1000) }));
       await prisma.proxySubscriptionNode.createMany({ data: [nodeData("main", "aaaa", 0), nodeData("second", "cccc", 1)] });
-      const stored = (node: ReturnType<typeof nodeData>) => ({ ...node, state: "unknown" as const, latencyMs: null, lastProbeAt: null });
+      const stored = (node: ReturnType<typeof nodeData>) => ({ ...node, state: "unknown" as const, latencyMs: null, lastProbeAt: null, network: null, security: null, flow: null });
 
-      await repository.applyRefresh("main", { at: NOW, ok: true, note: "2 узла", nodes: [stored(nodeData("main", "aaaa", 2)), stored(nodeData("main", "dddd", 3))], providerIntervalHours: null, trafficUsedBytes: null, trafficTotalBytes: null, expiresAt: null });
+      await repository.applyRefresh("main", { at: NOW, ok: true, note: "2 узла", nodes: [stored(nodeData("main", "aaaa", 2)), stored(nodeData("main", "dddd", 3))], providerIntervalHours: null, trafficUsedBytes: null, trafficTotalBytes: null, expiresAt: null, routing: NO_ROUTING });
 
       expect((await prisma.proxySubscriptionNode.findMany({ orderBy: { slot: "asc" } })).map((node) => [node.subscriptionKey, node.nodeKey, node.slot])).toEqual([
         ["second", "cccc", 1],
         ["main", "aaaa", 2],
         ["main", "dddd", 3],
       ]);
+    });
+  });
+
+  describe("транспорт, безопасность и маршрутизация (T-0385)", () => {
+    it("узел до миграции: network, security и flow — null; после обновления лежат из разбора", async () => {
+      await repository.create(row());
+      await prisma.proxySubscriptionNode.create({ data: nodeData("main", "aaaa", 0) });
+      expect(await prisma.proxySubscriptionNode.findUniqueOrThrow({ where: { subscriptionKey_nodeKey: { subscriptionKey: "main", nodeKey: "aaaa" } } })).toMatchObject({ network: null, security: null, flow: null });
+
+      const stored = { ...nodeData("main", "bbbb", 1), state: "unknown" as const, latencyMs: null, lastProbeAt: null, network: "tcp", security: "reality", flow: "xtls-rprx-vision" };
+      await repository.applyRefresh("main", { at: NOW, ok: true, note: "1 узел", nodes: [stored], providerIntervalHours: null, trafficUsedBytes: null, trafficTotalBytes: null, expiresAt: null, routing: NO_ROUTING });
+
+      const loaded = await repository.load("main");
+      expect(loaded?.nodes[0]).toMatchObject({ nodeKey: "bbbb", network: "tcp", security: "reality", flow: "xtls-rprx-vision" });
+    });
+
+    it("транспорт вне перечня и безопасность вне перечня — отказ CHECK; пустые значения можно", async () => {
+      await repository.create(row());
+      const data = (nodeKey: string, slot: number, patch: Record<string, unknown>) => prisma.proxySubscriptionNode.create({ data: { ...nodeData("main", nodeKey, slot), ...patch } });
+
+      await expect(data("aaaa", 0, { network: "udp" })).rejects.toThrow();
+      await expect(data("bbbb", 1, { security: "ssl" })).rejects.toThrow();
+      for (const [index, network] of ["tcp", "ws", "grpc", "httpupgrade", "xhttp"].entries()) await expect(data(`n${String(index)}`, 10 + index, { network }), network).resolves.toBeDefined();
+      for (const [index, security] of ["none", "tls", "reality"].entries()) await expect(data(`s${String(index)}`, 20 + index, { security }), security).resolves.toBeDefined();
+      await expect(data("nulls", 30, { network: null, security: null, flow: null })).resolves.toBeDefined();
+    });
+
+    it("источник маршрутизации вне перечня и отрицательные числа — отказ CHECK; null и четыре значения можно", async () => {
+      await repository.create(row());
+      const update = (data: Record<string, unknown>) => prisma.proxySubscription.update({ where: { key: "main" }, data });
+
+      await expect(update({ routingSource: "x" })).rejects.toThrow();
+      await expect(update({ routingDirect: -1 })).rejects.toThrow();
+      await expect(update({ routingBlock: -1 })).rejects.toThrow();
+      for (const source of ["none", "json", "header", "json+header"]) await expect(update({ routingSource: source }), source).resolves.toBeDefined();
+      await expect(update({ routingSource: null, routingDirect: null, routingBlock: null })).resolves.toBeDefined();
+    });
+
+    it("маршрутизация записывается обновлением и читается: подсказки — массивом, не разобранный заголовок — null", async () => {
+      await repository.create(row());
+      await repository.applyRefresh("main", {
+        at: NOW,
+        ok: true,
+        note: "0 узлов",
+        nodes: [],
+        providerIntervalHours: null,
+        trafficUsedBytes: null,
+        trafficTotalBytes: null,
+        expiresAt: null,
+        routing: { source: "json+header", direct: 12, block: 3, hints: ["geosite:category-ru", "geoip:ru"] },
+      });
+
+      expect((await repository.load("main"))?.subscription).toMatchObject({ routingSource: "json+header", routingDirect: 12, routingBlock: 3, routingHints: ["geosite:category-ru", "geoip:ru"] });
+      expect(await prisma.proxySubscription.findUniqueOrThrow({ where: { key: "main" } })).toMatchObject({ routingHints: ["geosite:category-ru", "geoip:ru"] });
+
+      await repository.applyRefresh("main", { at: NOW, ok: true, note: "0 узлов", nodes: [], providerIntervalHours: null, trafficUsedBytes: null, trafficTotalBytes: null, expiresAt: null, routing: { source: "header", direct: null, block: null, hints: [] } });
+      expect((await repository.load("main"))?.subscription).toMatchObject({ routingSource: "header", routingDirect: null, routingBlock: null, routingHints: [] });
+    });
+
+    it("неудачное обновление маршрутизацию не трогает; смена адреса её сбрасывает", async () => {
+      await repository.create(row());
+      await repository.applyRefresh("main", { at: NOW, ok: true, note: "ок", nodes: [], providerIntervalHours: null, trafficUsedBytes: null, trafficTotalBytes: null, expiresAt: null, routing: { source: "json", direct: 4, block: 0, hints: ["geoip:ru"] } });
+
+      await repository.recordFailure("main", new Date(NOW.getTime() + 1000), "сбой");
+      expect((await repository.load("main"))?.subscription).toMatchObject({ lastRefreshOk: false, routingSource: "json", routingDirect: 4, routingHints: ["geoip:ru"] });
+
+      await repository.save({ ...row(), routingSource: null, routingDirect: null, routingBlock: null, routingHints: [] }, { dropNodes: true });
+      expect((await repository.load("main"))?.subscription).toMatchObject({ routingSource: null, routingDirect: null, routingBlock: null, routingHints: [] });
     });
   });
 });

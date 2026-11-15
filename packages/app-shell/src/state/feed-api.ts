@@ -30,6 +30,8 @@ export interface FeedItem {
   atMs: number;
   /** время забега: у `long_run` и `week_record` */
   seconds: number | null;
+  /** очки: у `week_record` в сезоне по очкам; старый сервер поля не шлёт — null */
+  points: number | null;
 }
 
 export interface FeedData {
@@ -57,6 +59,7 @@ const eventSchema = z.object({
   name: z.string(),
   at: z.string(),
   seconds: z.nullable(z.number()),
+  points: z.optional(z.nullable(z.number())),
 });
 
 const viewSchema = z.object({
@@ -79,13 +82,14 @@ function toItem(raw: unknown): FeedItem | null {
   const result = eventSchema.safeParse(raw);
   if (!result.success) return null;
   const { id, kind, name, at, seconds } = result.data;
+  const points = result.data.points ?? null;
   if (!isFeedKind(kind)) return null;
   const atMs = Date.parse(at);
   const shown = clipName(name);
   if (Number.isNaN(atMs) || shown === "") return null;
   // «12 мин в одном забеге» без минут — выдумка: такое событие не показываем.
   if (KIND_WITH_SECONDS.has(kind) && (seconds === null || seconds < 0)) return null;
-  return { id, kind, name: shown, atMs, seconds };
+  return { id, kind, name: shown, atMs, seconds, points };
 }
 
 export interface FeedApi {

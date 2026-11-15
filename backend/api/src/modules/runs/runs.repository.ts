@@ -524,7 +524,8 @@ export class PrismaRunsRepository implements RunsRepository {
 
   async review(limit: number): Promise<ReviewRow[]> {
     const rows = await this.prisma.run.findMany({
-      where: { verdict: { in: ["suspicious", "rejected"] } },
+      // Забег с решением разбора (честный или аннулированный) из очереди уходит (Р203).
+      where: { verdict: { in: ["suspicious", "rejected"] }, reviewOutcome: null },
       orderBy: { finishedAt: "desc" },
       take: limit,
       select: {
@@ -563,11 +564,21 @@ export class PrismaRunsRepository implements RunsRepository {
 }
 
 /**
- * Снят с рейтинга модератором: вердикт честный, читов нет и сдан не под
- * ограничением — иначе забег и не был бы рейтинговым. Другого пути к такому
- * сочетанию нет, поэтому отдельная пометка не нужна.
+ * Снят с рейтинга модератором: нерейтинговый забег без читов, сданный не под
+ * ограничением и не пролог, — и либо с честным вердиктом без решения разбора
+ * (иначе он и не был бы рейтинговым), либо признанный честным разбором
+ * (Р203: «Честный» и «Вернуть забег» возвращают в рейтинг и подозрительный
+ * забег). Аннулированный сюда не попадает: вернуть его можно только отменой
+ * аннулирования, с причиной. Другого пути к такому сочетанию нет, поэтому
+ * отдельная пометка не нужна.
  */
-const UNRANKED_BY_MODERATOR = { ranked: false, verdict: "ok" as const, cheats: false, ratingRestricted: null };
+const UNRANKED_BY_MODERATOR = {
+  ranked: false,
+  cheats: false,
+  ratingRestricted: null,
+  mode: { not: "prologue" as const },
+  OR: [{ verdict: "ok" as const, reviewOutcome: null }, { reviewOutcome: "honest" }],
+};
 
 /** Колонка — строкой: незнакомое значение читается как «без ограничения», а не роняет чтение. */
 function ratingRestrictedOf(value: string | null): RatingRestricted | null {

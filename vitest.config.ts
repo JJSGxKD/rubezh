@@ -35,6 +35,7 @@ export default defineConfig({
       // Бэкенд берёт ядро курсов собранным (`dist`), а тесты — исходником:
       // иначе прогон тестов зависел бы от того, собран ли пакет.
       "@bh/fx": `${repoRoot}packages/fx/src/index.ts`,
+      "@bh/ledger": `${repoRoot}packages/ledger/src/index.ts`,
       "@bh/proxy-kit": `${repoRoot}packages/proxy-kit/src/index.ts`,
       "@bh/promo-kit": `${repoRoot}packages/promo-kit/src/index.ts`,
     },

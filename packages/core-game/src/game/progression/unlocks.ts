@@ -11,6 +11,8 @@ import { MAX_CARD_TOOLS } from "./card-tools";
 export interface AccountUnlocks {
   weapons: ReadonlySet<string>;
   passives: ReadonlySet<string>;
+  /** модификаторы забега, открытые к уровню (T-0119) */
+  modifiers: ReadonlySet<string>;
   limits: LoadoutLimits;
 }
 
@@ -26,18 +28,20 @@ function sortedRows(table: readonly AccountUnlockDef[]): AccountUnlockDef[] {
 export function unlocksAt(table: readonly AccountUnlockDef[], level: number): AccountUnlocks {
   const weapons = new Set<string>();
   const passives = new Set<string>();
+  const modifiers = new Set<string>();
   const limits: LoadoutLimits = { weapons: 0, passives: { attack: 0, defense: 0, mobility: 0 } };
   for (const row of sortedRows(table)) {
     if (row.level > level) break;
     for (const id of row.weapons ?? []) weapons.add(id);
     for (const id of row.passives ?? []) passives.add(id);
+    for (const id of row.modifiers ?? []) modifiers.add(id);
     if (row.slots?.weapons !== undefined) limits.weapons = row.slots.weapons;
     for (const category of PASSIVE_CATEGORIES) {
       const slots = row.slots?.passives?.[category];
       if (slots !== undefined) limits.passives[category] = slots;
     }
   }
-  return { weapons, passives, limits };
+  return { weapons, passives, modifiers, limits };
 }
 
 /**
@@ -49,10 +53,11 @@ export function weaponsOpenAt(defs: readonly WeaponDef[], open: AccountUnlocks):
   return defs.filter((def) => open.weapons.has(def.evolvedFrom ?? def.id));
 }
 
-/** На каком уровне открывается оружие или навык; `null` — таблица его не знает. */
-export function unlockLevelOf(table: readonly AccountUnlockDef[], kind: "weapon" | "passive", id: string): number | null {
+/** На каком уровне открывается оружие, навык или модификатор забега; `null` — таблица его не знает. */
+export function unlockLevelOf(table: readonly AccountUnlockDef[], kind: "weapon" | "passive" | "modifier", id: string): number | null {
   for (const row of sortedRows(table)) {
-    if ((kind === "weapon" ? row.weapons : row.passives)?.includes(id) === true) return row.level;
+    const ids = kind === "weapon" ? row.weapons : kind === "passive" ? row.passives : row.modifiers;
+    if (ids?.includes(id) === true) return row.level;
   }
   return null;
 }
@@ -69,7 +74,12 @@ export function unlocksOfLevel(table: readonly AccountUnlockDef[], level: number
  */
 export function findUnlockProblems(
   table: readonly AccountUnlockDef[],
-  content: { weapons: readonly string[]; passives: ReadonlyMap<string, keyof LoadoutLimits["passives"]> },
+  content: {
+    weapons: readonly string[];
+    passives: ReadonlyMap<string, keyof LoadoutLimits["passives"]>;
+    /** id модификаторов забега; не заданы — открытия модификаторов не проверяются */
+    modifiers?: readonly string[];
+  },
   ceiling: LoadoutLimits,
 ): string[] {
   const problems: string[] = [];
@@ -93,6 +103,16 @@ export function findUnlockProblems(
       const found = rows.filter((row) => (kind === "оружие" ? row.weapons : row.passives)?.includes(id) === true);
       if (found.length === 0) problems.push(`${kind} ${id} не открывается ни на одном уровне`);
       if (found.length > 1) problems.push(`${kind} ${id} открывается на уровнях ${found.map((row) => String(row.level)).join(", ")}: ожидается один`);
+    }
+  }
+  if (content.modifiers !== undefined) {
+    for (const id of content.modifiers) {
+      const found = rows.filter((row) => row.modifiers?.includes(id) === true);
+      if (found.length === 0) problems.push(`модификатор ${id} не открывается ни на одном уровне`);
+      if (found.length > 1) problems.push(`модификатор ${id} открывается на уровнях ${found.map((row) => String(row.level)).join(", ")}: ожидается один`);
+    }
+    for (const row of rows) {
+      for (const id of row.modifiers ?? []) if (!content.modifiers.includes(id)) problems.push(`уровень ${String(row.level)}: модификатора ${id} нет в контенте`);
     }
   }
   for (const row of rows) {

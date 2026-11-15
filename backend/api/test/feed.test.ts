@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { createHash } from "node:crypto";
 import { Logger } from "@nestjs/common";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FEED_KINDS, type FeedEvent } from "../src/modules/feed/feed-events.js";
+import { FEED_KINDS, feedEventSchema, type FeedEvent } from "../src/modules/feed/feed-events.js";
 import { FEED_WINDOW_MS, feedEventsOf, visibleEvents } from "../src/modules/feed/feed-rules.js";
 import { FeedService } from "../src/modules/feed/feed.service.js";
 import type { FeedRepository } from "../src/modules/feed/feed.repository.js";
@@ -53,7 +53,7 @@ function recorded(patch: Partial<RecordedRun> = {}): RecordedRun {
 }
 
 function event(patch: Partial<FeedEvent> = {}): FeedEvent {
-  return { id: "run-1:long_run", kind: "long_run", accountId: ALICE, atMs: NOW.getTime() - HOUR, seconds: 700, ...patch };
+  return { id: "run-1:long_run", kind: "long_run", accountId: ALICE, atMs: NOW.getTime() - HOUR, seconds: 700, points: null, ...patch };
 }
 
 describe("feedEventsOf: что из забега попадает в ленту", () => {
@@ -77,13 +77,27 @@ describe("feedEventsOf: что из забега попадает в ленту"
 
     const events = feedEventsOf(recorded({ survivalSec: 600 }), rules, false);
 
-    expect(events).toEqual([{ id: "run-1:long_run", kind: "long_run", accountId: ALICE, atMs: NOW.getTime(), seconds: 600 }]);
+    expect(events).toEqual([{ id: "run-1:long_run", kind: "long_run", accountId: ALICE, atMs: NOW.getTime(), seconds: 600, points: null }]);
   });
 
   it("рекорд недели — week_record с тем же временем, даже короткий забег", () => {
     const events = feedEventsOf(recorded({ survivalSec: 300 }), rules, true);
 
-    expect(events).toEqual([{ id: "run-1:week_record", kind: "week_record", accountId: ALICE, atMs: NOW.getTime(), seconds: 300 }]);
+    expect(events).toEqual([{ id: "run-1:week_record", kind: "week_record", accountId: ALICE, atMs: NOW.getTime(), seconds: 300, points: null }]);
+  });
+
+  it("неделя по очкам: week_record несёт очки, остальные виды — null", () => {
+    const run = recorded({ survivalSec: 900, points: 2340 });
+    const events = feedEventsOf(run, rules, true, "points");
+
+    expect(events.find((item) => item.kind === "week_record")).toMatchObject({ seconds: 900, points: 2340 });
+    expect(events.filter((item) => item.kind !== "week_record").every((item) => item.points === null)).toBe(true);
+  });
+
+  it("неделя по времени: week_record без очков, даже если они у забега есть", () => {
+    const events = feedEventsOf(recorded({ survivalSec: 300, points: 2340 }), rules, true, "time");
+
+    expect(events[0]?.points).toBeNull();
   });
 
   it("оба условия — два события с разными id", () => {
@@ -109,13 +123,13 @@ describe("feedEventsOf: босс и редкий сундук (T-0175)", () => {
   it("bossKills: 2 при rareChests: 0 — одно событие boss без времени", () => {
     const events = feedEventsOf(recorded({ survivalSec: 300, counters: { ...counters, bossKills: 2 } }), rules, false);
 
-    expect(events).toEqual([{ id: "run-1:boss", kind: "boss", accountId: ALICE, atMs: NOW.getTime(), seconds: null }]);
+    expect(events).toEqual([{ id: "run-1:boss", kind: "boss", accountId: ALICE, atMs: NOW.getTime(), seconds: null, points: null }]);
   });
 
   it("rareChests: 1 при bossKills: 0 — одно событие chest без времени", () => {
     const events = feedEventsOf(recorded({ survivalSec: 300, counters: { ...counters, chestsOpened: 1, rareChests: 1 } }), rules, false);
 
-    expect(events).toEqual([{ id: "run-1:chest", kind: "chest", accountId: ALICE, atMs: NOW.getTime(), seconds: null }]);
+    expect(events).toEqual([{ id: "run-1:chest", kind: "chest", accountId: ALICE, atMs: NOW.getTime(), seconds: null, points: null }]);
   });
 
   it("один вид на забег, сколько бы боссов и сундуков ни было", () => {
@@ -148,6 +162,15 @@ describe("feedEventsOf: босс и редкий сундук (T-0175)", () => {
     expect(feedEventsOf(recorded({ cheats: true, counters: withCounters }), rules, false)).toEqual([]);
     expect(feedEventsOf(recorded({ verdict: "suspicious", counters: withCounters }), rules, false)).toEqual([]);
     expect(feedEventsOf(recorded({ verdict: "rejected", counters: withCounters }), rules, false)).toEqual([]);
+  });
+});
+
+describe("feedEventSchema: старые записи", () => {
+  it("запись без points разбирается, points: null", () => {
+    const old = { id: "r:week_record", kind: "week_record", accountId: ALICE, atMs: 1, seconds: 300 };
+
+    expect(feedEventSchema.parse(old).points).toBeNull();
+    expect(feedEventSchema.parse({ ...old, points: 2340 }).points).toBe(2340);
   });
 });
 
@@ -320,7 +343,7 @@ describe("запись: слушатель забегов", () => {
 
     await service.recorded(recorded({ survivalSec: 450 }));
 
-    expect(repository.events).toEqual([{ id: "run-1:week_record", kind: "week_record", accountId: ALICE, atMs: NOW.getTime(), seconds: 450 }]);
+    expect(repository.events).toEqual([{ id: "run-1:week_record", kind: "week_record", accountId: ALICE, atMs: NOW.getTime(), seconds: 450, points: null }]);
   });
 
   it("забег 400 при прежних 400 — не рекорд", async () => {
@@ -340,6 +363,49 @@ describe("запись: слушатель забегов", () => {
     await service.recorded(recorded({ runId: "r3", survivalSec: 340 }));
 
     expect(repository.events.map((item) => item.id)).toEqual(["r2:week_record"]);
+  });
+
+  it("сезон по очкам: лидер под ключом с pts:, рекорд — по очкам и с очками в событии", async () => {
+    const { service, repository } = build({ [SETTINGS.ratingPointsFrom.key]: START_DATE });
+
+    await service.recorded(recorded({ runId: "r1", survivalSec: 300, points: 1000 }));
+    await service.recorded(recorded({ runId: "r2", survivalSec: 200, points: 1500 }));
+
+    expect(repository.bumps.map((item) => [item.seasonKey, item.survivalSec])).toEqual([
+      ["pts:2026-11-02", 1000],
+      ["pts:2026-11-02", 1500],
+    ]);
+    expect(repository.events.filter((item) => item.kind === "week_record")).toEqual([
+      { id: "r2:week_record", kind: "week_record", accountId: ALICE, atMs: NOW.getTime(), seconds: 200, points: 1500 },
+    ]);
+  });
+
+  it("сезон по очкам: больше времени, но меньше очков — не рекорд", async () => {
+    const { service, repository } = build({ [SETTINGS.ratingPointsFrom.key]: START_DATE });
+
+    await service.recorded(recorded({ runId: "r1", survivalSec: 300, points: 1500 }));
+    await service.recorded(recorded({ runId: "r2", survivalSec: 900, points: 1200 }));
+
+    expect(repository.events.some((item) => item.kind === "week_record")).toBe(false);
+  });
+
+  it("сезон по очкам: забег без очков — не рекорд и лидера не двигает", async () => {
+    const { service, repository } = build({ [SETTINGS.ratingPointsFrom.key]: START_DATE });
+
+    await service.recorded(recorded({ runId: "r1", survivalSec: 900, points: null }));
+
+    expect(repository.bumps).toEqual([]);
+    expect(repository.events.some((item) => item.kind === "week_record")).toBe(false);
+  });
+
+  it("сезон по времени: ключ без pts:, points: null", async () => {
+    const { service, repository } = build();
+    repository.bumpResult = 400;
+
+    await service.recorded(recorded({ survivalSec: 450, points: 3000 }));
+
+    expect(repository.bumps[0]?.seasonKey).toBe("2026-11-02");
+    expect(repository.events[0]).toMatchObject({ kind: "week_record", points: null });
   });
 
   it("сезонов нет — week_record нет и лидер не ведётся, long_run есть", async () => {
@@ -435,7 +501,7 @@ describe("чтение: view", () => {
 
     expect(view.refreshSec).toBe(300);
     expect(view.events).toEqual([
-      { id: createHash("sha1").update("r9:long_run").digest("hex").slice(0, 12), kind: "long_run", name: "Алиса", at: new Date(NOW.getTime() - HOUR).toISOString(), seconds: 700 },
+      { id: createHash("sha1").update("r9:long_run").digest("hex").slice(0, 12), kind: "long_run", name: "Алиса", at: new Date(NOW.getTime() - HOUR).toISOString(), seconds: 700, points: null },
     ]);
   });
 

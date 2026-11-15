@@ -69,7 +69,7 @@ function Stats({ bar, compare }: { bar: FunnelBar; compare: boolean }) {
         <b className="font-semibold text-text">{formatNumber(bar.count)}</b>
       </span>
       <span>{percent(bar.ofFirst)} от входа</span>
-      <span>{bar.ofPrev === null ? "—" : `${percent(bar.ofPrev)} от прошлого`}</span>
+      <span>{bar.ofPrev === null ? "—" : `${percent(bar.ofPrev)} от шага выше`}</span>
       {change === null ? null : <span className={change.value === 0 ? "" : change.value > 0 ? "text-success" : "text-danger"}>{change.text}</span>}
     </span>
   );

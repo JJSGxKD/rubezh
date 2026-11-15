@@ -41,8 +41,12 @@ export const NEUTRAL_BASE = 0xdc / 0xff;
  * тихие: крупный рисунок повторяется каждые 256 единиц и на обзоре
  * складывается в решётку. Крупную неровность даёт не плитка, а пятна чанков
  * поверх неё (prototype/arena.html, `buildChunk`).
+ *
+ * `bleed` — запас вокруг плитки в единицах холста: рисунок продолжается за
+ * край настоящими соседями, и размытие с краем не расходятся. Сборка рисует
+ * плитку с запасом в сторону и вырезает середину (`build.mjs`).
  */
-export function groundTile(zone, size = 512, seed = 7) {
+export function groundTile(zone, size = 512, seed = 7, bleed = 0) {
   const z = ZONES[zone];
   const r = rng(seed);
   let blobs = "";
@@ -66,7 +70,7 @@ export function groundTile(zone, size = 512, seed = 7) {
       flecks += wrap(`<path d="M${f(x)} ${f(y)} q${f((r() - 0.5) * 6 * k)} ${f(-h * 0.6)} ${f((r() - 0.5) * 8 * k)} ${f(-h)}" fill="none" stroke="${z.fleck}" stroke-width="${f(2.4 * k)}" stroke-linecap="round" opacity="0.75"/>`);
     }
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}"><filter id="soft"><feGaussianBlur stdDeviation="${f(8 * (size / 256))}"/></filter><rect width="${size}" height="${size}" fill="${z.base}"/><g filter="url(#soft)">${blobs}</g>${flecks}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-bleed} ${-bleed} ${size + 2 * bleed} ${size + 2 * bleed}" width="${size + 2 * bleed}" height="${size + 2 * bleed}"><filter id="soft"><feGaussianBlur stdDeviation="${f(8 * (size / 256))}"/></filter><rect x="${-bleed}" y="${-bleed}" width="${size + 2 * bleed}" height="${size + 2 * bleed}" fill="${z.base}"/><g filter="url(#soft)">${blobs}</g>${flecks}</svg>`;
 }
 
 const svg = (inner) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100">${inner}</svg>`;

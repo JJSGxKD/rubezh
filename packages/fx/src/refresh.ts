@@ -108,6 +108,15 @@ export async function refreshRates(input: { sources: readonly RateSource[]; stor
  * нему не состоится (§3.12: продавать по устаревшему — не дольше срока).
  */
 export async function takeSnapshot(store: RateStore, now: Date): Promise<RatesSnapshot> {
+  return await store.saveSnapshot(await buildSnapshot(store, now));
+}
+
+/**
+ * Тот же снимок, но без записи в хранилище (T-0453): кабинет участника смотрит курсы на каждый просмотр, а
+ * строка в базе на каждый просмотр — это рост таблицы без пользы. Платёж и цена, которым нужна ссылка на
+ * снимок, берут `takeSnapshot`; идентификатора у результата нет.
+ */
+export async function buildSnapshot(store: RateStore, now: Date): Promise<Omit<RatesSnapshot, "id">> {
   const rates = new Map<CurrencyCode, Rate>();
   const payout = new Map<CurrencyCode, Rate>();
   const codes = (Object.keys(CURRENCIES) as CurrencyCode[]).filter((code) => code !== BASE_CURRENCY);
@@ -140,7 +149,7 @@ export async function takeSnapshot(store: RateStore, now: Date): Promise<RatesSn
       (purpose === "price" ? rates : payout).set(code, manualToRate(manual, quote));
     }
   }
-  return await store.saveSnapshot({ takenAt: now, rates, payout });
+  return { takenAt: now, rates, payout };
 }
 
 /**

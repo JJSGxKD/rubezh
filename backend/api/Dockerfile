@@ -44,21 +44,24 @@ COPY packages/adapter-vk/package.json packages/adapter-vk/
 COPY packages/app-shell/package.json packages/app-shell/
 COPY packages/core-game/package.json packages/core-game/
 COPY packages/fx/package.json packages/fx/
+COPY packages/ledger/package.json packages/ledger/
 COPY packages/proxy-kit/package.json packages/proxy-kit/
 COPY packages/shared-types/package.json packages/shared-types/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter backend-api...
 
 # --- Сборка ------------------------------------------------------------------
-# Из монорепо бэкенд берёт только ядро курсов packages/fx и пакет прокси
-# packages/proxy-kit — собранными, как зависимости (docs/35-stage4-plan.md,
-# §3.12, Р101). @bh/shared-types он не
+# Из монорепо бэкенд берёт только ядро курсов packages/fx, ядро учёта
+# packages/ledger и пакет прокси packages/proxy-kit — собранными, как
+# зависимости (docs/35-stage4-plan.md, §3.12, Р101). @bh/shared-types он не
 # импортирует, и остального монорепо здесь нет. Фильтр `backend-api...`
 # собирает пакет курсов раньше бэкенда: типы бэкенд берёт из его dist.
 FROM deps AS build
 COPY tsconfig.base.json ./
 COPY packages/fx/tsconfig.json packages/fx/
 COPY packages/fx/src packages/fx/src
+COPY packages/ledger/tsconfig.json packages/ledger/
+COPY packages/ledger/src packages/ledger/src
 COPY packages/proxy-kit/tsconfig.json packages/proxy-kit/
 COPY packages/proxy-kit/src packages/proxy-kit/src
 COPY backend/api/tsconfig.json backend/api/
@@ -78,6 +81,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY backend/api/package.json backend/api/prisma.config.ts backend/api/
 COPY backend/api/prisma backend/api/prisma
 COPY packages/fx/package.json packages/fx/
+COPY packages/ledger/package.json packages/ledger/
 COPY packages/proxy-kit/package.json packages/proxy-kit/
 # Скрипты установки здесь не отключаются намеренно: postinstall @prisma/engines
 # кладёт движок миграций в образ. Без него Prisma полезет скачивать его при
@@ -87,6 +91,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 
 COPY --from=build /app/backend/api/dist backend/api/dist
 COPY --from=build /app/packages/fx/dist packages/fx/dist
+COPY --from=build /app/packages/ledger/dist packages/ledger/dist
 COPY --from=build /app/packages/proxy-kit/dist packages/proxy-kit/dist
 
 # Бит исполняемости не приезжает из Windows (CLAUDE.md, «Окружение команды»),

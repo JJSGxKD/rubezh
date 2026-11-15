@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type PlatformAdapter, type RunResult } from "@bh/shared-types";
-import type { RunDiagnostics, RunEngine, RunEvents, RunRecording, RunSession } from "@bh/core-game";
+import type { RunDiagnostics, RunEngine, RunEvents, RunProof, RunRecording, RunSession } from "@bh/core-game";
 
 // Итог забега в аналитике: сводка производительности плоскими полями
 // (docs/28-diagnostics.md §3.2).
 
 const engine = vi.hoisted(() => ({ load: vi.fn() }));
 const reports = vi.hoisted(() => ({ queueRunReport: vi.fn() }));
+const proofs = vi.hoisted(() => ({ queueRunProof: vi.fn() }));
 
 vi.mock("../src/state/run-report", () => ({ queueRunReport: reports.queueRunReport }));
+vi.mock("../src/state/run-proof-queue", () => ({ queueRunProof: proofs.queueRunProof }));
 
 vi.mock("@bh/core-game", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@bh/core-game")>()),
@@ -67,6 +69,8 @@ const DIAGNOSTICS: RunDiagnostics = {
     interruptions: 0,
   },
   recording: null,
+  proof: null,
+  proofBlocker: null,
 };
 
 describe("итог забега в аналитике", () => {
@@ -75,6 +79,7 @@ describe("итог забега в аналитике", () => {
   beforeEach(() => {
     engine.load.mockReset();
     reports.queueRunReport.mockReset();
+    proofs.queueRunProof.mockReset();
     events = [];
     initShell({
       adapter: { ui: createNoopPlatformUi(), haptic: () => undefined } as unknown as PlatformAdapter,
@@ -152,6 +157,24 @@ describe("итог забега в аналитике", () => {
     await vi.waitFor(() => expect(reports.queueRunReport).toHaveBeenCalledTimes(1));
 
     expect(reports.queueRunReport).toHaveBeenCalledWith(recording, 1);
+  });
+
+  it("запись для проверки уходит в очередь записей, а у забега без неё очередь не трогается (tasks/T-0316)", async () => {
+    const fake = fakeEngine();
+    engine.load.mockResolvedValue(fake.engine);
+    await useRun.getState().start({ container: {} as HTMLElement, startingWeaponId: "spark", mapId: "frontier", difficultyId: "normal" });
+
+    const proof = { schema: "run-proof-v1", runId: "run-1" } as RunProof;
+    fake.emit("diagnostics", { ...DIAGNOSTICS, proof });
+    fake.emit("finished", RESULT);
+    await vi.waitFor(() => expect(proofs.queueRunProof).toHaveBeenCalledTimes(1));
+    expect(proofs.queueRunProof).toHaveBeenCalledWith(proof);
+
+    // Забег разработчика, переполненный лог ввода: записи нет, и очередь о нём не знает.
+    fake.emit("diagnostics", { ...DIAGNOSTICS, proofBlocker: "dev" });
+    fake.emit("abandoned", { ...RESULT, outcome: "abandoned" });
+    await Promise.resolve();
+    expect(proofs.queueRunProof).toHaveBeenCalledTimes(1);
   });
 
   describe("сила и давление (tasks/T-0196, решение 5)", () => {

@@ -1,6 +1,8 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { levelCap } from "../items/item-rules.js";
-import { MAX_LEVEL, RUBEZH_REWARD_MUL, levelReward, rubezhPaid, xpForLevel, type LevelReward } from "./progress-rules.js";
+import { SETTINGS } from "../settings/setting-catalog.js";
+import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
+import { MAX_LEVEL, RUBEZH_REWARD_MUL, levelLadderOf, levelReward, rubezhPaid, xpForLevel, type LevelLadder, type LevelReward } from "./progress-rules.js";
 import { PROGRESS_REPOSITORY, type ProgressRepository } from "./progress.repository.js";
 
 /**
@@ -53,10 +55,14 @@ export type RunRewardView =
 
 @Injectable()
 export class ProgressService {
-  constructor(@Inject(PROGRESS_REPOSITORY) private readonly progress: ProgressRepository) {}
+  constructor(
+    @Inject(PROGRESS_REPOSITORY) private readonly progress: ProgressRepository,
+    // Нет настроек — лестница наград прежняя.
+    @Optional() @Inject(SETTINGS_READER) private readonly settings?: SettingsReader,
+  ) {}
 
   async view(accountId: string): Promise<ProgressView> {
-    return progressView(await this.progress.progress(accountId));
+    return progressView(await this.progress.progress(accountId), levelLadderFrom(this.settings));
   }
 
   async runReward(accountId: string, runId: string): Promise<RunRewardView> {
@@ -77,7 +83,12 @@ export class ProgressService {
   }
 }
 
-export function progressView(progress: { xp: number; level: number }): ProgressView {
+/** Лестница наград за уровень из настроек; без настроек — умолчание. */
+export function levelLadderFrom(settings: SettingsReader | undefined): LevelLadder | undefined {
+  return settings === undefined ? undefined : levelLadderOf(settings.get(SETTINGS.rewardsLevelLadder));
+}
+
+export function progressView(progress: { xp: number; level: number }, ladder?: LevelLadder): ProgressView {
   const floor = xpForLevel(progress.level);
   const top = progress.level >= MAX_LEVEL;
   return {
@@ -85,15 +96,15 @@ export function progressView(progress: { xp: number; level: number }): ProgressV
     xp: progress.xp,
     xpIntoLevel: progress.xp - floor,
     xpForNext: top ? null : xpForLevel(progress.level + 1) - floor,
-    nextReward: top ? null : levelReward(progress.level + 1),
-    upcoming: upcomingLevels(progress.level),
+    nextReward: top ? null : levelReward(progress.level + 1, ladder),
+    upcoming: upcomingLevels(progress.level, ladder),
   };
 }
 
-function upcomingLevels(level: number): UpcomingLevel[] {
+function upcomingLevels(level: number, ladder?: LevelLadder): UpcomingLevel[] {
   const upcoming: UpcomingLevel[] = [];
   for (let next = level + 1; next <= Math.min(MAX_LEVEL, level + UPCOMING_LEVELS); next++) {
-    upcoming.push({ level: next, ...levelReward(next), itemLevelCap: levelCap(next) });
+    upcoming.push({ level: next, ...levelReward(next, ladder), itemLevelCap: levelCap(next) });
   }
   return upcoming;
 }

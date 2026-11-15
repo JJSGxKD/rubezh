@@ -27,7 +27,7 @@ const patternsRoot = fileURLToPath(new URL("../src/game/patterns", import.meta.u
 
 const REMOVED_ENEMIES = ["shooter_wisp", "boss_seer"] as const;
 const REMOVED_PATTERNS = ["kite_and_shoot", "caster"] as const;
-const EXPECTED_PATTERNS = ["swarm", "chase", "dash", "orbit", "exploder", "splitter", "rush", "cordon"];
+const EXPECTED_PATTERNS = ["swarm", "chase", "dash", "orbit", "exploder", "splitter", "rush", "cordon", "stalker"];
 
 describe("в бою нет врагов со снарядами", () => {
   it("паттерны врагов не создают снарядов", () => {
@@ -45,7 +45,7 @@ describe("в бою нет врагов со снарядами", () => {
     }
   });
 
-  it("реализованы ровно восемь паттернов, без стрельбы и кастинга", () => {
+  it("реализованы ровно девять паттернов, без стрельбы и кастинга", () => {
     expect([...IMPLEMENTED_PATTERNS].sort()).toEqual([...EXPECTED_PATTERNS].sort());
     for (const pattern of REMOVED_PATTERNS) expect(IMPLEMENTED_PATTERNS).not.toContain(pattern);
   });

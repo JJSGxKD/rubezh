@@ -120,6 +120,20 @@ describe("приёмник событий", () => {
     expect(sink.rows[1]?.payload).toMatchObject({ extra: 1 });
   });
 
+  it("stalker_ended: корректное принимается, чужой исход и отрицательные числа отклоняются", async () => {
+    const target = await start();
+    const ok = { index: 0, outcome: "faded", hits: 1, pushes: 4, relocations: 0, lifeSec: 18, elapsedSec: 300 };
+    const response = await post(target, {
+      events: [
+        event({ eventType: "stalker_ended", payload: ok }),
+        event({ eventType: "stalker_ended", payload: { ...ok, outcome: "fled" } }),
+        event({ eventType: "stalker_ended", payload: { ...ok, hits: -1 } }),
+      ],
+    });
+    expect(response.json()).toEqual({ data: { accepted: 1, rejected: 2, rejectedBy: { payload: 2 } } });
+    expect(sink.rows.map((row) => row.eventType)).toEqual(["stalker_ended"]);
+  });
+
   it("берёт Telegram ID только из проверенной подписи, а поддельную принимает без него", async () => {
     const target = await start();
     await post(target, { events: [event()] }, { authorization: `tma ${launchFor(777000111, TOKEN)}` });

@@ -24,6 +24,7 @@ import { PrismaSeasonsRepository } from "../src/modules/seasons/seasons.reposito
 import { ratingRestrictions } from "./helpers/memory-runs.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Дивизионы сезона и «Твой стиль» на настоящих Postgres и Redis (tasks/T-0295).
@@ -96,7 +97,7 @@ describe.skipIf(!live)("дивизионы и стиль игрока на жи�
   });
 
   async function player(name = "Игрок"): Promise<string> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(600_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: name, username: null, photoUrl: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
     return created.accountId;
   }
 
@@ -149,7 +150,7 @@ describe.skipIf(!live)("дивизионы и стиль игрока на жи�
     const settings = panelSettings({ [START_KEY]: settingOf(start), [POINTS_FROM_KEY]: settingOf(start) });
     const schedule = new SeasonSchedule(settings);
     const rating = ratingRestrictions(runs, leaderboard, undefined, settings);
-    const projection = new SeasonsProjection(schedule, seasonStore, seasonsRepository, new RunsHooks(), new RestrictionsHooks(), rating.gate, rating.rating);
+    const projection = new SeasonsProjection(schedule, seasonStore, seasonsRepository, new RunsHooks(), new RestrictionsHooks(), rating.gate, rating.rating, { set: async () => "OK", eval: async () => 1 } as never);
     const view = new SeasonsViewService(schedule, seasonsRepository, seasonStore, friends, rating.gate, rating.rating);
     const close = new SeasonsCloseService(redis, schedule, closeRepository, rating.gate);
     return { schedule, projection, view, close };

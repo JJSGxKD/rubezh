@@ -16,9 +16,11 @@ import { PrologueService } from "../runs/prologue.service.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import type { WalletResource } from "../wallet/wallet-types.js";
+import { WATCH_MS } from "./channel-watch-rules.js";
 import { ChannelWatchService } from "./channel-watch.service.js";
 import {
   TaskCheckUnavailableError,
+  TaskEmblemFixedError,
   TaskLimitReachedError,
   TaskLinkRequiredError,
   TaskNotDoneError,
@@ -31,6 +33,7 @@ import {
 import {
   OPEN_KINDS,
   RUN_KINDS,
+  STATE_KINDS,
   TASK_KIND_IDS,
   TASK_LIMIT_GRACE_MIN,
   TASK_PERIODS,
@@ -39,11 +42,14 @@ import {
   channelLinkMode,
   countsForTasks,
   isCheckedKind,
+  isEmblemKind,
   isRunKind,
+  masterIdsOf,
   rewardReason,
   slotsFor,
   taskGroup,
   visibleOn,
+  withDynamicTargets,
   type AchievementCategory,
   type ChannelLinkMode,
   type PoolTier,
@@ -131,6 +137,29 @@ export interface TaskView {
   prestige: number;
   /** скрытое достижение — в список попадает уже открытым */
   hidden: boolean;
+  /**
+   * Сутки окна перепроверки подписки (Р115, T-0183) у заданий, за которыми сервер наблюдает;
+   * у остальных `null` — клиент не угадывает правило, а берёт его отсюда.
+   */
+  recheckDays: number | null;
+}
+
+/** Наблюдаемые задания игрока и срок окна в сутках — то, что нужно `viewOf`, чтобы заполнить `recheckDays`. */
+export interface WatchInfo {
+  taskIds: ReadonlySet<string>;
+  days: number;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Берёт ли задание под наблюдение забор награды: то же условие, что в `ChannelWatchService.start`
+ * (канал с площадкой и чатом, у площадки есть проверка подписки).
+ */
+export function isWatchedDef(def: TaskDef, hasMembership: (platform: PlatformId) => boolean): boolean {
+  const params = def.params;
+  if (def.kind !== "channel" || params === null || params.chat === undefined || params.platform === undefined) return false;
+  return hasMembership(params.platform);
 }
 
 export interface TaskCatalogView {
@@ -184,7 +213,7 @@ export class TasksService implements OnModuleInit {
 
   async view(account: AccountRef, at = new Date()): Promise<TaskView[]> {
     const { defs, progress, participation } = await this.state(account, at);
-    return viewOf(defs, progress, participation, at, account.platform);
+    return viewOf(defs, progress, participation, at, account.platform, this.watchInfo(defs));
   }
 
   /** Полоса очков дня и недели; `null` — сервис очков не подключён (старый состав модуля). */
@@ -232,7 +261,7 @@ export class TasksService implements OnModuleInit {
     // Прогресс остальных целей — как был; этой — после проверки площадки.
     const others = progress.filter((candidate) => candidate.taskId !== taskId);
     const none = { coins: 0, gems: 0, shards: 0 };
-    if (done.claimed) return { claimed: false, credited: none, tasks: viewOf(defs, [...others, done], joined, at, account.platform) };
+    if (done.claimed) return { claimed: false, credited: none, tasks: viewOf(defs, [...others, done], joined, at, account.platform, this.watchInfo(defs)) };
 
     const credited = { ...none };
     for (const [field, resource] of REWARD_RESOURCES) {
@@ -254,7 +283,7 @@ export class TasksService implements OnModuleInit {
       await this.startWatch(account, def, done.periodStart, at);
       await this.awardPassPoints(accountId, taskId, def.passPoints, at);
     }
-    return { claimed, credited, tasks: viewOf(defs, [...others, { ...done, claimed: true }], joined, at, account.platform) };
+    return { claimed, credited, tasks: viewOf(defs, [...others, { ...done, claimed: true }], joined, at, account.platform, this.watchInfo(defs)) };
   }
 
   /**
@@ -304,12 +333,12 @@ export class TasksService implements OnModuleInit {
       // Переход до исчерпания — начало мягкого часа. После исчерпания час не
       // продлевается: иначе игрок держал бы место переходами бесконечно.
       if ((mine === null || mine.completedAt === null) && (place.slots === null || place.slots.left > 0)) await this.db(this.repository.markOpened(accountId, taskId, at));
-      return { url: def.params.url, tasks: viewOf(defs, progress, participation, at, account.platform) };
+      return { url: def.params.url, tasks: viewOf(defs, progress, participation, at, account.platform, this.watchInfo(defs)) };
     }
     const done = await this.db(this.repository.complete(accountId, def, at, graceSince(at)));
     if (done === null) throw this.limitReached(accountId, taskId);
     const others = progress.filter((candidate) => candidate.taskId !== taskId);
-    return { url: def.params.url, tasks: viewOf(defs, [...others, done], withCompleted(participation, taskId, at), at, account.platform) };
+    return { url: def.params.url, tasks: viewOf(defs, [...others, done], withCompleted(participation, taskId, at), at, account.platform, this.watchInfo(defs)) };
   }
 
   /**
@@ -335,6 +364,13 @@ export class TasksService implements OnModuleInit {
     this.logger.log(JSON.stringify({ module: "tasks", event: "task_link_started", accountId, taskId, platform }));
     if ((mine === null || mine.completedAt === null) && (place.slots === null || place.slots.left > 0)) await this.db(this.repository.markOpened(accountId, taskId, at));
     return { url };
+  }
+
+  /** Наблюдаемые задания среди видимых: окно ставит только забор канала с проверкой площадки (T-0183). */
+  private watchInfo(defs: readonly TaskDef[]): WatchInfo | undefined {
+    if (this.watch === undefined) return undefined;
+    const taskIds = new Set(defs.filter((def) => isWatchedDef(def, (platform) => this.memberships.for(platform) !== null)).map((def) => def.taskId));
+    return { taskIds, days: Math.round(WATCH_MS / DAY_MS) };
   }
 
   /** Каталог, прогресс и участие игрока — разом: экран заданий ждёт самого долгого из трёх. */
@@ -435,6 +471,8 @@ export class TasksService implements OnModuleInit {
     // не слайд. Прежнюю не перепроверяем — она уже у игроков.
     if (task.image !== null && task.image !== before?.image) await this.media.require(task.image, "task");
     if (before === null) {
+      // Знаки статусов и сезонов заводит миграция: правило, кто их держит, живёт в коде, а строка без него мертва.
+      if (isEmblemKind(task.kind)) throw new TaskEmblemFixedError();
       if (!(await this.db(this.repository.insert(task, actor.accountId, at)))) throw new TaskShapeLockedError();
       await this.roles.audit({ actorAccountId: actor.accountId, action: "tasks.create", target: task.taskId, after: task });
     } else {
@@ -500,7 +538,36 @@ export class TasksService implements OnModuleInit {
       return [{ taskId: def.taskId, period: def.period, target: def.target, op: kind.op, amount: measure(run, def.filter) }];
     });
     if (deltas.every((delta) => delta.amount <= 0)) return;
-    await this.db(this.repository.applyRun({ runId: run.runId, accountId: run.accountId, at: run.finishedAt, deltas }));
+    const fresh = await this.db(this.repository.applyRun({ runId: run.runId, accountId: run.accountId, at: run.finishedAt, deltas }));
+    if (!fresh) return;
+    // «Коллекционер» (T-0322): только забег, сдвинувший «Мастера оружия», мог выполнить нового «Мастера».
+    const masters = new Set(masterIdsOf(await this.active()));
+    if (deltas.some((delta) => delta.amount > 0 && masters.has(delta.taskId))) {
+      try {
+        await this.syncMasters(run.accountId, run.finishedAt);
+      } catch (error: unknown) {
+        // Забег уже засчитан и повторно не придёт: следующее открытие витрины допишет «Коллекционера».
+        this.logger.warn(JSON.stringify({ module: "tasks", event: "masters_sync_failed", accountId: run.accountId, reason: error instanceof Error ? error.message : "unknown" }));
+      }
+    }
+  }
+
+  /**
+   * «Коллекционер» (T-0322): прогресс — сколько «Мастеров оружия» игрок выполнил, «максимум»,
+   * поэтому новый «Мастер» цель поднимает, а выполненное выполненным и остаётся. Зовут витрина
+   * достижений и записанный забег; одним запросом с `count`.
+   */
+  async syncMasters(accountId: string, at = new Date()): Promise<void> {
+    const defs = await this.active();
+    const collectors = defs.filter((def) => def.kind === "weapon_masters");
+    const masters = masterIdsOf(defs);
+    if (collectors.length === 0 || masters.length === 0) return;
+    const done = await this.db(this.repository.completedCount(accountId, masters));
+    await this.applyState(
+      accountId,
+      collectors.map((def) => ({ taskId: def.taskId, period: def.period, target: def.target, op: STATE_KINDS.weapon_masters.op, amount: done })),
+      at,
+    );
   }
 
   /** Правка каталога из панели видна сразу на этой реплике, на остальных — через полминуты. */
@@ -511,18 +578,20 @@ export class TasksService implements OnModuleInit {
   /**
    * Включённые цели, которые игрок может выполнить: цель другой площадки ему
    * не показывается, цель без площадки — всем; из пула — только набор дня и
-   * недели на `at`.
+   * недели на `at`. Строки знаков статуса и сезона сюда не входят.
    */
   private async visible(account: AccountRef, at: Date): Promise<TaskDef[]> {
     const linkable = this.linkable();
-    return inPlay(await this.active(), at).filter((def) => visibleOn(def.params, account.platform, linkable));
+    // Знаки статусов и сезонов — строки того же каталога, но не задания: их нет в списке и забрать их нельзя.
+    return inPlay(await this.active(), at).filter((def) => !isEmblemKind(def.kind) && visibleOn(def.params, account.platform, linkable));
   }
 
   private async active(): Promise<TaskDef[]> {
     const now = Date.now();
     if (this.cache === null || this.cache.until <= now) {
       const defs = await this.db(this.repository.catalog());
-      this.cache = { defs: defs.filter((def) => def.active), until: now + CATALOG_TTL_MS };
+      // Цель «Коллекционера» считается по включённым «Мастерам», а не читается из строки (T-0322).
+      this.cache = { defs: withDynamicTargets(defs.filter((def) => def.active)), until: now + CATALOG_TTL_MS };
     }
     return this.cache.defs;
   }
@@ -563,6 +632,7 @@ export function viewOf(
   participation: ReadonlyMap<string, TaskParticipation> = new Map(),
   at = new Date(),
   platform?: PlatformId,
+  watch?: WatchInfo,
 ): TaskView[] {
   const byTask = new Map(progress.map((row) => [row.taskId, row]));
   // Сравнение строк, а не `localeCompare`: порядок не должен зависеть от локали сервера.
@@ -598,6 +668,7 @@ export function viewOf(
       rung: def.rung,
       prestige: def.prestige,
       hidden: def.hidden,
+      recheckDays: watch?.taskIds.has(def.taskId) === true ? watch.days : null,
     };
   });
 }

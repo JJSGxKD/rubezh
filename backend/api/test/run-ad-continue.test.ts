@@ -90,7 +90,7 @@ class StarsLedger implements ContinueLedger {
 
 const config = () => loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv);
 
-function setup(blocks = [adBlock("adsgram", 10, { place: "second_chance" }), adBlock("adsonar", 20, { place: "second_chance" })], settings = panelSettings()) {
+function setup(blocks = [adBlock("adsgram", 10, { place: "second_chance" }), adBlock("richads", 20, { place: "second_chance" })], settings = panelSettings()) {
   const runs = new MemoryRunsRepository();
   const repository = new MemoryAdContinues();
   const adsRepository = new MemoryAds();

@@ -36,6 +36,12 @@ export const SUBSCRIPTION_USER_AGENT = "v2rayN/7.0";
  */
 export const subscriptionHwid = (cipher: SecretCipher, subscriptionKey: string): string => cipher.deriveId("proxy.subscription.hwid", subscriptionKey);
 
+/** Сколько знаков `x-hwid` видно в панели: по началу устройство находится в кабинете поставщика, полный идентификатор не нужен. */
+const HWID_PREFIX_LENGTH = 8;
+
+/** Отпечаток устройства для панели — начало `x-hwid`. Адрес подписки и ключ шифрования по нему не восстановить. */
+export const subscriptionHwidPrefix = (cipher: SecretCipher, subscriptionKey: string): string => subscriptionHwid(cipher, subscriptionKey).slice(0, HWID_PREFIX_LENGTH);
+
 /** Бросает, если имя не резолвится или хотя бы один его адрес не публичный. */
 async function assertPublicHost(target: URL, resolve: HostResolver): Promise<void> {
   const host = target.hostname.replace(/^\[|\]$/g, "");

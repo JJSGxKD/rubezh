@@ -28,8 +28,8 @@ function formatRow(entry, bus, m, marks) {
   return [`${entry.id}-${entry.variant}`, bus, fmt(m.peakDbfs), fmt(m.rmsDbfs), fmt(m.audibleMs, 0), fmt(m.tailMs, 0), flags].join("\t");
 }
 
-/** Запуск; возвращает код выхода. */
-export async function run(options, log = console.log) {
+/** Запуск; возвращает код выхода. `collect` (если задан) получает замеры и пути файлов для fx:check. */
+export async function run(options, log = console.log, collect = null) {
   try {
     const response = await fetch(options.base, { signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS) }).catch((error) => {
       if (isLocalUrl(options.base) && String(error?.cause?.code ?? "").includes("CERT")) return { ok: true };
@@ -80,6 +80,10 @@ export async function run(options, log = console.log) {
       await writeFile(join(dir, `${name}.png`), Buffer.from(item.spectrogramPng.split(",")[1], "base64"));
       report.push({ id: item.id, variant: item.variant, bus: recipe.bus, gap: recipe.gap, voices: recipe.voices, dur: recipe.dur, ...m, marks });
       rows.push(formatRow(item, recipe.bus, m, marks));
+      if (collect !== null) {
+        collect.sounds.push({ id: item.id, variant: item.variant, bus: recipe.bus, ...m, marks });
+        collect.files.push(join(dir, `${name}.wav`), join(dir, `${name}.png`));
+      }
       for (const mark of marks) {
         log(`${mark.level === "error" ? "ОШИБКА" : mark.level === "warning" ? "ПРЕДУПРЕЖДЕНИЕ" : "заметка"} ${name}: ${mark.text}`);
       }

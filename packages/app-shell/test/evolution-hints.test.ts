@@ -84,9 +84,11 @@ describe("рецепты в гайдбуке", () => {
   it("закрыты те, чей уровень выше уровня аккаунта", () => {
     const closed = (level: number): string[] => evolutionRecipes(level).filter((recipe) => recipe.locked).map((recipe) => recipe.evolution);
     // fire_rain = «Метеор» (16) + «Дальнобойность» (3).
-    expect(closed(1).sort()).toEqual(["fire_rain", "forge", "tempest", "viper"]);
+    expect(closed(1).sort()).toEqual(["fire_rain", "forge", "tempest", "viper", "whirl"]);
     // tempest = «Буря» (4) + «Залп» (8), viper = «Жало» (11) + «Закалка» (14): по таблице открытий.
-    expect(closed(6).sort()).toEqual(["fire_rain", "tempest", "viper"]);
+    expect(closed(6).sort()).toEqual(["fire_rain", "tempest", "viper", "whirl"]);
+    // whirl = «Кистень» (15) + «Мощь» (1).
+    expect(closed(14)).toEqual(["fire_rain", "whirl"]);
     expect(closed(16)).toEqual([]);
   });
 

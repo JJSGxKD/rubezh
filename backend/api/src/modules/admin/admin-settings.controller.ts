@@ -5,7 +5,8 @@ import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
-import { SETTING_KEY } from "../settings/setting-catalog.js";
+import { ChangeRequestRequiredError } from "../change-requests/change-request-errors.js";
+import { SETTING_KEY, settingByKey } from "../settings/setting-catalog.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
@@ -38,6 +39,7 @@ export class AdminSettingsController {
     const actor = accountOf(request);
     await this.limit(actor.accountId);
     const { value } = parse(() => saveSchema.parse(body), "Значение — строка, флажок или число");
+    refuseMoney(key);
     return { data: await this.settings.save(actor, keyOf(key), value) };
   }
 
@@ -46,6 +48,7 @@ export class AdminSettingsController {
   async reset(@Req() request: unknown, @Param("key") key: string): Promise<{ data: SettingView }> {
     const actor = accountOf(request);
     await this.limit(actor.accountId);
+    refuseMoney(key);
     return { data: await this.settings.reset(actor, keyOf(key)) };
   }
 
@@ -56,4 +59,10 @@ export class AdminSettingsController {
 
 function keyOf(key: string): string {
   return parse(() => z.string().regex(SETTING_KEY).parse(key), "Некорректный ключ настройки");
+}
+
+/** Ключи «деньги» (награды, цены) правит только заявка со вторым участником, и сброс к умолчанию — тоже правка. */
+function refuseMoney(key: string): void {
+  const setting = settingByKey(key);
+  if (setting?.money === true) throw new ChangeRequestRequiredError(setting.title);
 }

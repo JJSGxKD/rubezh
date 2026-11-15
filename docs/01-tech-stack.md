@@ -126,7 +126,7 @@ interface PlatformAdapter {
 
 Метод `showAd(request)` в адаптере — опциональный: показывает рекламу той
 сети и того блока, что выдал сервер, и возвращает исход — досмотрено,
-закрыто или отказ с кодом. На Telegram — SDK AdsGram, AdSonar и RichAds
+закрыто или отказ с кодом. На Telegram — SDK AdsGram и RichAds
 (`adapter-telegram/src/ads/`). Taddy показывает не SDK, а наш рекламный блок
 в оболочке: креатив сервер берёт по API сети (`35-stage4-plan.md` WP12,
 часть 9). SDK Taddy адаптер поднимает методом `prepareAds` только для учёта

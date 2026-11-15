@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { DifficultyId, RunLoadout, RunMode, RunOutcome } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunMode, RunModifierId, RunOutcome } from "@bh/shared-types";
 import { CONTENT_HASH } from "../content/hash";
 import { hashSnapshot, type ContentSnapshot } from "../content/snapshot";
 import type { RunBus } from "../engine/run-bus";
@@ -20,12 +20,13 @@ import { applyDevCommand } from "./run/dev-commands";
 import { isPrologueWon } from "./run/prologue";
 import { restartSceneData } from "./run/restart-data";
 import { inspectWorld } from "./run/inspect";
-import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
+import { AD_REROLL_COMMAND, applyCardTool, BANISH_PREFIX, canAdReroll, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { takeChestEvents, type ChestCursor } from "./sim/chests";
 import { describePressureStart } from "./sim/pressure";
 import { chooseBlessing, isAwaitingBlessing, takeSecretEvents, type SecretCursor } from "./sim/secrets";
 import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
+import { settleStalkerDeath } from "./sim/stalker";
 import { takeSiegeEvents } from "./sim/siege";
 import type { RubezhPhase } from "./sim/rubezh";
 import { isEmptyLoadout } from "./progression/run-loadout";
@@ -90,6 +91,8 @@ export interface MainSceneData {
   difficultyId: DifficultyId;
   /** режим нового забега; продолженный берёт режим из снимка. Без поля — `endless` */
   mode?: RunMode;
+  /** модификатор нового забега (T-0119); продолженный берёт его из снимка */
+  modifierIds?: readonly RunModifierId[];
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
   /** шина событий наружу: экраны рисует оболочка, движок только сообщает */
@@ -219,6 +222,8 @@ export class MainScene extends Phaser.Scene {
       difficultyId: resume?.difficultyId ?? data.difficultyId,
       // Режим продолженного забега — из снимка: пролог не должен превратиться в обычный забег (и наоборот).
       mode: resume !== undefined ? (resume.mode ?? "endless") : (data.mode ?? "endless"),
+      // Модификатор продолженного забега — тоже из снимка: оси сложности у мира другие.
+      modifierIds: resume !== undefined ? (resume.modifierIds ?? []) : (data.modifierIds ?? []),
       ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
       unitScale: data.unitScale,
       ...(loadout === undefined ? {} : { loadout }),
@@ -250,27 +255,19 @@ export class MainScene extends Phaser.Scene {
       game: this.game,
       unitScale: data.unitScale,
       renderCapFps: data.renderCapFps ?? null,
-      recording:
-        data.recordRun === true
-          ? {
-              reportId: createUuid(),
-              runId: this.runId,
-              // Метка начала — единственное обращение к часам ради записи; в
-              // симуляции часов нет и быть не может.
-              startedAt: new Date().toISOString(),
-              seed: this.seed,
-              mapId: world.mapId,
-              difficultyId: world.difficultyLevel.id,
-              startingWeaponId: this.startingWeaponId(),
-              ...(world.mode === "endless" ? {} : { mode: world.mode }),
-              contentHash: this.contentHash,
-              unitScale: data.unitScale,
-              // Продолженный забег не повторить с начала, а в забеге
-              // разработчика читы и команды в лог не пишутся.
-              replayBlocker: resume !== undefined ? "resumed" : data.dev !== undefined ? "dev" : null,
-              ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
-            }
-          : null,
+      // Запись для проверки идёт у каждого забега; полная запись — по переключателю.
+      recorder: {
+        world,
+        runId: this.runId,
+        seed: this.seed,
+        contentHash: this.contentHash,
+        startingWeaponId: this.startingWeaponId(),
+        unitScale: data.unitScale,
+        ...(data.dev === undefined ? {} : { dev: true }),
+        ...(resume === undefined ? {} : { resume }),
+        // Метка начала — единственное обращение к часам ради записи; в симуляции часов нет и быть не может.
+        ...(data.recordRun === true ? { full: { reportId: createUuid(), startedAt: new Date().toISOString() } } : {}),
+      },
     });
     this.probe = probe;
 
@@ -350,6 +347,7 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitStalkerEvents();
       this.emitSiegeEvents();
       this.emitRubezhEvents();
       if (isPrologueWon(this.world)) break;
@@ -487,6 +485,14 @@ export class MainScene extends Phaser.Scene {
     this.applyCardToolCommand(REROLL_COMMAND);
   }
 
+  /**
+   * Переброс за рекламу (tasks/T-0199). Оболочка зовёт его только после того, как сервер записал
+   * показ: сцена о ролике не знает, правило «раз за забег» держит мир.
+   */
+  rerollOffersViaAd(): void {
+    this.applyCardToolCommand(AD_REROLL_COMMAND);
+  }
+
   /** Пропуск уровня: без улучшения, за долю опыта до следующего. */
   skipOffers(): void {
     this.applyCardToolCommand(SKIP_COMMAND);
@@ -513,6 +519,7 @@ export class MainScene extends Phaser.Scene {
       left: outcome.left,
       level,
       ...(outcome.item === null ? {} : { item: outcome.item }),
+      ...(outcome.viaAd === true ? { viaAd: true as const } : {}),
     });
     if (outcome.kind === "skip") {
       this.finishChoice();
@@ -621,6 +628,7 @@ export class MainScene extends Phaser.Scene {
     // где он ещё жив, — второй шанс без второго шанса.
     if (!this.ready || this.phase === "dead" || this.phase === "downed") return null;
     const world = this.world;
+    const proof = this.probe.proofDraft(world);
     return {
       format: RUN_SNAPSHOT_FORMAT,
       contentHash: this.contentHash,
@@ -630,6 +638,7 @@ export class MainScene extends Phaser.Scene {
       difficultyId: world.difficultyLevel.id,
       startingWeaponId: this.startingWeaponId(),
       ...(world.mode === "endless" ? {} : { mode: world.mode }),
+      ...(world.modifierIds.length === 0 ? {} : { modifierIds: [...world.modifierIds] }),
       summary: {
         survivalSec: world.stats.elapsedSec,
         level: world.progression.level,
@@ -642,6 +651,8 @@ export class MainScene extends Phaser.Scene {
       ...(this.cheatsUsed ? { cheats: true } : {}),
       ...(this.sceneData.dev === undefined ? {} : { dev: true }),
       ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
+      // Запись для проверки на этот момент: продолжение дописывает её, а не начинает новую.
+      ...(proof === null ? {} : { proof }),
     };
   }
 
@@ -679,6 +690,7 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitStalkerEvents();
       this.emitSiegeEvents();
       this.emitRubezhEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world) || isAwaitingBlessing(this.world)) break;
@@ -818,6 +830,18 @@ export class MainScene extends Phaser.Scene {
     for (const ended of events.ended) this.sceneData.bus.emit("ringEnded", ended);
   }
 
+  /**
+   * Закончившиеся появления Карачуна — оболочке, для аналитики. Смерть закрывает появление после шага, как
+   * у кольца; журнал очищается сразу, чтобы запись не ушла дважды, и после восстановления снимка он пуст.
+   */
+  private emitStalkerEvents(): void {
+    settleStalkerDeath(this.world);
+    const journal = this.world.stalker.ended;
+    if (journal.length === 0) return;
+    for (const ended of journal) this.sceneData.bus.emit("stalkerEnded", ended);
+    journal.length = 0;
+  }
+
   /** Осада стоящего — оболочке: предупреждение, начало и конец. Журнал после восстановления снимка пуст. */
   private emitSiegeEvents(): void {
     const events = takeSiegeEvents(this.world, this.siegeCursor);
@@ -912,6 +936,7 @@ export class MainScene extends Phaser.Scene {
       tools: { ...progression.tools },
       toolsTotal: { ...progression.toolsTotal },
       canReroll: canReroll(this.world),
+      canAdReroll: canAdReroll(this.world),
       refreshed,
     });
   }

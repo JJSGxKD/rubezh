@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { formatDuration } from "../../common/card/labels.js";
 import { HERO_PORTRAITS, PORTRAIT_RATIO, WORDMARK_RATIO, WORDMARK_SVG } from "../../common/card/brand-art.js";
 import { estimateWidth, PALETTE, rect, renderPng, svgDocument, svgImage, text, twilightBackdrop, wrapWords } from "../../common/card/svg.js";
 import { WELCOME_TEXTS, type WelcomeLanguage } from "./welcome-texts.js";
@@ -13,7 +12,7 @@ import { WELCOME_TEXTS, type WelcomeLanguage } from "./welcome-texts.js";
  * Сменой версии сбрасываются и картинки, нарисованные без шрифта: их
  * `file_id` Telegram отдаёт так же охотно, как хорошие.
  */
-export const CARD_VERSION = 5;
+export const CARD_VERSION = 6;
 
 const WIDTH = 1200;
 const HEIGHT = 675;
@@ -22,7 +21,7 @@ const NAME_MAX = 18;
 
 export interface WelcomeProgress {
   /** лучший забег в рейтинге единой сложности; `null` — рекорда нет */
-  best: { survivalSec: number; rank: number; total: number } | null;
+  best: { points: number; survivalSec: number; rank: number; total: number } | null;
   runs: number;
 }
 
@@ -48,6 +47,11 @@ export function displayName(firstName: string | undefined, language: WelcomeLang
   return cleaned.length > NAME_MAX ? `${cleaned.slice(0, NAME_MAX - 1).trimEnd()}…` : cleaned;
 }
 
+/** Число с разрядами через неразрывный пробел: «2 340». */
+function formatNumber(value: number): string {
+  return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
+}
+
 /** Ключ кэша: имени в открытом виде в Redis нет — только хэш. */
 export function welcomeCacheKey(card: WelcomeCard): string {
   const best = card.progress.best;
@@ -58,7 +62,7 @@ export function welcomeCacheKey(card: WelcomeCard): string {
     card.progress.runs,
     // Время — с тем же округлением, что на картинке: иначе 7:42,4 и 7:42,6
     // дали бы две копии одной карточки.
-    best === null ? null : [Math.round(best.survivalSec), best.rank, best.total],
+    best === null ? null : [best.points, Math.round(best.survivalSec), best.rank, best.total],
   ]);
   return createHash("sha256").update(payload).digest("hex");
 }
@@ -97,8 +101,11 @@ export function renderWelcomeSvg(card: WelcomeCard): string {
   } else {
     const panelY = PAD + 176;
     parts.push(rect(PAD, panelY, COLUMN, 236, { fill: PALETTE.surface, stroke: PALETTE.border, radius: 24 }));
-    parts.push(text(PAD + 36, panelY + 140, formatDuration(best.survivalSec), { size: 120, fill: PALETTE.accent, weight: 800 }));
-    parts.push(text(PAD + 40, panelY + 196, texts.recordLabel(), { size: 28, fill: PALETTE.muted, spacing: 1 }));
+    const score = formatNumber(best.points);
+    // Справа от очков стоит место, поэтому длинное число уменьшается, а не наезжает на него.
+    const scoreSize = estimateWidth(score, 120, true) > COLUMN * 0.6 ? 96 : 120;
+    parts.push(text(PAD + 36, panelY + 140, score, { size: scoreSize, fill: PALETTE.accent, weight: 800 }));
+    parts.push(text(PAD + 40, panelY + 196, texts.pointsLabel(best.survivalSec), { size: 28, fill: PALETTE.muted, spacing: 1 }));
 
     const right = PAD + COLUMN - 32;
     const rank = texts.rank(best.rank, best.total);

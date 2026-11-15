@@ -5,9 +5,15 @@
  *
  * - `fx.*` — источники курсов (`modules/fx/fx.refresher.ts`);
  * - `telegram.bot` — Bot API;
+ * - `telegram.web` — публичные страницы Telegram и его CDN: аватарка бота и Mini App для
+ *   задания (Р158). Отдельно от `telegram.bot`: это не Bot API и ходит не на его хост,
+ *   поэтому у сервиса свой режим маршрута и своя строка в журнале;
+ * - `vk.api` — методы API VK ключом сообщества: проверка вступления, ответы игрокам (Р188);
+ * - `max.bot` — Bot API MAX: бот заданий-каналов (Р188);
  * - `taddy.api`, `taddy.exchange` — реклама и лента заданий Taddy;
  * - `ads.creatives` — креативы сетей;
  * - `ads.postback` — постбэки конверсий в кабинет сети;
+ * - `github.api` — GitHub: выпуски Xray и запуск обновления ядра (Р202);
  * - `secrets.check` — проверка ключа интеграции из панели;
  * - `proxy.subscription` — загрузка подписки Xray (Р101): адрес секретный, поэтому
  *   только напрямую (`direct_only`) и без пути в журнале.
@@ -22,10 +28,14 @@ export const OUTBOUND_SERVICES = [
   "fx.tonapi",
   "fx.binance",
   "telegram.bot",
+  "telegram.web",
+  "vk.api",
+  "max.bot",
   "taddy.api",
   "taddy.exchange",
   "ads.creatives",
   "ads.postback",
+  "github.api",
   "secrets.check",
   "proxy.subscription",
 ] as const;

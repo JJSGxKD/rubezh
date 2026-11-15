@@ -100,9 +100,16 @@ describe("симуляция", () => {
     // с Тараном (T-0197): счётчик убийств по типам стал на одну ячейку длиннее,
     // сумма изменилась, а убийства и уровень остались прежними. Затем — со стражем
     // рубежа (T-0120): тот же случай, ячейка в конце, убийства и уровень прежние.
-    expect(run.checksum).toBe(-789188299);
-    expect(run.world.stats.enemiesKilled).toBe(481);
-    expect(run.world.progression.level).toBe(19);
+    // Затем — с Ледяным духом и Кистенем (T-0281): пул врагов сценария и
+    // предложения уровня стали шире — убито 459 вместо 481, уровень прежний (19).
+    // Затем — с неубиваемым преследователем (T-0421): ещё одна ячейка счётчика по типам,
+    // убийства и уровень прежние. Затем — с Болотником (T-0282): ещё один тип в смеси
+    // сценария сдвинул генератор, а ядовитая лужа и касание бросают шанс состояния из того
+    // же потока, поэтому забег пошёл другим путём набора — убито 99, уровень 10. Сценарий
+    // хаотичен по набору: без Болотника тот же seed даёт 459 и 19.
+    expect(run.checksum).toBe(-1280386854);
+    expect(run.world.stats.enemiesKilled).toBe(99);
+    expect(run.world.progression.level).toBe(10);
   });
 
   it("расходится на другом seed — иначе seed ни на что не влияет", () => {
@@ -149,5 +156,32 @@ describe("рубеж и детерминизм (T-0120)", () => {
       return checksumWorld(world);
     };
     expect(sumOf(true)).not.toBe(sumOf(false));
+  });
+});
+
+describe("модификатор забега и детерминизм (T-0119)", () => {
+  const scenario = { seed: 20260912, ticks: 1800, population: 80, weights: ALL_PATTERNS_WEIGHTS, immortalPlayer: true };
+
+  it("пустой список модификаторов считается побитово так же, как забег без поля", () => {
+    const plain = runScripted(scenario);
+    const empty = runScripted({ ...scenario, modifierIds: [] });
+    expect(empty.checksum).toBe(plain.checksum);
+    expect(empty.world.stats).toEqual(plain.world.stats);
+  });
+
+  it("два мира с одним seed и «Спешкой» дают одну сумму", () => {
+    const first = runScripted({ ...scenario, modifierIds: ["hurry"] });
+    const second = runScripted({ ...scenario, modifierIds: ["hurry"] });
+    expect(second.checksum).toBe(first.checksum);
+    expect(second.world.stats).toEqual(first.world.stats);
+  });
+
+  it("то же для «Инверсии», а модификатор меняет сумму: опыт в бою растёт быстрее", () => {
+    const plain = runScripted(scenario);
+    const first = runScripted({ ...scenario, modifierIds: ["inverse"] });
+    const second = runScripted({ ...scenario, modifierIds: ["inverse"] });
+    expect(second.checksum).toBe(first.checksum);
+    expect(first.checksum).not.toBe(plain.checksum);
+    expect(first.world.stats.xpCollected).toBeGreaterThan(plain.world.stats.xpCollected);
   });
 });

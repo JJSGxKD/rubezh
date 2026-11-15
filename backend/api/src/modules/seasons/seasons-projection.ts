@@ -1,10 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import type { Redis } from "ioredis";
 import { withTimeout } from "../../common/with-timeout.js";
+import { REDIS } from "../../infra/redis.js";
 import { scoreOf } from "../rating/rating-switch.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RestrictionsHooks, type RestrictionChange } from "../restrictions/restrictions-hooks.js";
 import { RatingRestrictions } from "../runs/rating-restrictions.js";
 import { COMMON_ONLY } from "../runs/leaderboard.store.js";
+import { RELEASE_SCRIPT } from "../runs/rating-restrictions.js";
 import { isRatedRun } from "../runs/rated-runs.js";
 import { DIFFICULTIES, RATED_DIFFICULTIES, isRatedDifficulty, type Difficulty } from "../runs/run-rules.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
@@ -30,6 +34,13 @@ import { SEASONS_REPOSITORY, type SeasonsRepository } from "./seasons.repository
  * Таблица — кеш: закрытие сезона её не читает, а любое расхождение лечит
  * пересборка `rebuild` из базы.
  *
+ * Смена `rating.points-from` на понедельник идущей недели (tasks/T-0446, Р212)
+ * переводит идущий сезон на очки: его доска живёт под новым ключом `pts:…` и
+ * пуста, поэтому `switchBoard` пересобирает её из базы сама. API работает
+ * несколькими репликами, и сообщение о смене приходит каждой: пересборку ведёт
+ * та, что взяла замок в Redis; пересборка идемпотентна, так что запоздавшая
+ * реплика лишь повторит её.
+ *
  * Единая сложность (Р126, T-0191): таблицы есть только у рейтинговых сложностей,
  * и в них идут забеги не раньше отсечки рейтинга (`SeasonSchedule.ratingSince`).
  * Пересборка очищает таблицы остальных сложностей.
@@ -37,12 +48,17 @@ import { SEASONS_REPOSITORY, type SeasonsRepository } from "./seasons.repository
 
 const DB_TIMEOUT_MS = 3_000;
 const REDIS_TIMEOUT_MS = 2_000;
+const SWITCH_LOCK_KEY = "seasons:board-switch:lock";
+/** Пересборка недели идёт секунды; срок — страховка от упавшей реплики, лок отпускается в конце. */
+const SWITCH_LOCK_TTL_MS = 120_000;
 /** Виды, которые закрывают рейтинг: свой и блокировка целиком. */
 const RATING_KINDS = new Set(["leaderboard", "all"]);
 
 @Injectable()
 export class SeasonsProjection implements OnModuleInit {
   private readonly logger = new Logger("seasons");
+  /** Ключ доски, которую эта реплика уже пересобрала после перехода на очки; на старте — нет. */
+  private switchedKey: string | null = null;
 
   constructor(
     private readonly schedule: SeasonSchedule,
@@ -52,6 +68,7 @@ export class SeasonsProjection implements OnModuleInit {
     private readonly restrictionsHooks: RestrictionsHooks,
     private readonly restrictions: AccountRestrictions,
     private readonly rating: RatingRestrictions,
+    @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
   ) {}
 
   onModuleInit(): void {
@@ -62,6 +79,35 @@ export class SeasonsProjection implements OnModuleInit {
     // Отдельная доска — свои слушатели: имена слушателей уникальны, а правила у них другие.
     this.restrictionsHooks.onImposed("seasons-board", async (change) => await this.separated(change));
     this.restrictionsHooks.onSettled("seasons-board", async (change) => await this.unseparated(change));
+    // Слушатель настроек синхронный: пересборка идёт в фоне, а её сбой не выходит наружу.
+    this.schedule.onScoringSettingChange(() => void this.switchBoard());
+  }
+
+  /**
+   * Идущий сезон стал сезоном по очкам, а его доска (`pts:…`) ещё не собрана:
+   * пересобрать её из базы под замком Redis. Сезон по времени не трогается —
+   * его доска и так полна. Замок занят — пересобирает другая реплика.
+   * Исключений не бросает: сбой уходит в лог, замок снимается всегда.
+   */
+  async switchBoard(at = new Date()): Promise<void> {
+    const season = this.schedule.current(at);
+    if (season === null || this.schedule.scoringOf(season) !== "points") return;
+    const key = this.schedule.boardSeason(season).key;
+    if (key === this.switchedKey) return;
+    const token = randomUUID();
+    try {
+      const taken = await withTimeout(this.redis.set(SWITCH_LOCK_KEY, token, "PX", SWITCH_LOCK_TTL_MS, "NX"), REDIS_TIMEOUT_MS, "seasons: лок смены доски");
+      if (taken === null) return;
+      try {
+        const counts = await this.rebuild(at);
+        this.switchedKey = key;
+        this.logger.log(JSON.stringify({ module: "seasons", event: "season_board_switched", key, counts }));
+      } finally {
+        await withTimeout(this.redis.eval(RELEASE_SCRIPT, 1, SWITCH_LOCK_KEY, token) as Promise<unknown>, REDIS_TIMEOUT_MS, "seasons: снятие лока смены доски");
+      }
+    } catch (error: unknown) {
+      this.logger.warn(JSON.stringify({ module: "seasons", event: "season_board_switch_failed", key, reason: error instanceof Error ? error.message : String(error) }));
+    }
   }
 
   /**

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
+import { scoreOf, type Scoring } from "../rating/rating-switch.js";
 import { isRatedRun } from "../runs/rated-runs.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { SeasonSchedule } from "../seasons/seasons-schedule.js";
@@ -58,8 +59,8 @@ export class FeedService implements OnModuleInit {
   async recorded(run: RecordedRun): Promise<void> {
     try {
       if (!isFeedRun(run) || !isRatedRun(run.difficulty, run.finishedAt, this.schedule.ratingSince())) return;
-      const weekRecord = await this.beatsWeekTop(run);
-      const events = feedEventsOf(run, { longRunSec: this.settings.get(SETTINGS.feedLongRunSec) }, weekRecord);
+      const { record, scoring } = await this.beatsWeekTop(run);
+      const events = feedEventsOf(run, { longRunSec: this.settings.get(SETTINGS.feedLongRunSec) }, record, scoring);
       await this.repository.add(events, Date.now());
     } catch (error: unknown) {
       this.warn("record_failed", error);
@@ -86,13 +87,20 @@ export class FeedService implements OnModuleInit {
     this.cached = null;
   }
 
-  /** Обошёл ли забег лидера таблицы недели; сезонов нет — рекордов нет. */
-  private async beatsWeekTop(run: RecordedRun): Promise<boolean> {
+  /**
+   * Обошёл ли забег лидера таблицы недели в мере сезона (очки или время); сезонов
+   * нет или у забега нет нужного счёта — рекордов нет. Лидер по очкам лежит под
+   * ключом доски с `pts:`, поэтому две меры не смешиваются.
+   */
+  private async beatsWeekTop(run: RecordedRun): Promise<{ record: boolean; scoring: Scoring }> {
     const season = this.schedule.current(run.finishedAt);
-    if (season === null) return false;
-    const previous = await this.repository.bumpWeekTop(season.key, run.difficulty, run.survivalSec);
+    if (season === null) return { record: false, scoring: "time" };
+    const scoring = this.schedule.scoringOf(season);
+    const score = scoreOf(run, scoring);
+    if (score === null) return { record: false, scoring };
+    const previous = await this.repository.bumpWeekTop(this.schedule.boardSeason(season).key, run.difficulty, score);
     // Первый забег недели на пустой таблице (-1) рекордом не считается.
-    return previous > 0 && run.survivalSec > previous;
+    return { record: previous > 0 && score > previous, scoring };
   }
 
   private async rebuild(now: Date): Promise<FeedView> {
@@ -140,5 +148,5 @@ function viewOf(event: FeedEvent, names: ReadonlyMap<string, string>): FeedEvent
   if (name === undefined) return [];
   // Сырой id содержит id забега: клиенту нужен только ключ строки.
   const id = createHash("sha1").update(event.id).digest("hex").slice(0, 12);
-  return [{ id, kind: event.kind, name, at: new Date(event.atMs).toISOString(), seconds: event.seconds }];
+  return [{ id, kind: event.kind, name, at: new Date(event.atMs).toISOString(), seconds: event.seconds, points: event.points }];
 }

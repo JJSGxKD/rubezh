@@ -51,6 +51,8 @@ const taskSchema = z.object({
   slots: z.optional(z.nullable(z.object({ left: z.number(), total: z.number(), holdUntil: z.nullable(z.string()) }))),
   /** картинка 1:1 партнёрской цели (Р82) — путь от адреса API; сервер до картинок поля не отдавал */
   image: z.optional(z.nullable(z.string())),
+  /** сутки окна перепроверки подписки (Р115) у наблюдаемых заданий; сервер до T-0183 поля не отдавал */
+  recheckDays: z.optional(z.nullable(z.number())),
   /** ступень пула ротации — экрану не нужна, сервер до ротации поля не отдавал */
   tier: z.optional(z.nullable(z.string())),
   /** оружие, стихия или сложность цели — по ним строится текст; сервер до ротации поля не отдавал */
@@ -163,7 +165,7 @@ export function goalFilterParams(task: Pick<TaskItem, "kind"> & { filter?: TaskI
   const filter = task.filter ?? null;
   if (filter === null) return {};
   if (task.kind === "weapon_runs" && filter.weapon !== undefined) return { weapon: t(`weapon.${filter.weapon}.name`) };
-  if (task.kind === "element_runs" && filter.element !== undefined) return { element: t(`task.element.${filter.element}`) };
+  if ((task.kind === "element_runs" || task.kind === "element_kills") && filter.element !== undefined) return { element: t(`task.element.${filter.element}`) };
   if ((task.kind === "difficulty_runs" || task.kind === "difficulty_survive_sec") && filter.difficulty !== undefined) {
     return { difficulty: t(`difficulty.${filter.difficulty}.name`) };
   }

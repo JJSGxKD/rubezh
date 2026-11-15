@@ -1,0 +1,78 @@
+{
+  "log": {
+    "loglevel": "warning",
+    "access": "none"
+  },
+  "inbounds": [
+    {
+      "tag": "in-0",
+      "listen": "127.0.0.1",
+      "port": 10800,
+      "protocol": "socks",
+      "settings": {
+        "auth": "noauth",
+        "udp": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "out-main-{{KEY}}",
+      "protocol": "vmess",
+      "settings": {
+        "vnext": [
+          {
+            "address": "203.0.113.12",
+            "port": 80,
+            "users": [
+              {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "alterId": 0,
+                "security": "auto"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none",
+        "tcpSettings": {
+          "header": {
+            "type": "http",
+            "request": {
+              "path": [
+                "/x"
+              ],
+              "headers": {
+                "Host": [
+                  "a.example.com",
+                  "b.example.com"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "mux": {
+        "enabled": false
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": [
+          "in-0"
+        ],
+        "outboundTag": "out-main-{{KEY}}"
+      }
+    ]
+  }
+}

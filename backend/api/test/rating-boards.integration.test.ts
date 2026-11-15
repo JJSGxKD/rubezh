@@ -38,6 +38,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { ratingRestrictions } from "./helpers/memory-runs.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Доски рейтинга по очкам на настоящих Postgres и Redis (tasks/T-0294). Адреса —
@@ -130,12 +131,12 @@ describe.skipIf(!live)("доски рейтинга по очкам на жив�
   });
 
   async function player(name = "Игрок"): Promise<AccountRef> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(500_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: name, username: null, photoUrl: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
     return { accountId: created.accountId, platform: "telegram", platformUserId: created.platformUserId };
   }
 
   async function moderator(): Promise<AccountRef> {
-    const created = await memoryAccounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: "Модератор", username: null, photoUrl: null }, Date.now());
+    const created = await memoryAccounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Модератор", username: null, photoUrl: null }, Date.now());
     await rolesRepository.grant(created.accountId, "owner", null);
     return { accountId: created.accountId, platform: "telegram", platformUserId: created.platformUserId };
   }
@@ -167,7 +168,7 @@ describe.skipIf(!live)("доски рейтинга по очкам на жив�
     const rating = ratingRestrictions(runs, leaderboard, undefined, settings);
     const roles = new RolesService(config, rolesRepository, memoryAccounts);
     const service = new RunsService(config, runs, leaderboard, roles, hooks, new RunContinues(), new RunLoadouts(), rating.rating, undefined, killsScorer());
-    const projection = new SeasonsProjection(schedule, seasonStore, seasonsRepository, hooks, new RestrictionsHooks(), rating.gate, rating.rating);
+    const projection = new SeasonsProjection(schedule, seasonStore, seasonsRepository, hooks, new RestrictionsHooks(), rating.gate, rating.rating, { set: async () => "OK", eval: async () => 1 } as never);
     projection.onModuleInit();
     const seasonsView = new SeasonsViewService(schedule, seasonsRepository, seasonStore, friends, rating.gate, rating.rating);
     const close = new SeasonsCloseService(redis, schedule, closeRepository, rating.gate);

@@ -1,4 +1,4 @@
-import { pluralRu } from "../../common/card/labels.js";
+import { formatDuration, pluralRu } from "../../common/card/labels.js";
 
 /**
  * Тексты приветствия по `/start` на языке пользователя
@@ -26,7 +26,8 @@ export interface WelcomeTexts {
   newcomerLead: string;
   newcomerPoints: readonly string[];
   newcomerCall: string;
-  recordLabel(): string;
+  /** подпись под очками лучшего забега: сколько он длился */
+  pointsLabel(survivalSec: number): string;
   rank(rank: number, total: number): string;
   runs(count: number): string;
   veteranCall: string;
@@ -44,7 +45,7 @@ export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
     newcomerLead: "Продержись как можно дольше против волн, которые не кончаются.",
     newcomerPoints: ["Персонаж атакует сам — ты ведёшь его пальцем", "Собирай кристаллы и выбирай улучшения", "Каждая минута злее предыдущей"],
     newcomerCall: "Жми «Играть» — первый забег займёт пару минут",
-    recordLabel: () => "рекорд",
+    pointsLabel: (survivalSec) => `очков · за ${formatDuration(survivalSec)}`,
     rank: (rank, total) => `#${rank} из ${total}`,
     runs: (count) => `${count} ${pluralRu(count, "забег", "забега", "забегов")}`,
     veteranCall: "Побьёшь свой рекорд?",
@@ -62,7 +63,7 @@ export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
     newcomerLead: "Hold out as long as you can against waves that never end.",
     newcomerPoints: ["Your hero attacks on its own — you steer", "Collect crystals and pick upgrades", "Every minute is harder than the last"],
     newcomerCall: "Tap “Play” — your first run takes a couple of minutes",
-    recordLabel: () => "best",
+    pointsLabel: (survivalSec) => `points · in ${formatDuration(survivalSec)}`,
     rank: (rank, total) => `#${rank} of ${total}`,
     runs: (count) => `${count} ${count === 1 ? "run" : "runs"}`,
     veteranCall: "Can you beat your record?",

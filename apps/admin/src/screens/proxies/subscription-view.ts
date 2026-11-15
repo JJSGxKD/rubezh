@@ -1,11 +1,12 @@
-import { countriesOf, type SubscriptionInfo, type SubscriptionNode, type SubscriptionOverview } from "../../api/proxy-subscription";
+import { countriesOf, type SubscriptionDevice, type SubscriptionInfo, type SubscriptionNode, type SubscriptionOverview, type SubscriptionRouting } from "../../api/proxy-subscription";
 import { formatTime, plural } from "../../format";
 
 /**
  * Чистые функции блока «Подписки Xray» (docs/35-stage4-plan.md Р101, Р192):
- * проверка адреса до отправки, строки трафика и итога обновления, сводка по узлам
- * и входам, порядок узлов. Вынесены из компонентов ради теста; сервер проверит то
- * же самое ещё раз.
+ * проверка адреса до отправки, строки трафика, устройства, маршрутизации и итога
+ * обновления, транспорт и безопасность узла словами, сводка по узлам и входам,
+ * порядок узлов. Вынесены из компонентов ради теста; сервер проверит то же самое
+ * ещё раз.
  */
 
 const URL_PROBLEMS = {
@@ -88,6 +89,74 @@ export function trafficLine(subscription: Pick<SubscriptionInfo, "trafficUsedByt
   return until === null ? traffic : `${traffic} · до ${until}`;
 }
 
+/** Транспорт узла так, как его называет Xray: `tcp` с версии 24 — «RAW». */
+const TRANSPORTS: ReadonlyMap<string, string> = new Map([
+  ["tcp", "RAW"],
+  ["ws", "WebSocket"],
+  ["grpc", "gRPC"],
+  ["httpupgrade", "HTTPUpgrade"],
+  ["xhttp", "XHTTP"],
+]);
+
+/** Транспорт словами; нет сведений — прочерк, незнакомое значение — как есть. */
+export function transportLabel(network: string | null): string {
+  if (network === null) return "—";
+  return TRANSPORTS.get(network) ?? network;
+}
+
+/**
+ * Безопасность словами: «TLS», «REALITY», для `none` — по протоколу. VLESS и
+ * Trojan без TLS и REALITY идут открытым текстом — «без шифрования». VMess и
+ * Shadowsocks шифруют сами, и такая надпись была бы неправдой — «шифр протокола».
+ * Протокол незнакомый — значение как есть. Флаг `flow` дописывается: Vision коротко,
+ * другой — как есть. Нет сведений о безопасности — прочерк.
+ */
+export function securityLabel(protocol: string, security: string | null, flow: string | null): string {
+  if (security === null) return "—";
+  let base: string;
+  if (security === "tls") base = "TLS";
+  else if (security === "reality") base = "REALITY";
+  else if (security === "none" && (protocol === "vless" || protocol === "trojan")) base = "без шифрования";
+  else if (security === "none" && (protocol === "vmess" || protocol === "shadowsocks")) base = "шифр протокола";
+  else base = security;
+  if (flow === null || flow === "") return base;
+  return `${base} · ${flow === "xtls-rprx-vision" ? "Vision" : flow}`;
+}
+
+/** «Занимает 1 устройство у поставщика · отпечаток 3f9a2c1b… · Linux, v2rayN/7.0». */
+export function deviceLine(device: SubscriptionDevice): string {
+  const head = `Занимает ${String(device.count)} ${plural(device.count, ["устройство", "устройства", "устройств"])} у поставщика`;
+  if (device.hwidPrefix === null) return `${head} · отпечаток появится, когда на сервере будет ключ шифрования`;
+  return `${head} · отпечаток ${device.hwidPrefix}… · ${device.os}, ${device.userAgent}`;
+}
+
+const ROUTING_SOURCES: Record<SubscriptionRouting["source"], string> = {
+  none: "",
+  json: "в JSON-конфиге",
+  header: "в заголовке поставщика",
+  "json+header": "в JSON-конфиге и заголовке поставщика",
+};
+
+/**
+ * Своя маршрутизация подписки — только для сведения. Записи мимо туннеля и
+ * блокировки считаются числом, подсказки — имена списков `geosite:`/`geoip:`;
+ * нулевая часть опускается. Заголовок, который не разобрался, — «состав не разобран».
+ */
+export function routingLine(routing: SubscriptionRouting | null): string {
+  if (routing === null) return "Своя маршрутизация: станет известно после обновления подписки";
+  if (routing.source === "none") return "Своя маршрутизация: нет";
+  const head = `Своя маршрутизация: есть (${ROUTING_SOURCES[routing.source]})`;
+  const tail = "Наш перебор её не применяет";
+  if (routing.direct === null && routing.block === null) return `${head}, состав не разобран. ${tail}`;
+
+  const parts: string[] = [];
+  const direct = routing.direct ?? 0;
+  const block = routing.block ?? 0;
+  if (direct > 0) parts.push(`мимо туннеля ${String(direct)}${routing.hints.length === 0 ? "" : `, например ${routing.hints.join(", ")}`}`);
+  if (block > 0) parts.push(`блокируется ${String(block)}`);
+  return parts.length === 0 ? `${head}. ${tail}` : `${head} — ${parts.join("; ")}. ${tail}`;
+}
+
 /** Итог последнего обновления: неудачный — красным, текст сервера как есть. */
 export function refreshLine(subscription: Pick<SubscriptionInfo, "lastRefreshAt" | "lastRefreshOk" | "lastRefreshNote">): { tone: "neutral" | "danger"; text: string } {
   if (subscription.lastRefreshAt === null) return { tone: "neutral", text: "Ещё не обновлялась — сервер обновит подписку в течение минуты" };
@@ -135,8 +204,10 @@ export interface NodeRow {
   nodeKey: string;
   name: string;
   protocol: string;
+  transportText: string;
+  securityText: string;
   host: string;
-  countryText: string;
+  country: string | null;
   statusLabel: string;
   tone: "success" | "neutral" | "danger";
   latencyText: string;
@@ -156,8 +227,10 @@ export function nodeRows(nodes: readonly SubscriptionNode[]): NodeRow[] {
       nodeKey: node.nodeKey,
       name: node.name,
       protocol: node.protocol,
+      transportText: transportLabel(node.network),
+      securityText: securityLabel(node.protocol, node.security, node.flow),
       host: node.host,
-      countryText: node.country ?? "—",
+      country: node.country,
       statusLabel: STATE_VIEW[node.state].label,
       tone: STATE_VIEW[node.state].tone,
       latencyText: node.state === "healthy" && node.latencyMs !== null ? `${String(node.latencyMs)} мс` : "—",

@@ -1,8 +1,9 @@
 import type { EnemyDef, PassiveDef, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
-import { addPassive } from "../src/game/progression/loadout";
+import { addPassive, addWeapon } from "../src/game/progression/loadout";
 import { refreshPlayerStats } from "../src/game/progression/levels";
 import { orbiterRenderPoints } from "../src/game/render/orbiter-points";
+import { orbiterLook } from "../src/game/render/looks";
 import { createWorld, DEFAULT_SIM_CONFIG, type World } from "../src/game/sim/world";
 import { effectiveWeaponLevel, orbiterCount, type OrbiterPoint } from "../src/game/weapons";
 import type { ResolvedWeaponLevel } from "../src/game/weapons/weapon-types";
@@ -99,5 +100,41 @@ describe("положения оберегов для рендера", () => {
   it("без оберегов — ноль точек", () => {
     const world = createWorld({ seed: 1, enemies: [DUMMY], weapons: [] });
     expect(orbiterRenderPoints(world, 0, [])).toBe(0);
+  });
+});
+
+describe("облик оберегов по оружию слота", () => {
+  const FLAIL: WeaponDef = { ...WARD, id: "flail" };
+
+  it("вместе с точками пишет id оружия, чьё это обереги, в порядке слотов", () => {
+    const world = createWorld({
+      seed: 1,
+      enemies: [DUMMY],
+      weapons: [WARD, FLAIL],
+      loadoutLimits: { weapons: 2, passives: { attack: 0, defense: 0, mobility: 0 } },
+    });
+    addWeapon(world.loadout, 1);
+    const out: OrbiterPoint[] = [];
+    const ids: string[] = [];
+    const count = orbiterRenderPoints(world, 1, out, ids);
+
+    expect(world.loadout.weapons.length).toBe(2);
+    expect(ids.slice(0, count)).toEqual(["ward", "ward", "flail", "flail"]);
+  });
+
+  it("кистень и круговерть рисуются своими кадрами, а не кадром оберега", () => {
+    expect(orbiterLook("ward").frame).toBe("fx/orbiter_ward0");
+    expect(orbiterLook("flail").frame).toBe("fx/orbiter_flail0");
+    expect(orbiterLook("whirl").frame).toBe("fx/orbiter_whirl0");
+  });
+
+  it("груз кистеня крупнее оберега, круговерти — не мельче кистеня", () => {
+    expect(orbiterLook("flail").radius).toBeGreaterThan(orbiterLook("ward").radius);
+    expect(orbiterLook("whirl").radius).toBeGreaterThanOrEqual(orbiterLook("flail").radius);
+    expect(orbiterLook("flail").color).not.toBe(orbiterLook("ward").color);
+  });
+
+  it("оружие без своего облика рисуется как оберег", () => {
+    expect(orbiterLook("blade_whirl")).toBe(orbiterLook("ward"));
   });
 });

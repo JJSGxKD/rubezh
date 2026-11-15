@@ -49,7 +49,7 @@ export type HapticType =
  * места по сессии показа.
  */
 export interface AdShowRequest {
-  /** сеть из выдачи сервера: `adsgram`, `adsonar`, `richads`, `taddy` */
+  /** сеть из выдачи сервера: `adsgram`, `richads`, `taddy` */
   network: string;
   /** блок в кабинете сети; `null` — показ по ключам сети */
   blockId: string | null;
@@ -534,6 +534,8 @@ export interface EnemyPatternParams {
   };
   /** Страж кольца держит место в строю; числа кольца — у события таймлайна, а не у врага. */
   cordon: Record<string, never>;
+  /** Неубиваемый преследователь (Р205): числа тела — `core-game/src/content/stalker.ts`, а не у врага. */
+  stalker: Record<string, never>;
 }
 
 export type EnemyPattern = keyof EnemyPatternParams;
@@ -572,6 +574,22 @@ export type ElementId = (typeof ELEMENTS)[number];
 
 /** Стихии, у которых есть состояние и сопротивление, — всё, кроме физического. */
 export type StatusElement = Exclude<ElementId, "physical">;
+
+/**
+ * След врага: за ним на земле остаются лужи (`sim/hazards.ts`, Р157). Задаётся
+ * данными любому паттерну; стихия лужи — `element` врага, шанс состояния — его
+ * `statusChance`. Коридоры проверяет тест контента.
+ */
+export interface EnemyTrailDef {
+  /** как часто враг оставляет лужу, секунды его жизни; первая — через столько же после появления (0,5…5) */
+  everySec: number;
+  /** радиус лужи в игровых единицах (12…60) */
+  radius: number;
+  /** сколько лужа живёт, секунды (1…8) */
+  lifeSec: number;
+  /** урон игроку в луже в секунду (1…20); бьёт тиками по полсекунды */
+  damagePerSec: number;
+}
 
 interface EnemyDefBase {
   id: string;
@@ -627,6 +645,8 @@ interface EnemyDefBase {
   element?: StatusElement;
   /** шанс наложить состояние за попадание, от 0 до 1; не задан — каждое попадание */
   statusChance?: number;
+  /** след из луж за врагом; не задан — врага без следа */
+  trail?: EnemyTrailDef;
 }
 
 /**
@@ -1269,8 +1289,14 @@ export interface SecretsDef {
    * размера `chestSize`; за `timeLimitSec` секунд не добил — разлом закрыт без награды
    */
   rift: { radius: number; elites: number; ringRadius: number; chestSize: ChestSize; timeLimitSec: number };
-  /** огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому */
-  wisp: { appearSec: number; speed: number };
+  /**
+   * огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и
+   * ведёт к ближайшему неоткрытому шагами (Р214): перелёт длиной `hopUnits` в сторону цели со
+   * скоростью `speed` и боковым отклонением `swayMin…swayMax` долей шага, каждый следующий шаг — в
+   * другую сторону; после посадки ждёт, пока игрок не подойдёт ближе `waitUnits`; последний шаг
+   * идёт прямо к краю круга цели. Нет неоткрытых мест — гаснет
+   */
+  wisp: { appearSec: number; speed: number; hopUnits: number; swayMin: number; swayMax: number; waitUnits: number };
   /** набор благословений капища */
   blessings: readonly BlessingDef[];
 }
@@ -1301,6 +1327,74 @@ export interface SiegeDef {
   cordon: { enemy: string; count: number; ring: CordonRingDef };
   /** сколько элит выходит кольцом на нулевом уровне; типы — те, что таймлайн к этой секунде уже выпускал */
   eliteCount: number;
+}
+
+/**
+ * Тело неубиваемого преследователя (docs/35-stage4-plan.md, Р205, tasks/T-0421): удары оружия его
+ * не убивают, а отталкивают, а касание снимает долю здоровья и отбрасывает игрока. Расстояния — в
+ * игровых единицах, время — в секундах.
+ */
+export interface StalkerBodyDef {
+  /** доля максимума здоровья игрока за одно касание, мимо брони и сопротивлений */
+  touchMaxHpShare: number;
+  /** отброс игрока после касания: на сколько единиц и за сколько секунд */
+  knockback: { distance: number; sec: number };
+  /** сколько после касания он не бьёт снова */
+  touchCooldownSec: number;
+  /** сколько после касания он стоит на месте */
+  recoverSec: number;
+  push: {
+    /** первый толчок серии, единиц */
+    first: number;
+    /** каждый следующий толчок серии — предыдущий, умноженный на это */
+    decay: number;
+    /** столько секунд без попаданий — серия сначала */
+    seriesResetSec: number;
+    /** за любые 60 тиков подряд — не дальше этого, единиц */
+    maxPerSec: number;
+  };
+}
+
+/** Отрезок значений `[min, max]`, из которого поток случайности бросает число. */
+export interface StalkerRange {
+  min: number;
+  max: number;
+}
+
+/**
+ * Когда и как появляется преследователь (Р205, tasks/T-0423). Время — в секундах, расстояния — в
+ * игровых единицах.
+ */
+export interface StalkerAppearDef {
+  /** с какой секунды забега он приходит */
+  fromSec: number;
+  /** первое предвестие — через столько секунд после `fromSec` */
+  firstDelaySec: StalkerRange;
+  /** пауза от конца появления до следующего предвестия на `fromSec` */
+  gapSec: StalkerRange;
+  /** она же на `lateAtSec` и дальше; между ними — линейно */
+  lateGapSec: StalkerRange;
+  lateAtSec: number;
+  /** сколько секунд длится погоня */
+  chaseSec: StalkerRange;
+  /** сколько горит предвестие до выхода */
+  omenSec: number;
+  /** сколько он стоит, растворяясь, после погони */
+  fadeSec: number;
+  /** на каком расстоянии от игрока выходит: на виду и у самого узкого экрана */
+  appearDistance: number;
+  /** дальше этого от игрока он растворяется и возникает ближе */
+  farDistance: number;
+  /** ниже этого уровня аккаунта он не приходит; забег без уровня идёт с ним */
+  minAccountLevel: number;
+}
+
+/** Правила преследователя целиком: какой враг им служит, как устроено его тело и когда он приходит. */
+export interface StalkerDef {
+  /** id врага паттерна `stalker` */
+  enemy: string;
+  body: StalkerBodyDef;
+  appear: StalkerAppearDef;
 }
 
 /** Какие виды тайников забег нашёл и использовал: без повторов, в каноническом порядке. */
@@ -1418,7 +1512,51 @@ export interface DifficultyDef {
   spawnRateMul: number;
   /** потолок живых врагов одновременно */
   maxAliveMul: number;
+  /**
+   * Опыт в бою: сумма кристаллов за врага равна `round(xp · xpMul)`. Есть только у
+   * сложности, составленной с модификатором забега (`composeDifficulty`); в контенте
+   * поля нет, и нет поля — множитель 1.
+   */
+  xpMul?: number;
 }
+
+/**
+ * Модификатор забега (docs/39-retention-mechanics.md Б8, Р105): условие, которое игрок
+ * берёт на себя перед забегом ради награды. Оси ложатся умножением поверх выбранной
+ * сложности, плюс опыт в бою. Награда за забег — отдельная таблица
+ * `RUN_MODIFIER_REWARD_MUL`, движок её не читает.
+ */
+export type RunModifierId = "hurry" | "inverse";
+
+export const RUN_MODIFIER_IDS: readonly RunModifierId[] = ["hurry", "inverse"];
+
+export interface RunModifierDef {
+  id: RunModifierId;
+  nameKey: string;
+  descriptionKey: string;
+  /** здоровье врагов, множитель поверх сложности */
+  enemyHpMul: number;
+  /** урон врагов */
+  enemyDamageMul: number;
+  /** темп спавна — врагов в секунду */
+  spawnRateMul: number;
+  /** потолок живых врагов одновременно */
+  maxAliveMul: number;
+  /** опыт в бою: множитель суммы кристаллов за убитого врага */
+  xpMul: number;
+}
+
+/**
+ * Во сколько раз модификатор увеличивает награду за забег (монеты и опыт аккаунта).
+ * Лежит здесь, а не в контенте движка, потому что её читают двое: сервер, когда
+ * считает награду (T-0122), и лист «Перед забегом», когда подписывает выбор (T-0123).
+ * Движок её не читает — награда не влияет на сам бой. Числа стартовые, калибрует
+ * геймдизайнер.
+ */
+export const RUN_MODIFIER_REWARD_MUL: Readonly<Record<RunModifierId, number>> = {
+  hurry: 1.25,
+  inverse: 1.25,
+};
 
 /** Наклоны рычагов подстройки: на сколько множитель меняется на единицу уровня давления. */
 export interface PressureLeversDef {
@@ -1500,6 +1638,8 @@ export interface AccountUnlockDef {
   passives?: string[];
   /** слоты с этого уровня; не заданное — как на уровне ниже */
   slots?: { weapons?: number; passives?: Partial<Record<PassiveCategory, number>> };
+  /** модификаторы забега, которые открываются на этом уровне (`RUN_MODIFIER_IDS`) */
+  modifiers?: string[];
 }
 
 /**
@@ -1660,6 +1800,8 @@ export interface RunResult {
   mapId: string;
   /** уровень сложности: рекорд и лидерборд — отдельно по каждому */
   difficultyId: DifficultyId;
+  /** модификатор забега (T-0119); у забега без него поля нет */
+  modifierIds?: RunModifierId[];
   /**
    * Отпечаток игрового контента. Без него правку баланса не отделить от
    * сезонности: два забега с разной длиной могут отличаться и игроком, и
@@ -1708,6 +1850,12 @@ export interface RunResult {
   prologue?: RunPrologue;
   /** убийства по id врага; враги без убийств не попадают */
   killsByEnemy: Record<string, number>;
+  /**
+   * Типы врагов, вышедшие в мир, — id в порядке первого появления, без повторов (tasks/T-0479).
+   * Не «убил», а «встретил»: босс и элита здесь есть, даже если их не убили. Необязательное:
+   * итог прошлой сборки поля не знает.
+   */
+  enemiesSeen?: string[];
   damageDealt: number;
   damageTaken: number;
   /**
@@ -1755,6 +1903,11 @@ export interface RunResult {
    * итог прошлой сборки.
    */
   boosts?: string[];
+  /**
+   * Сколько раз за забег переброс карточек взят за рекламу (tasks/T-0199, Р133): не больше одного.
+   * Сервер сверяет число с книгой показов. Нет поля — не брали, в том числе итог прошлой сборки.
+   */
+  adRerolls?: number;
   /** Сила игрока и давление. Нет поля — подстройки не было: забег без уровня аккаунта или итог прошлой сборки. */
   pressure?: RunPressureResult;
   /**
@@ -1821,6 +1974,8 @@ export interface RunFinishSubmission {
   loadout?: SignedLoadout;
   /** бусты, применённые движком; нет поля — забег без бустов */
   boosts?: string[];
+  /** переброс карточек за рекламу, 0..1; нет поля — не брали (tasks/T-0199) */
+  adRerolls?: number;
   /**
    * Подробности для листа забега в профиле (docs/35-stage4-plan.md, WP4): на
    * вердикт не влияют. Нет полей — забег из очереди прошлой сборки.
@@ -1853,6 +2008,10 @@ export interface RunFinishStats {
   noHitSec?: number;
   noKillSec?: number;
   killsByElement?: Partial<Record<ElementId, number>>;
+  /** типы врагов, вышедшие в мир (tasks/T-0479): по ним сервер открывает записи кодекса; записи прошлых сборок поля не знают */
+  enemiesSeen?: string[];
+  /** найденные виды тайников (tasks/T-0261): по ним сервер открывает кодекс тайников; записи прошлых сборок поля не знают */
+  secretsFound?: string[];
   /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
   huntLog?: RunHuntEntry[];
   buildScore?: number;
@@ -1921,6 +2080,26 @@ export interface RunScoreView {
   expectedPoints: number;
 }
 
+/** Знак у имени в строке списка (T-0235, Р149): выбранный игроком или знак по умолчанию. */
+export interface PublicEmblem {
+  id: string;
+  title: string;
+  /** редкость: шкала предметов и отдельный тон `team` у знака «Команда» */
+  tier: string;
+  category: "status" | "season" | "merit";
+  /** порядковый номер сезона — только у сезонного знака */
+  season?: number | undefined;
+}
+
+/** То, что список показывает рядом с именем игрока: знак, облик героя и выбор аватара. */
+export interface PublicMark {
+  emblem?: PublicEmblem | undefined;
+  /** действующий облик (T-0237, Р150): выбранный, а если игрок им больше не владеет, — `keeper`; нет поля — сервер до обликов или источник недоступен */
+  appearance?: string | undefined;
+  /** в кружке аватара фото площадки, а не голова облика (T-0237, Р47); нет поля — голова облика */
+  avatarPhoto?: true | undefined;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   name: string;
@@ -1934,6 +2113,12 @@ export interface LeaderboardEntry {
   tester?: true | undefined;
   /** поддержал проект (Р109); нет поля — не поддержал */
   supporter?: true | undefined;
+  /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен, клиент рисует по `tester` и `supporter` */
+  emblem?: PublicEmblem | undefined;
+  /** действующий облик героя (T-0237); нет поля — сервер до обликов или источник недоступен, клиент рисует Хранителя */
+  appearance?: string | undefined;
+  /** в кружке аватара фото площадки, а не голова облика (T-0237) */
+  avatarPhoto?: true | undefined;
   /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
   prestige?: number | undefined;
   /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */
@@ -1988,7 +2173,7 @@ export interface RunProfile {
   runs: number;
   totalKills: number;
   totalSurvivalSec: number;
-  best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
+  best: Record<DifficultyId, { survivalSec: number; rank: number; points?: number | null } | null>;
   recent: RecentRun[];
   /** пролог пройден (T-0279): `false` — награда дня и задания закрыты; нет поля — сервер до пролога, разделы открыты */
   prologueDone?: boolean;

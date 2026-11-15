@@ -30,6 +30,8 @@
   "season.history.reward.pending": "Награда ждёт",
   "season.friends.empty": "У тебя пока нет друзей в игре — позови, и можно будет соревноваться",
   "season.friends.invite": "Позвать друзей",
+  "season.friends.idle": "Друзья ещё не играли на этой неделе — позови их в забег",
+  "season.friends.open": "К друзьям",
   "season.error": "Не удалось загрузить сезон — проверь связь",
   "season.retry": "Повторить",
   "rating.periods": "Период",

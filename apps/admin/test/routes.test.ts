@@ -94,6 +94,23 @@ describe("меню панели", () => {
   });
 });
 
+describe("раздел «Платежи» (tasks/T-0437)", () => {
+  const UUID = "3f0c2a52-9d5b-4a79-8a41-0b2a1f6e8c11";
+
+  it("виден с правом payments.view и только с ним; стоит в группе «Поддержка» после «Игроков»", () => {
+    expect(visibleSections(["payments.view"]).map((section) => section.id)).toEqual(["payments"]);
+    expect(visibleSections(["payments.support", "players.view", "analytics.revenue.view"]).map((section) => section.id)).not.toContain("payments");
+    const support = SECTION_GROUPS.find((group) => group.title === "Поддержка")?.sections.map((section) => section.id) ?? [];
+    expect(support.indexOf("payments")).toBe(support.indexOf("players") + 1);
+  });
+
+  it("адрес карточки: id — UUID покупки, обратно собирается", () => {
+    expect(parseRoute(`#/payments/${UUID}`)).toEqual({ section: "payments", id: UUID });
+    expect(parseRoute("#/payments")).toEqual({ section: "payments", id: null });
+    expect(hrefOf({ section: "payments", id: UUID })).toBe(`#/payments/${UUID}`);
+  });
+});
+
 describe("поиск раздела в меню", () => {
   const titles = (groups: SectionGroup[]) => groups.map((group) => `${group.title}: ${group.sections.map((section) => section.title).join(", ")}`);
 
@@ -138,5 +155,32 @@ describe("отображение чисел и времени", () => {
     expect(formatDelta(50)).toBe("+50");
     expect(formatDelta(-20)).toBe("−20");
     expect(formatDelta(0)).toBe("0");
+  });
+
+  it("раздел «Участники»: виден с revenue.split.view и не виден с одним revenue.split.own.view", () => {
+    expect(visibleSections(["revenue.split.view"], MENU).map((section) => section.id)).toContain("stakeholders");
+    expect(visibleSections(["revenue.split.own.view"], MENU).map((section) => section.id)).not.toContain("stakeholders");
+  });
+
+  it("«Мой проект» виден с правом участника и с правом финансов, без них — нет", () => {
+    expect(visibleSections(["revenue.split.own.view"], MENU).map((section) => section.id)).toContain("my-project");
+    expect(visibleSections(["revenue.split.view"], MENU).map((section) => section.id)).toContain("my-project");
+    expect(visibleSections(["analytics.revenue.view"], MENU).map((section) => section.id)).not.toContain("my-project");
+  });
+
+  it("участник с единственным правом попадает в «Мой проект» сразу после входа", () => {
+    expect(resolveRoute(null, ["revenue.split.own.view"], MENU)).toEqual({ section: "my-project", id: null });
+  });
+
+  it("«Мой проект» — первый в группе «Доход»", () => {
+    expect(SECTION_GROUPS.find((group) => group.title === "Доход")?.sections[0]?.id).toBe("my-project");
+  });
+
+  it("«Бухгалтерия» видна с ledger.view и не видна участнику проекта; стоит в «Доходе» после «Моего проекта»", () => {
+    expect(visibleSections(["ledger.view"], MENU).map((section) => section.id)).toContain("ledger");
+    expect(visibleSections(["revenue.split.own.view"], MENU).map((section) => section.id)).not.toContain("ledger");
+    expect(visibleSections(["revenue.split.view"], MENU).map((section) => section.id)).not.toContain("ledger");
+    const ids = SECTION_GROUPS.find((group) => group.title === "Доход")?.sections.map((section) => section.id) ?? [];
+    expect(ids.indexOf("ledger")).toBe(ids.indexOf("my-project") + 1);
   });
 });

@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { bareHost, cleanLabel, parsePort } from "../internal/text.js";
-import { fail, finishNode, UUID, type Fail } from "../links/common.js";
+import { jsonObjectOf } from "../internal/json.js";
+import { fail, finishNode, optional, UUID, VLESS_FLOWS, vlessEncryption, type Fail } from "../links/common.js";
 import { SHADOWSOCKS_METHODS } from "../links/shadowsocks.js";
 import { VMESS_CIPHERS } from "../links/vmess.js";
-import type { NodeProtocol, ShareLinkResult } from "../node.js";
-import { streamFromSettings } from "./stream.js";
+import type { NodeDialer, NodeProtocol, ShareLinkResult } from "../node.js";
+import { isSet, streamFromSettings } from "./stream.js";
 
 /**
  * Один выход Xray (`outbounds[]` конфига) в `ProxyNode` — тот же узел, что даёт
@@ -40,30 +41,34 @@ interface Endpoint {
 
 type Step<T> = ({ ok: true } & T) | Fail;
 
+/** Выходы того же конфига по тегу: на них ссылается цепочка узла (`sockopt.dialerProxy`, `proxySettings`). */
+export type Siblings = ReadonlyMap<string, unknown>;
+
 /**
  * `protocol` — уже в нижнем регистре; `remarks` — название конфига, под которым
- * узел виден в панели.
+ * узел виден в панели; `siblings` — выходы его конфига: без них цепочка узла
+ * непонятна, и узел пропускается.
  */
-export function parseOutbound(protocol: string, raw: unknown, remarks: string): ShareLinkResult {
+export function parseOutbound(protocol: string, raw: unknown, remarks: string, siblings: Siblings = new Map()): ShareLinkResult {
   try {
-    return convert(protocol, raw, remarks);
+    return convert(protocol, raw, remarks, siblings);
   } catch {
     // Разбор не должен падать, но если упал — это «выход непонятен», а не авария.
     return fail("malformed", protocol);
   }
 }
 
-function convert(protocol: string, raw: unknown, remarks: string): ShareLinkResult {
+function convert(protocol: string, raw: unknown, remarks: string, siblings: Siblings): ShareLinkResult {
   if (!isNodeProtocol(protocol)) return fail("unsupported_scheme", protocol);
   const outbound = envelope.safeParse(raw);
   if (!outbound.success) return fail("malformed", protocol);
-  // Цепочка через другой выход: без него узел пойдёт напрямую, а это другой маршрут.
-  if (outbound.data.proxySettings !== undefined && outbound.data.proxySettings !== null) return fail("unsupported_option", "proxySettings");
 
   const found = protocol === "vless" || protocol === "vmess" ? vnextEndpoint(protocol, outbound.data.settings) : serversEndpoint(protocol, outbound.data.settings);
   if (!found.ok) return found;
   const stream = streamFromSettings(outbound.data.streamSettings, found.host);
   if (!stream.ok) return stream;
+  const dialer = dialerOf(stream.dialerTag, outbound.data.proxySettings, siblings);
+  if (!dialer.ok) return dialer;
 
   const { host, port } = found;
   return {
@@ -78,8 +83,48 @@ function convert(protocol: string, raw: unknown, remarks: string): ShareLinkResu
       cipher: found.cipher,
       transport: stream.transport,
       security: stream.security,
+      ...optional("dialer", dialer.dialer),
     }),
   };
+}
+
+const proxySettingsSection = z.object({ tag: z.string().optional() });
+const neighbourSection = z.object({
+  protocol: z.string(),
+  settings: z.unknown().optional(),
+  proxySettings: z.unknown().optional(),
+  streamSettings: z.object({ sockopt: z.object({ dialerProxy: z.unknown().optional() }).nullish() }).nullish(),
+});
+
+/**
+ * Цепочка узла: тег из `sockopt.dialerProxy` либо из `proxySettings.tag` (старая
+ * запись того же самого) должен указывать на выход `freedom` этого же конфига —
+ * фрагментацию или шум первых пакетов. Его `settings` становятся частью узла.
+ *
+ * Всё остальное пропускается: цепочка на другой прокси-выход ведёт трафик узла через
+ * чужой узел, который у нас ни в переборе, ни в учёте; `redirect` перенаправил бы его на
+ * другой адрес; `freedom`, сам идущий через другой выход, — та же цепочка, только на
+ * шаг глубже.
+ */
+function dialerOf(tag: string | null, proxySettings: unknown, siblings: Siblings): { ok: true; dialer?: NodeDialer } | Fail {
+  let target = tag;
+  if (proxySettings !== undefined && proxySettings !== null) {
+    const parsed = proxySettingsSection.safeParse(proxySettings);
+    const legacyTag = parsed.success ? parsed.data.tag : undefined;
+    if (legacyTag === undefined || legacyTag === "") return fail("unsupported_option", "proxySettings");
+    if (target !== null && target !== legacyTag) return fail("unsupported_option", "dialerProxy");
+    target = legacyTag;
+  }
+  if (target === null) return { ok: true };
+
+  const neighbour = neighbourSection.safeParse(siblings.get(target));
+  if (!neighbour.success || neighbour.data.protocol.toLowerCase() !== "freedom") return fail("unsupported_option", "dialerProxy");
+  if (isSet(neighbour.data.proxySettings) || isSet(neighbour.data.streamSettings?.sockopt?.dialerProxy)) return fail("unsupported_option", "dialerProxy");
+
+  const settings = neighbour.data.settings === undefined || neighbour.data.settings === null ? {} : jsonObjectOf(neighbour.data.settings);
+  if (settings === null) return fail("malformed", "dialerProxy");
+  if ("redirect" in settings) return fail("unsupported_option", "dialerProxy.redirect");
+  return { ok: true, dialer: { settings } };
 }
 
 /**
@@ -117,12 +162,12 @@ function vlessCredentials(address: { host: string; port: number }, item: unknown
   if (!user.success) return fail("malformed", "users");
   const secret = uuidOf(user.data.id);
   if (secret === null) return fail("malformed", "uuid");
-  // Шифрование VLESS в обычных подписках — `none`; постквантовое и прочее мы пропускаем.
-  const encryption = user.data.encryption ?? "none";
-  if (encryption !== "none" && encryption !== "") return fail("unsupported_option", "encryption");
+  // Шифрование VLESS и режимы `flow` — как у ссылки.
+  const encryption = vlessEncryption(user.data.encryption);
+  if (!encryption.ok) return encryption;
   const flow = user.data.flow ?? "";
-  if (flow !== "" && flow !== "xtls-rprx-vision") return fail("unsupported_option", "flow");
-  return { ...address, ok: true, secret, flow: flow === "" ? null : flow, cipher: null };
+  if (flow !== "" && !VLESS_FLOWS.has(flow)) return fail("unsupported_option", "flow");
+  return { ...address, ok: true, secret, flow: flow === "" ? null : flow, cipher: encryption.cipher };
 }
 
 function vmessCredentials(address: { host: string; port: number }, item: unknown): Step<Endpoint> {

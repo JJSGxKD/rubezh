@@ -25,7 +25,9 @@ export const WALLET_DAILY_CAPS: Record<EarnReason, Partial<Record<WalletResource
   // если в один день закрыты все ежедневные и недельные; самоцветов у них нет,
   // но панель вправе их дать.
   task_reward: { coins: 10_000, gems: 50, shard_common: 100 },
-  achievement_reward: { coins: 20_000, gems: 200 },
+  // Все достижения каталога по умолчанию, закрытые в один день, — ~23 750
+  // монет (с v2, T-0322); потолок держит их с запасом под новые строки.
+  achievement_reward: { coins: 30_000, gems: 200 },
   // Самоцветов на колесе нет (Р11, п. 5) — и кошелёк их по этой причине не
   // начислит. Самая щедрая крутка — 2 980 монет на сотом уровне
   // (`wheel/wheel-rules.ts`), а круток в сутки не больше семи: бесплатная и
@@ -65,6 +67,8 @@ export const EXCHANGE_RESOURCES: Record<ExchangeReason, readonly WalletResource[
   boost_refund: ["coins", "gems"],
   // Бонус тестеру и самоцветы за второй шанс (Р87, tasks/T-0042): только самоцветы.
   wipe_compensation: ["gems"],
+  // Компенсация за сбой оплаты (Р209, tasks/T-0435): только самоцветы (Р2).
+  payment_compensation: ["gems"],
 };
 
 /**

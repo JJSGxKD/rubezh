@@ -16,5 +16,5 @@
   "include": ["src", "src/**/*.json"],
   // Ядро курсов бэкенд берёт собранным: `tsc -b` соберёт пакет первым, а
   // типы придут из его `dist` (docs/35-stage4-plan.md, §3.12).
-  "references": [{ "path": "../../packages/fx" }, { "path": "../../packages/proxy-kit" }]
+  "references": [{ "path": "../../packages/fx" }, { "path": "../../packages/ledger" }, { "path": "../../packages/proxy-kit" }]
 }

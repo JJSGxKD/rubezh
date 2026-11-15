@@ -3,7 +3,7 @@ import { Logger } from "@nestjs/common";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { BotRouter } from "../src/platforms/telegram/bot-router.js";
-import { answerOf, decideCheckout, type PreCheckout } from "../src/modules/payments/checkout-answer.js";
+import { answerOf, decideCheckout, type CheckoutRefusal, type PreCheckout } from "../src/modules/payments/checkout-answer.js";
 import { PaymentConfirmation, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
 import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
@@ -971,5 +971,163 @@ describe("внешний возврат закрывает покупки акк
 
     expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ status: "refunded" });
     expect(restrictions.imposed).toEqual([]);
+  });
+});
+
+describe("отметка предварительной проверки в хронологии платежа (T-0430)", () => {
+  /** Что записали в отметку покупки. */
+  interface Marked {
+    purchaseId: string;
+    at: Date;
+    refusal: CheckoutRefusal | null;
+  }
+
+  let purchases: MemoryPurchasesRepository;
+  let api: FakeStarsApi;
+  let purchase: ContinuePurchase;
+  /** Порядок событий: ответ площадке, вызов отметки. */
+  let order: string[];
+  let marked: Marked[];
+  /** Что делает подставная отметка после записи: по умолчанию ничего. */
+  let behaviour: () => Promise<void>;
+  let logged: { level: string; event: string; fields: Record<string, unknown> }[];
+
+  function build(withMarks = true): PaymentConfirmation {
+    const marks = {
+      mark: async (purchaseId: string, at: Date, refusal: CheckoutRefusal | null): Promise<void> => {
+        order.push("отметка");
+        marked.push({ purchaseId, at, refusal });
+        await behaviour();
+      },
+    };
+    return new PaymentConfirmation(config(), purchases, starsProviders(api), switchesOf(config()), new PaymentsHooks(), new PurchaseRevocation(), undefined, undefined, withMarks ? (marks as never) : undefined);
+  }
+
+  const events = (): string[] => logged.map((line) => line.event);
+
+  beforeEach(() => {
+    purchases = new MemoryPurchasesRepository();
+    api = new FakeStarsApi();
+    order = [];
+    marked = [];
+    behaviour = async () => undefined;
+    logged = [];
+    for (const level of ["log", "warn", "error"] as const) {
+      vi.spyOn(Logger.prototype, level).mockImplementation((line: unknown) => {
+        const { event, ...fields } = JSON.parse(String(line)) as { event: string } & Record<string, unknown>;
+        logged.push({ level, event, fields });
+      });
+    }
+    purchase = pending();
+    purchases.rows.set(purchase.purchaseId, purchase);
+    purchases.owners.set(purchase.accountId, String(PLAYER_ID));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  /** Ответ площадке занимает время: отметка, вызванная раньше ответа, окажется в порядке событий первой. */
+  function slowAnswer(): void {
+    const answer = api.answerPreCheckoutQuery.bind(api);
+    api.answerPreCheckoutQuery = async (queryId, reply) => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await answer(queryId, reply);
+      order.push("ответ площадке");
+    };
+  }
+
+  it("проверка прошла — отметка без отказа, и пишется после того, как площадка получила ответ", async () => {
+    slowAnswer();
+
+    await expect(build().answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: true });
+
+    expect(marked).toEqual([{ purchaseId: purchase.purchaseId, at: new Date(NOW), refusal: null }]);
+    expect(order).toEqual(["ответ площадке", "отметка"]);
+  });
+
+  it("отказ — в отметке его причина", async () => {
+    purchase = pending({ invoicedAt: new Date(NOW - 31 * 60_000) });
+    purchases.rows.set(purchase.purchaseId, purchase);
+    purchases.owners.set(purchase.accountId, String(PLAYER_ID));
+
+    await expect(build().answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: false, reason: "stale_invoice" });
+
+    expect(marked).toEqual([{ purchaseId: purchase.purchaseId, at: new Date(NOW), refusal: "stale_invoice" }]);
+  });
+
+  it("база не ответила на проверку — отказ `unavailable` тоже попадает в отметку", async () => {
+    purchases.checkout = async () => Promise.reject(new Error("connect ECONNREFUSED"));
+
+    await expect(build().answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: false, reason: "unavailable" });
+
+    expect(marked.map((item) => item.refusal)).toEqual(["unavailable"]);
+  });
+
+  it("продление подписки отмечается по счёту первой покупки — тому, что стоит в payload", async () => {
+    const first = { ...pending(), product: "vip" as const, runId: null, continueNo: null, elapsedSec: null, sku: "vip", priceStars: 700, chargedStars: 700, status: "paid" as const, paidAt: new Date(NOW - 86_400_000), telegramChargeId: "charge-1", fulfilledAt: new Date(NOW - 86_400_000) };
+    purchases.rows.set(first.purchaseId, first);
+    purchases.owners.set(first.accountId, String(PLAYER_ID));
+
+    await expect(build().answerCheckout(query(first), NOW)).resolves.toEqual({ ok: true });
+
+    expect(marked).toEqual([{ purchaseId: first.purchaseId, at: new Date(NOW), refusal: null }]);
+  });
+
+  it("отметка не отвечает — решение уже возвращено, а через две секунды в логе `checkout_mark_failed`", async () => {
+    vi.useFakeTimers();
+    behaviour = () => new Promise<void>(() => undefined);
+
+    const decision = await build().answerCheckout(query(purchase), NOW);
+
+    expect(decision).toEqual({ ok: true });
+    expect(api.answers).toEqual([{ queryId: "q-1", answer: { ok: true } }]);
+    expect(events()).not.toContain("checkout_mark_failed");
+    await vi.advanceTimersByTimeAsync(1_900);
+    expect(events()).not.toContain("checkout_mark_failed");
+    await vi.advanceTimersByTimeAsync(200);
+    const failure = logged.find((line) => line.event === "checkout_mark_failed");
+    expect(failure).toMatchObject({ level: "warn", fields: { purchaseId: purchase.purchaseId, reason: expect.stringContaining("отметка проверки оплаты") as string } });
+  });
+
+  it("отметка бросает — решение возвращено, ошибки наружу нет, в логе `checkout_mark_failed`", async () => {
+    behaviour = () => Promise.reject(new Error("deadlock detected"));
+
+    await expect(build().answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: true });
+
+    await vi.waitFor(() => expect(events()).toContain("checkout_mark_failed"));
+    expect(logged.find((line) => line.event === "checkout_mark_failed")).toMatchObject({ level: "warn", fields: { purchaseId: purchase.purchaseId, reason: "deadlock detected" } });
+    expect(api.answers).toEqual([{ queryId: "q-1", answer: { ok: true } }]);
+  });
+
+  it("сбой отметки не подменяет строку лога проверки: `pre_checkout` остаётся как был", async () => {
+    behaviour = () => Promise.reject(new Error("deadlock detected"));
+
+    await build().answerCheckout(query(purchase), NOW);
+
+    await vi.waitFor(() => expect(events()).toContain("checkout_mark_failed"));
+    expect(logged.find((line) => line.event === "pre_checkout")).toMatchObject({ level: "log", fields: { purchaseId: purchase.purchaseId, ok: true } });
+  });
+
+  it("payload не UUID — отметки нет: писать некуда", async () => {
+    await expect(build().answerCheckout(query(purchase, { payload: "не-uuid" }), NOW)).resolves.toEqual({ ok: false, reason: "unknown_invoice" });
+
+    await Promise.resolve();
+    expect(marked).toEqual([]);
+    expect(events()).not.toContain("checkout_mark_failed");
+  });
+
+  it("площадка без оплаты — ответить нечем и отмечать нечего", async () => {
+    await expect(build().answerCheckout(query(purchase, { platform: "vk" }), NOW)).resolves.toEqual({ ok: false, reason: "unavailable" });
+
+    expect(marked).toEqual([]);
+  });
+
+  it("без сервиса отметок (тесты, где его нет) проверка идёт как прежде", async () => {
+    await expect(build(false).answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: true });
+
+    expect(marked).toEqual([]);
+    expect(api.answers).toEqual([{ queryId: "q-1", answer: { ok: true } }]);
   });
 });

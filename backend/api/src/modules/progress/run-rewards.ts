@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { Queue, Worker, type Job } from "bullmq";
 import type { Redis } from "ioredis";
 import { withTimeout } from "../../common/with-timeout.js";
@@ -7,7 +7,10 @@ import { createQueueConnection } from "../../infra/queues.js";
 import { ItemsService } from "../items/items.service.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
-import { levelReward, runReward } from "./progress-rules.js";
+import { SETTINGS } from "../settings/setting-catalog.js";
+import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
+import { DEFAULT_RUN_REWARD_LIMITS, levelReward, runReward, type RunRewardLimits } from "./progress-rules.js";
+import { levelLadderFrom } from "./progress.service.js";
 import { PROGRESS_REPOSITORY, type ProgressRepository, type RunRewardRow } from "./progress.repository.js";
 
 /**
@@ -52,6 +55,8 @@ export class RunRewards implements OnModuleInit, OnApplicationBootstrap, OnModul
     @Inject(PROGRESS_REPOSITORY) private readonly progress: ProgressRepository,
     private readonly wallet: WalletService,
     private readonly items: ItemsService,
+    // Нет настроек (старый состав модуля, тесты) — числа наград прежние постоянные.
+    @Optional() @Inject(SETTINGS_READER) private readonly settings?: SettingsReader,
   ) {}
 
   onModuleInit(): void {
@@ -101,7 +106,9 @@ export class RunRewards implements OnModuleInit, OnApplicationBootstrap, OnModul
   }
 
   async grant(job: RewardJob): Promise<RunRewardRow> {
-    const decision = runReward(job);
+    // Числа наград читаются на каждом начислении: правка из панели действует со следующей награды.
+    const decision = runReward(job, runLimitsFrom(this.settings));
+    const ladder = levelLadderFrom(this.settings);
     const at = new Date(job.finishedAt);
     const row = await this.progress.recordRun({ runId: job.runId, accountId: job.accountId, coins: decision.coins, xp: decision.xp, skipped: decision.skipped, at });
     if (row.skipped !== null || row.coinsCredited !== null) return row;
@@ -120,7 +127,7 @@ export class RunRewards implements OnModuleInit, OnApplicationBootstrap, OnModul
       credited = result.credited;
     }
     for (let level = row.levelBefore + 1; level <= row.levelAfter; level++) {
-      const reward = levelReward(level);
+      const reward = levelReward(level, ladder);
       const grant = { accountId: row.accountId, reason: "level_reward" as const, source: `level:${level}`, at };
       if (reward.coins > 0) await this.wallet.grant({ ...grant, resource: "coins", amount: reward.coins, idempotencyKey: `level:${row.accountId}:${level}:coins` });
       if (reward.gems > 0) await this.wallet.grant({ ...grant, resource: "gems", amount: reward.gems, idempotencyKey: `level:${row.accountId}:${level}:gems` });
@@ -142,6 +149,12 @@ export class RunRewards implements OnModuleInit, OnApplicationBootstrap, OnModul
   private log(level: "log" | "warn" | "error", event: string, fields: Record<string, unknown>): void {
     this.logger[level](JSON.stringify({ module: "progress", event, ...fields }));
   }
+}
+
+/** Порог и потолки забега из настроек; без настроек — прежние постоянные. */
+export function runLimitsFrom(settings: SettingsReader | undefined): RunRewardLimits {
+  if (settings === undefined) return DEFAULT_RUN_REWARD_LIMITS;
+  return { minSec: settings.get(SETTINGS.rewardsRunMinSec), maxCoins: settings.get(SETTINGS.rewardsRunMaxCoins), maxXp: settings.get(SETTINGS.rewardsRunMaxXp) };
 }
 
 function jobOf(run: RecordedRun): RewardJob {

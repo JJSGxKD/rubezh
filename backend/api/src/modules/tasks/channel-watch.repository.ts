@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { z } from "zod";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import type { RetentionMarks, RetentionPatch } from "./channel-watch-rules.js";
 
 /**
  * Окна перепроверки подписки после награды (`task_channel_watch`,
@@ -38,7 +39,7 @@ export interface Revoked {
   shards: number;
 }
 
-export interface WatchRow extends NewWatch {
+export interface WatchRow extends NewWatch, RetentionMarks {
   /** последняя проверка, на которую площадка ответила */
   checkedAt: Date | null;
   state: WatchState;
@@ -52,6 +53,12 @@ export interface WatchRow extends NewWatch {
 export interface Penalty {
   key: WatchKey;
   revoked: Revoked;
+}
+
+/** Отметки удержания окна: что поставить, если отметка ещё пуста. */
+export interface RetentionMark {
+  key: WatchKey;
+  marks: RetentionPatch;
 }
 
 export type PairLock<T> = { locked: true; value: T } | { locked: false };
@@ -71,6 +78,12 @@ export interface ChannelWatchRepository {
   postpone(keys: readonly WatchKey[], nextCheckAt: Date, checkedAt: Date | null): Promise<void>;
   close(keys: readonly WatchKey[], state: Extract<WatchState, "kept" | "expired">, closedAt: Date): Promise<void>;
   markPenalized(items: readonly Penalty[], eventNo: number, penalizedAt: Date): Promise<void>;
+  /**
+   * Записать отметки удержания окон (Р139) — только в пустые: уже поставленная
+   * отметка не меняется, поэтому повтор задания очереди её не перепишет. Окно
+   * любого состояния: закрытое окно свои отметки хранит.
+   */
+  markRetention(items: readonly RetentionMark[]): Promise<void>;
   /**
    * Выполнить `work`, пока никто другой не работает с этой парой, — на любой
    * реплике. Занято — `work` не вызывается и ответ `{ locked: false }`:
@@ -93,6 +106,9 @@ const rowSchema = z.object({
   event_no: z.number().int().nullable(),
   penalized_at: z.date().nullable(),
   revoked: revokedSchema.nullable(),
+  held_d1: z.boolean().nullable(),
+  held_d3: z.boolean().nullable(),
+  held_d7: z.boolean().nullable(),
 });
 
 /** Ответ `lastEventNo`: `COALESCE(max(…), 0)::int` всегда даёт одну строку с целым. */
@@ -122,6 +138,9 @@ function toRow(raw: unknown): WatchRow {
     eventNo: row.event_no,
     penalizedAt: row.penalized_at,
     revoked: row.revoked,
+    heldD1: row.held_d1,
+    heldD3: row.held_d3,
+    heldD7: row.held_d7,
   };
 }
 
@@ -144,7 +163,7 @@ export class PrismaChannelWatchRepository implements ChannelWatchRepository {
 
   async due(now: Date, limit: number): Promise<WatchRow[]> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT account_id::text AS account_id, task_id, period_start::text AS period_start, started_at, watch_until, next_check_at, checked_at, state, event_no, penalized_at, revoked
+      SELECT account_id::text AS account_id, task_id, period_start::text AS period_start, started_at, watch_until, next_check_at, checked_at, state, event_no, penalized_at, revoked, held_d1, held_d3, held_d7
       FROM task_channel_watch
       WHERE state = 'watching' AND next_check_at <= ${now}
       ORDER BY next_check_at, account_id, task_id, period_start
@@ -154,7 +173,7 @@ export class PrismaChannelWatchRepository implements ChannelWatchRepository {
 
   async openOf(accountId: string, taskId: string): Promise<WatchRow[]> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT account_id::text AS account_id, task_id, period_start::text AS period_start, started_at, watch_until, next_check_at, checked_at, state, event_no, penalized_at, revoked
+      SELECT account_id::text AS account_id, task_id, period_start::text AS period_start, started_at, watch_until, next_check_at, checked_at, state, event_no, penalized_at, revoked, held_d1, held_d3, held_d7
       FROM task_channel_watch
       WHERE account_id = ${accountId}::uuid AND task_id = ${taskId} AND state = 'watching'
       ORDER BY period_start`;
@@ -196,6 +215,26 @@ export class PrismaChannelWatchRepository implements ChannelWatchRepository {
       UPDATE task_channel_watch w SET state = 'penalized', event_no = ${eventNo}, penalized_at = ${penalizedAt}, checked_at = ${penalizedAt}, revoked = k.revoked::jsonb
       FROM unnest(${accounts}::uuid[], ${tasks}::text[], ${periods}::date[], ${revoked}::text[]) AS k(account_id, task_id, period_start, revoked)
       WHERE w.account_id = k.account_id AND w.task_id = k.task_id AND w.period_start = k.period_start AND w.state = 'watching'`;
+  }
+
+  async markRetention(items: readonly RetentionMark[]): Promise<void> {
+    const todo = items.filter((item) => item.marks.heldD1 !== undefined || item.marks.heldD3 !== undefined || item.marks.heldD7 !== undefined);
+    if (todo.length === 0) return;
+    const { accounts, tasks, periods } = columns(todo.map((item) => item.key));
+    // Пустая строка — «отметку не ставить»: массив булевых с дырами драйвер передаёт нетвёрдо.
+    const text = (value: boolean | undefined) => (value === undefined ? "" : String(value));
+    const d1 = todo.map((item) => text(item.marks.heldD1));
+    const d3 = todo.map((item) => text(item.marks.heldD3));
+    const d7 = todo.map((item) => text(item.marks.heldD7));
+    // COALESCE по самой колонке: поставленная отметка остаётся при любом повторе.
+    await this.prisma.$executeRaw`
+      UPDATE task_channel_watch w SET
+        held_d1 = COALESCE(w.held_d1, NULLIF(k.d1, '')::boolean),
+        held_d3 = COALESCE(w.held_d3, NULLIF(k.d3, '')::boolean),
+        held_d7 = COALESCE(w.held_d7, NULLIF(k.d7, '')::boolean)
+      FROM unnest(${accounts}::uuid[], ${tasks}::text[], ${periods}::date[], ${d1}::text[], ${d3}::text[], ${d7}::text[]) AS k(account_id, task_id, period_start, d1, d3, d7)
+      WHERE w.account_id = k.account_id AND w.task_id = k.task_id AND w.period_start = k.period_start
+        AND (w.held_d1 IS NULL OR w.held_d3 IS NULL OR w.held_d7 IS NULL)`;
   }
 
   async withPairLock<T>(accountId: string, taskId: string, work: () => Promise<T>): Promise<PairLock<T>> {

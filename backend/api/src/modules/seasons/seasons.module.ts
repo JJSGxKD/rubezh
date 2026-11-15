@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PublicIdentityModule } from "../../common/public-identity.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { FriendsModule } from "../friends/friends.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
@@ -29,7 +30,7 @@ import { PrismaSeasonsRepository, SEASONS_REPOSITORY } from "./seasons.repositor
  * подписываются сами.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, FriendsModule, RestrictionsModule],
+  imports: [AuthModule, RunsModule, WalletModule, FriendsModule, RestrictionsModule, PublicIdentityModule],
   controllers: [SeasonsController],
   providers: [
     SeasonSchedule,

@@ -1,3 +1,4 @@
+import { RUN_MODIFIER_IDS } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "../src/content/unlocks";
 import { LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
@@ -112,6 +113,37 @@ describe("уровень в наборе, записи и повторе", () =>
     const { accountLevel, ...withoutLevel } = recording.loadout ?? { modifiers: {}, boosts: [] };
     expect(accountLevel).toBe(1);
     expect(replayRecording({ ...recording, loadout: withoutLevel }).verdict).not.toBe("match");
+  });
+});
+
+describe("лестница модификаторов (T-0119)", () => {
+  const modifiersAt = (level: number) => [...unlocksAt(ACCOUNT_UNLOCKS, level).modifiers].sort();
+
+  it("на 1-м уровне множество пусто, на 8-м без модификаторов, на 9-м — «Спешка», на 12-м — оба", () => {
+    expect(modifiersAt(1)).toEqual([]);
+    expect(modifiersAt(8)).toEqual([]);
+    expect(modifiersAt(9)).toEqual(["hurry"]);
+    expect(modifiersAt(11)).toEqual(["hurry"]);
+    expect(modifiersAt(12)).toEqual(["hurry", "inverse"]);
+    expect(modifiersAt(40)).toEqual(["hurry", "inverse"]);
+  });
+
+  it("каждый открыт ровно на одном уровне, а промежутки между любыми открытиями не больше трёх", () => {
+    for (const id of RUN_MODIFIER_IDS) {
+      expect(ACCOUNT_UNLOCKS.filter((row) => row.modifiers?.includes(id) === true), id).toHaveLength(1);
+      expect(unlockLevelOf(ACCOUNT_UNLOCKS, "modifier", id), id).not.toBeNull();
+    }
+    expect(unlockLevelOf(ACCOUNT_UNLOCKS, "modifier", "ghost")).toBeNull();
+    const levels = ACCOUNT_UNLOCKS.filter((row) => (row.weapons?.length ?? 0) + (row.passives?.length ?? 0) + (row.modifiers?.length ?? 0) > 0)
+      .map((row) => row.level)
+      .sort((a, b) => a - b);
+    for (let i = 1; i < levels.length; i++) expect(levels[i] - levels[i - 1], `уровни ${levels[i - 1]} и ${levels[i]}`).toBeLessThanOrEqual(3);
+  });
+
+  it("порядок строк таблицы не важен, а строка без модификаторов их не отнимает", () => {
+    const shuffled = [{ level: 12, modifiers: ["inverse"] }, { level: 1, weapons: ["spark"] }, { level: 9, modifiers: ["hurry"] }, { level: 10 }];
+    expect([...unlocksAt(shuffled, 10).modifiers]).toEqual(["hurry"]);
+    expect([...unlocksAt(shuffled, 12).modifiers].sort()).toEqual(["hurry", "inverse"]);
   });
 });
 

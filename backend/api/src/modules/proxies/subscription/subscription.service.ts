@@ -14,6 +14,7 @@ import { takeMinute } from "./subscription-lock.js";
 import { SubscriptionRoutes } from "./subscription-routes.js";
 import { newSubscriptionKey, slotQuota, SUBSCRIPTIONS_MAX } from "./subscription-rules.js";
 import { openUrl, sealUrl } from "./subscription-url.js";
+import { subscriptionHwidPrefix } from "./subscription-download.js";
 import { nodeViews, subscriptionAudit, subscriptionView, type SubscriptionsOverview } from "./subscription-views.js";
 import { SUBSCRIPTION_REPOSITORY, type StoredSubscription, type SubscriptionRepository } from "./subscription.repository.js";
 import { SubscriptionSync } from "./subscription.sync.js";
@@ -84,6 +85,10 @@ export class ProxySubscriptionService {
       trafficUsedBytes: null,
       trafficTotalBytes: null,
       expiresAt: null,
+      routingSource: null,
+      routingDirect: null,
+      routingBlock: null,
+      routingHints: [],
       updatedBy: actor.accountId,
       updatedAt: at,
       createdAt: at,
@@ -109,7 +114,22 @@ export class ProxySubscriptionService {
       if (replaced) row = { ...draft, ...sealUrl(this.cipher, key, url) };
     }
     // Новый адрес — другая подписка: итог и узлы прежней к ней не относятся.
-    if (replaced) row = { ...row, lastRefreshAt: null, lastRefreshOk: null, lastRefreshNote: null, providerIntervalHours: null, trafficUsedBytes: null, trafficTotalBytes: null, expiresAt: null };
+    if (replaced) {
+      row = {
+        ...row,
+        lastRefreshAt: null,
+        lastRefreshOk: null,
+        lastRefreshNote: null,
+        providerIntervalHours: null,
+        trafficUsedBytes: null,
+        trafficTotalBytes: null,
+        expiresAt: null,
+        routingSource: null,
+        routingDirect: null,
+        routingBlock: null,
+        routingHints: [],
+      };
+    }
 
     await this.commands.update(before, row, replaced);
     await this.reload();
@@ -172,8 +192,13 @@ export class ProxySubscriptionService {
       limit: SUBSCRIPTIONS_MAX,
       slotCount,
       slotQuota: slotQuota(slotCount, all.length),
-      subscriptions: all.map(({ subscription, nodes }) => ({ ...subscriptionView(subscription), nodes: nodeViews(nodes) })),
+      subscriptions: all.map(({ subscription, nodes }) => ({ ...subscriptionView(subscription, this.hwidPrefixOf(subscription.key)), nodes: nodeViews(nodes) })),
     };
+  }
+
+  /** Отпечаток устройства подписки; без ключа шифрования его нет. Полный `x-hwid` из сервиса не выходит. */
+  private hwidPrefixOf(key: string): string | null {
+    return this.cipher === null ? null : subscriptionHwidPrefix(this.cipher, key);
   }
 
   private async subscriptionOf(key: string): Promise<StoredSubscription> {

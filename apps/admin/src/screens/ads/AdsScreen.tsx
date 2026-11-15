@@ -7,16 +7,12 @@ import {
   MIN_NETWORKS_PER_PLACE,
   PLACE_TITLES,
   PLATFORM_TITLES,
-  SUCCESS_TITLES,
   adPlatforms,
-  blockServable,
   coverage,
   fetchAds,
   funnelNetworkTitle,
   passTitle,
   percent,
-  reachLabel,
-  type AdBlock,
   type AdsView,
   type FunnelDays,
   type PlaceCoverage,
@@ -26,9 +22,9 @@ import { hrefOf } from "../../routes";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
 import { HELP } from "../../ui/help";
-import { Badge, Button, DataTable, ErrorNotice, Help, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Badge, DataTable, ErrorNotice, Help, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
-import { BlockDialog } from "./BlockDialog";
+import { BlocksPanel } from "./BlocksPanel";
 import { NetworkCards } from "./NetworkCards";
 
 /**
@@ -130,56 +126,6 @@ function CoverageCell({ cell }: { cell: PlatformCoverage | undefined }) {
       {cell.networks.join(" → ")}
       {cell.networks.length >= MIN_NETWORKS_PER_PLACE ? null : <Badge tone="warning">одна сеть — отказ оставит место пустым</Badge>}
     </span>
-  );
-}
-
-function BlocksPanel({ view, canEdit, onSaved }: { view: AdsView; canEdit: boolean; onSaved: () => void }) {
-  const [open, setOpen] = useState<AdBlock | "new" | null>(null);
-  const networkName = (key: string) => view.networks.find((network) => network.networkKey === key)?.name ?? key;
-
-  return (
-    <Panel
-      title="Блоки мест"
-      help={HELP.ads.blocks}
-      actions={
-        canEdit ? (
-          <Button tone="primary" onClick={() => setOpen("new")}>
-            Новый блок
-          </Button>
-        ) : null
-      }
-    >
-      <DataTable
-        rows={view.blocks}
-        rowKey={(block) => block.blockId}
-        onRowClick={canEdit ? (block) => setOpen(block) : undefined}
-        empty="Блоков нет — заведите блок кнопкой «Новый блок»"
-        columns={[
-          { title: "Место", render: (block) => PLACE_TITLES[block.place] },
-          { title: "Сеть", render: (block) => networkName(block.networkKey) },
-          { title: "Блок", help: HELP.ads.externalId, render: (block) => (block.externalId === null ? <span className="text-text-muted">по ключам сети</span> : <span className="font-mono text-xs">{block.externalId}</span>) },
-          { title: "Успех", render: (block) => SUCCESS_TITLES[block.success] },
-          { title: "Где", help: HELP.ads.reach, render: (block) => reachLabel(view, block) },
-          {
-            title: "Состояние",
-            render: (block) =>
-              block.problem !== null ? (
-                <span className="flex flex-col gap-0.5">
-                  <Badge tone="danger">не по правилам сети — не выдаётся</Badge>
-                  <span className="text-xs text-danger">{block.problem}</span>
-                </span>
-              ) : !block.active ? (
-                <Badge tone="warning">выключен</Badge>
-              ) : blockServable(view, block) ? (
-                <Badge tone="success">в выдаче</Badge>
-              ) : (
-                <Badge>ждёт сеть: включить и задать ключи</Badge>
-              ),
-          },
-        ]}
-      />
-      {open === null ? null : <BlockDialog view={view} block={open} onClose={() => setOpen(null)} onSaved={onSaved} />}
-    </Panel>
   );
 }
 

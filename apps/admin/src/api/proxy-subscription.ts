@@ -7,7 +7,9 @@ import type { AdminApi, ApiResult } from "./client";
  * включённых работают общим запасом прокси для исходящих запросов сервера.
  * Адрес подписки секретный: сервер его не отдаёт никогда — только подсказку
  * «хост …abcd»; панель шлёт адрес лишь тогда, когда его ввели. Действия идут по
- * ключу подписки: его выдаёт сервер при создании.
+ * ключу подписки: его выдаёт сервер при создании. Транспорт, безопасность и
+ * маршрутизация подписки — сведения для человека (T-0385): перебор узлов ими не
+ * руководствуется.
  */
 
 const ROOT = "/proxy-subscriptions";
@@ -23,8 +25,33 @@ const nodeSchema = z.object({
   host: z.string(),
   state: z.enum(NODE_STATES),
   latencyMs: z.number().nullable(),
+  /** транспорт, безопасность и flow из разбора; незнакомое значение показывается как есть, а не роняет ответ; null — узел до первого обновления после выкатки */
+  network: z.string().nullable(),
+  security: z.string().nullable(),
+  flow: z.string().nullable(),
 });
 export type SubscriptionNode = z.infer<typeof nodeSchema>;
+
+/** Своя маршрутизация подписки: только для сведения, наш перебор её не применяет. */
+const routingSchema = z.object({
+  source: z.enum(["none", "json", "header", "json+header"]),
+  /** записей мимо туннеля; null — заголовок поставщика есть, состав не разобран */
+  direct: z.number().nullable(),
+  block: z.number().nullable(),
+  /** geosite:/geoip: из записей мимо туннеля */
+  hints: z.array(z.string()),
+});
+export type SubscriptionRouting = z.infer<typeof routingSchema>;
+
+/** Под каким устройством сервер ходит к поставщику: одно на подписку. */
+const deviceSchema = z.object({
+  count: z.number(),
+  /** первые знаки идентификатора устройства; null — на сервере нет ключа шифрования */
+  hwidPrefix: z.string().nullable(),
+  os: z.string(),
+  userAgent: z.string(),
+});
+export type SubscriptionDevice = z.infer<typeof deviceSchema>;
 
 const subscriptionSchema = z.object({
   /** по ключу идут все действия; неизменен с рождения */
@@ -41,6 +68,9 @@ const subscriptionSchema = z.object({
   trafficTotalBytes: z.number().nullable(),
   expiresAt: z.string().nullable(),
   updatedAt: z.string(),
+  /** null — подписка не обновлялась после выкатки */
+  routing: routingSchema.nullable(),
+  device: deviceSchema,
   nodes: z.array(nodeSchema),
 });
 export type SubscriptionInfo = z.infer<typeof subscriptionSchema>;

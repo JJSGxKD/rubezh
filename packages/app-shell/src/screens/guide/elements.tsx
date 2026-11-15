@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { EnemyDef, StatusElement } from "@bh/shared-types";
 import { t } from "../../i18n";
 import { ElementMark } from "../element-mark";
-import { enemyAttackElement, enemyResists, weaponElements } from "./guide-data";
+import { enemyAttackElement, enemyResists, enemyTrailKey, weaponElements } from "./guide-data";
 
 /**
  * Стихии в гайдбуке (docs/35-stage4-plan.md, WP6): что делает каждая, у кого
@@ -51,6 +51,13 @@ export function ResistLine(props: { def: EnemyDef }): ReactNode {
       {weak.length === 0 ? null : <ElementGroup label={t("guide.enemy.weak")} elements={weak} />}
     </p>
   );
+}
+
+/** «Оставляет ядовитые лужи — не стой в них» на карточке врага со следом; у остальных строки нет. */
+export function TrailLine(props: { def: EnemyDef }): ReactNode {
+  const key = enemyTrailKey(props.def);
+  if (key === null) return null;
+  return <p className="mt-1 text-xs text-text-muted">{t(key)}</p>;
 }
 
 function ElementGroup(props: { label: string; elements: StatusElement[] }): ReactNode {

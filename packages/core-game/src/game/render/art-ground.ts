@@ -16,7 +16,15 @@ export const ART_GROUND_KEY = "art-ground";
 export const ART_ENV_KEY = "art-env";
 
 /** Сторона клетки земли в игровых единицах: одна плитка 512 px. */
-const GROUND_CELL_UNITS = 256;
+export const GROUND_CELL_UNITS = 256;
+/**
+ * Перекрытие соседних клеток в игровых единицах. Край клетки слева и край
+ * соседа справа считаются по-разному и после матрицы слоя (дробный сдвиг,
+ * масштаб камеры, float32) расходятся на доли пикселя: столбец, чей центр
+ * попал в щель, не закрашен, и сквозь него виден цвет фона камеры. Плитка
+ * бесшовная, тинт в общих углах совпадает — единица перекрытия не видна.
+ */
+export const GROUND_OVERLAP_UNITS = 1;
 /** Сторона чанка декора в игровых единицах. */
 const CHUNK_UNITS = 384;
 /** Светлота основы нейтральной плитки — тинт делится на неё. */
@@ -83,6 +91,15 @@ export function groundTint(x: number, y: number): number {
   return (channel(16) << 16) | (channel(8) << 8) | channel(0);
 }
 
+/**
+ * Квадрат клетки земли в пикселях слоя мира: позиция прежняя, сторона больше
+ * на перекрытие. Клетка квадратная, поэтому `width` — и высота.
+ */
+export function groundCellRect(gx: number, gy: number, unitScale: number): { x: number; y: number; width: number } {
+  const size = GROUND_CELL_UNITS * unitScale;
+  return { x: gx * size, y: gy * size, width: size + GROUND_OVERLAP_UNITS * unitScale };
+}
+
 export class ArtGround {
   private readonly scene: Phaser.Scene;
   private readonly unitScale: number;
@@ -143,8 +160,8 @@ export class ArtGround {
 
   private cell(gx: number, gy: number): Phaser.GameObjects.Image {
     const image = this.cellPool.pop() ?? this.add(this.groundLayer, ART_GROUND_KEY).setOrigin(0, 0);
-    const size = GROUND_CELL_UNITS * this.unitScale;
-    image.setVisible(true).setPosition(gx * size, gy * size).setScale(size / image.width);
+    const rect = groundCellRect(gx, gy, this.unitScale);
+    image.setVisible(true).setPosition(rect.x, rect.y).setScale(rect.width / image.width);
     const corner = (x: number, y: number): number => groundTint(x * GROUND_CELL_UNITS, y * GROUND_CELL_UNITS);
     image.setTint(corner(gx, gy), corner(gx + 1, gy), corner(gx, gy + 1), corner(gx + 1, gy + 1));
     return image;

@@ -40,6 +40,12 @@ export interface AdBlockDef {
   devices: AdDevice[];
 }
 
+/** Блок каталога как его видит панель: правимые поля и отметка архива (Р200). */
+export interface AdCatalogBlock extends AdBlockDef {
+  /** ISO-время отметки; `null` — не в архиве */
+  archivedAt: string | null;
+}
+
 /** Воронка сети в месте за период: сколько выдано и сколько дошло до каждого шага. */
 export interface AdFunnelRow {
   networkKey: string;
@@ -73,7 +79,7 @@ export const ADS_CATALOG_REPOSITORY = Symbol("ADS_CATALOG_REPOSITORY");
 
 export interface AdsCatalogRepository {
   networks(): Promise<AdNetworkRow[]>;
-  blocks(): Promise<AdBlockDef[]>;
+  blocks(): Promise<AdCatalogBlock[]>;
   /** `false` — такой сети нет */
   updateNetwork(edit: AdNetworkEdit, at: Date): Promise<boolean>;
   /**
@@ -84,8 +90,18 @@ export interface AdsCatalogRepository {
   reorderNetworks(ids: readonly string[], at: Date): Promise<AdNetworksReorderResult>;
   /** новый блок — идентификатор выдаёт база; `null` — сети нет */
   insertBlock(block: Omit<AdBlockDef, "blockId">, actorAccountId: string, at: Date): Promise<AdBlockDef | null>;
-  /** сеть и место у блока не меняются; `false` — блока нет */
+  /**
+   * Сеть и место у блока не меняются; `false` — блока нет или он в архиве
+   * (Р200): правка, начатая до архива, не должна включить архивный блок.
+   */
   updateBlock(block: AdBlockDef, actorAccountId: string, at: Date): Promise<boolean>;
+  /**
+   * Отметка архива (Р200): `archived: true` — `archived_at = at` и `active = false`
+   * одной записью; `false` — `archived_at = NULL`, `active` не трогается.
+   * Пишет только при смене состояния. Результат: `null` — блока нет, иначе
+   * блок после записи и `changed` — была ли запись.
+   */
+  setBlockArchived(blockId: string, archived: boolean, actorAccountId: string, at: Date): Promise<{ block: AdCatalogBlock; changed: boolean } | null>;
   /** воронка настоящих показов; пропуски VIP — не здесь, а в `passes` */
   funnel(from: Date, to: Date): Promise<AdFunnelRow[]>;
   passes(from: Date, to: Date): Promise<AdPassRow[]>;
@@ -106,7 +122,26 @@ const blockSchema = z.object({
   active: z.boolean(),
   platforms: z.array(z.enum(PLATFORM_IDS)),
   devices: z.array(z.enum(AD_DEVICES)),
+  archived_at: z.date().nullable(),
 });
+
+/** Столбцы блока для панели — одни и для списка, и для перечитывания после записи. */
+const BLOCK_COLUMNS = Prisma.sql`block_id::text, network_key, place::text, external_id, success::text, active, platforms::text[] AS platforms, devices::text[] AS devices, archived_at`;
+
+function catalogBlockOf(raw: unknown): AdCatalogBlock {
+  const row = blockSchema.parse(raw);
+  return {
+    blockId: row.block_id,
+    networkKey: row.network_key,
+    place: row.place,
+    externalId: row.external_id,
+    success: row.success,
+    active: row.active,
+    platforms: row.platforms,
+    devices: row.devices,
+    archivedAt: row.archived_at?.toISOString() ?? null,
+  };
+}
 
 const count = z.union([z.bigint(), z.number()]).transform(Number);
 const funnelSchema = z.object({
@@ -134,23 +169,9 @@ export class PrismaAdsCatalogRepository implements AdsCatalogRepository {
     });
   }
 
-  async blocks(): Promise<AdBlockDef[]> {
-    const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT block_id::text, network_key, place::text, external_id, success::text, active, platforms::text[] AS platforms, devices::text[] AS devices
-      FROM ad_block ORDER BY place, network_key, created_at`;
-    return rows.map((raw) => {
-      const row = blockSchema.parse(raw);
-      return {
-        blockId: row.block_id,
-        networkKey: row.network_key,
-        place: row.place,
-        externalId: row.external_id,
-        success: row.success,
-        active: row.active,
-        platforms: row.platforms,
-        devices: row.devices,
-      };
-    });
+  async blocks(): Promise<AdCatalogBlock[]> {
+    const rows = await this.prisma.$queryRaw<unknown[]>`SELECT ${BLOCK_COLUMNS} FROM ad_block ORDER BY place, network_key, created_at`;
+    return rows.map(catalogBlockOf);
   }
 
   async updateNetwork(edit: AdNetworkEdit, at: Date): Promise<boolean> {
@@ -211,8 +232,9 @@ export class PrismaAdsCatalogRepository implements AdsCatalogRepository {
 
   async updateBlock(block: AdBlockDef, actorAccountId: string, at: Date): Promise<boolean> {
     // Сеть и место не меняются: по ним считана воронка прошлых показов.
+    // Блок в архиве не правится даже при гонке: условие стоит в самой записи, а не только в сервисе.
     const { count } = await this.prisma.adBlock.updateMany({
-      where: { blockId: block.blockId },
+      where: { blockId: block.blockId, archivedAt: null },
       data: {
         externalId: block.externalId,
         success: block.success,
@@ -224,6 +246,16 @@ export class PrismaAdsCatalogRepository implements AdsCatalogRepository {
       },
     });
     return count > 0;
+  }
+
+  async setBlockArchived(blockId: string, archived: boolean, actorAccountId: string, at: Date): Promise<{ block: AdCatalogBlock; changed: boolean } | null> {
+    // Условие по состоянию делает повтор и гонку двух запросов безвредными: пишет ровно один из них.
+    const { count } = await this.prisma.adBlock.updateMany({
+      where: archived ? { blockId, archivedAt: null } : { blockId, archivedAt: { not: null } },
+      data: archived ? { archivedAt: at, active: false, updatedAt: at, updatedBy: actorAccountId } : { archivedAt: null, updatedAt: at, updatedBy: actorAccountId },
+    });
+    const [raw] = await this.prisma.$queryRaw<unknown[]>`SELECT ${BLOCK_COLUMNS} FROM ad_block WHERE block_id = ${blockId}::uuid`;
+    return raw === undefined ? null : { block: catalogBlockOf(raw), changed: count > 0 };
   }
 
   async funnel(from: Date, to: Date): Promise<AdFunnelRow[]> {

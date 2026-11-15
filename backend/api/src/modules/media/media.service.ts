@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
+import { PERMISSIONS, type Permission } from "../roles/permissions.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
-import { IMAGE_CONTENT_TYPE, IMAGE_PROFILES, checkImage, fitsProfile, imageIdOf, type ImageProfileId } from "./image-rules.js";
+import { IMAGE_CONTENT_TYPE, IMAGE_PROFILES, checkImage, fitsProfile, imageIdOf, viewPermissionOf, type ImageProfileId } from "./image-rules.js";
 import { ImageNotFoundError, ImageRejectedError } from "./media-errors.js";
 import { MEDIA_REPOSITORY, type ImageMeta, type MediaRepository, type StoredImage } from "./media.repository.js";
 
@@ -15,6 +16,13 @@ import { MEDIA_REPOSITORY, type ImageMeta, type MediaRepository, type StoredImag
  */
 
 const DB_TIMEOUT_MS = 3_000;
+
+/** Право из строки базы; неизвестное — сбой, а не «открыто»: закрытое не должно открыться из-за опечатки. */
+function permissionOf(value: string): Permission {
+  const found = PERMISSIONS.find((permission) => permission === value);
+  if (found === undefined) throw new Error(`У картинки в базе неизвестное право показа «${value}»`);
+  return found;
+}
 
 /** Сколько держит реплика: картинок немного, каждая — до 200 КБ. */
 const CACHE_BUDGET_BYTES = 16 * 1024 * 1024;
@@ -35,9 +43,12 @@ export class MediaService {
     const checked = checkImage(bytes, IMAGE_PROFILES[profileId]);
     if (!checked.ok) throw new ImageRejectedError(checked.problem);
     const imageId = imageIdOf(bytes);
+    const viewPermission = viewPermissionOf(profileId);
     const meta = await this.db(
-      this.repository.insert({ imageId, contentType: IMAGE_CONTENT_TYPE, width: checked.width, height: checked.height, sizeBytes: bytes.length, data: bytes, createdBy: actor.accountId }),
+      this.repository.insert({ imageId, contentType: IMAGE_CONTENT_TYPE, width: checked.width, height: checked.height, sizeBytes: bytes.length, data: bytes, createdBy: actor.accountId, viewPermission }),
     );
+    // Прочитанная раньше открытой копия в памяти реплики устарела: закрытая загрузка закрывает и её.
+    if (viewPermission !== null) this.cache.delete(imageId);
     this.logger.log(JSON.stringify({ module: "media", event: "image_uploaded", accountId: actor.accountId, imageId, profile: profileId, sizeBytes: bytes.length }));
     return meta;
   }
@@ -60,12 +71,29 @@ export class MediaService {
     return image;
   }
 
-  /** Сохранённая картинка годится профилю — для того, что на неё ссылается: квадрат заданию, а не слайд. */
+  /**
+   * Картинка для показа в панели: закрытую отдаёт только тому, у кого есть право профиля, — остальным 403, а не
+   * «нет такой»: что картинка есть, они и так знают по адресу, а скрывать здесь нечего.
+   */
+  async readForPanel(actor: AccountRef, imageId: string): Promise<StoredImage | null> {
+    const image = await this.read(imageId);
+    if (image === null) return null;
+    if (image.viewPermission !== undefined && image.viewPermission !== null) await this.roles.require(actor, permissionOf(image.viewPermission));
+    return image;
+  }
+
+  /**
+   * Сохранённая картинка годится профилю — для того, что на неё ссылается: квадрат заданию, а не слайд. Закрытому
+   * профилю годится только та, что загружена под ним: чужую картинку чека не подставить, а загруженную открытой
+   * не «закрыть» ссылкой на неё.
+   */
   async require(imageId: string, profileId: ImageProfileId): Promise<void> {
     const meta = await this.db(this.repository.meta(imageId));
     if (meta === null) throw new ImageNotFoundError();
     const misfit = fitsProfile(meta, IMAGE_PROFILES[profileId]);
     if (misfit !== null) throw new ImageRejectedError(misfit.problem);
+    const needed = viewPermissionOf(profileId);
+    if (needed !== null && (await this.read(imageId))?.viewPermission !== needed) throw new ImageRejectedError(`Это не ${IMAGE_PROFILES[profileId].title}: загрузи его заново`);
   }
 
   private async db<T>(promise: Promise<T>): Promise<T> {
@@ -87,6 +115,13 @@ export class ImageCache {
     this.items.delete(imageId);
     this.items.set(imageId, item);
     return item;
+  }
+
+  delete(imageId: string): void {
+    const item = this.items.get(imageId);
+    if (item === undefined) return;
+    this.items.delete(imageId);
+    this.bytes -= item.data.byteLength;
   }
 
   set(image: StoredImage): void {

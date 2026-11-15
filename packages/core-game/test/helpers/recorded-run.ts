@@ -9,6 +9,7 @@ import { buildRunResult } from "../../src/game/run/run-result";
 import { createRunWorld } from "../../src/game/run-world";
 import { IDLE_CODE, inputOfCode, quantizeDirection } from "../../src/game/sim/input-code";
 import { applyContinue } from "../../src/game/sim/continue";
+import { settleCordonDeath } from "../../src/game/sim/cordon";
 import { stepWorld, type SimInput } from "../../src/game/sim/step";
 import { TICK_SEC } from "../../src/game/sim/world";
 import type { RunRecording } from "../../src/run-api";
@@ -30,6 +31,8 @@ export interface RecordedRunOptions {
   continues?: boolean;
   /** снаряжение на забег — как его подаёт оболочка */
   loadout?: RunLoadout;
+  /** модификатор забега (T-0119) — как его подаёт оболочка */
+  modifierIds?: readonly string[];
 }
 
 export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
@@ -40,6 +43,7 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     difficultyId: options.difficultyId ?? "normal",
     unitScale,
     ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
+    ...(options.modifierIds === undefined ? {} : { modifierIds: options.modifierIds }),
   });
   const recorder = new RunRecorder({
     reportId: "00000000-0000-4000-8000-000000000001",
@@ -53,6 +57,7 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     unitScale,
     replayBlocker: null,
     ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
+    ...(world.modifierIds.length === 0 ? {} : { modifierIds: [...world.modifierIds] }),
   });
   const choose = options.choose ?? ((offers) => offers[0].id);
   const input: SimInput = { moveX: 0, moveY: 0 };
@@ -82,6 +87,8 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     spawner.update(world, TICK_SEC);
     stepWorld(world, inputOfCode(code, input));
     recorder.stepped(code, world);
+    // Как в сцене: смерть закрывает кольцо стражей после шага и после свёртки тика.
+    settleCordonDeath(world);
     const frameMs = 1000 / 60;
     perf.frame(frameMs, world.enemies.aliveCount + world.projectiles.aliveCount);
     recorder.frame({

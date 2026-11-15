@@ -3,6 +3,7 @@ import { clearFreeze } from "./freeze";
 import { clearPlayerStatuses } from "./player-status";
 import { closeOpenRifts } from "./secrets";
 import { resetSiege } from "./siege";
+import { resetStalkerOnContinue } from "./stalker";
 import { despawnEnemy, MAX_CONTINUES_PER_RUN, TICK_SEC, type World } from "./world";
 
 /**
@@ -26,6 +27,9 @@ export function canContinue(world: World): boolean {
 export function applyContinue(world: World): boolean {
   if (!canContinue(world)) return false;
 
+  // Появление Карачуна, шедшее в момент смерти, закрывается исходом `died`, а следующее предвестие
+  // отодвигается на обычную паузу от этого тика; тело убирают вместе со всеми врагами ниже.
+  resetStalkerOnContinue(world);
   const enemies = world.enemies;
   for (let i = 0; i < enemies.count; i++) {
     if (enemies.alive[i] === 1) despawnEnemy(world, i);

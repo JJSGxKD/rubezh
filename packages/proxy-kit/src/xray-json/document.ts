@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { ProxyNode } from "../node.js";
+import { routingOfConfigs, type RoutingSummary } from "../routing.js";
 import type { SkippedLink } from "../subscription.js";
-import { parseOutbound } from "./outbound.js";
+import { parseOutbound, type Siblings } from "./outbound.js";
 
 /**
  * JSON-подписка Xray: массив полных конфигов (`[{ remarks, outbounds: [...] }]`) —
@@ -17,11 +18,13 @@ const SERVICE_PROTOCOLS: ReadonlySet<string> = new Set(["freedom", "blackhole", 
 /** Схема, по которой протокол попадает в `scheme` пропуска: из JSON туда не должно попасть что попало. */
 const SCHEME = /^[a-z][a-z0-9+.-]{0,31}$/;
 
-const config = z.object({ remarks: z.unknown().optional(), outbounds: z.array(z.unknown()) });
+/** `routing` читается как есть: что в нём правила, решает `routingOfConfigs`, а мусор там не повод отбросить конфиг. */
+const config = z.object({ remarks: z.unknown().optional(), outbounds: z.array(z.unknown()), routing: z.unknown().optional() });
 const withProtocol = z.object({ protocol: z.string() });
+const withTag = z.object({ tag: z.string() });
 
 export type XrayJsonResult =
-  | { kind: "ok"; nodes: ProxyNode[]; skipped: SkippedLink[]; truncated: boolean }
+  | { kind: "ok"; nodes: ProxyNode[]; skipped: SkippedLink[]; truncated: boolean; routing: RoutingSummary | null }
   | { kind: "unsupported_format" | "empty" };
 
 /** Что разбирается и считается в `maxLinks`: выход-узел либо то, что выходом не оказалось. */
@@ -32,6 +35,8 @@ type Item =
       scheme: string;
       outbound: unknown;
       remarks: string;
+      /** выходы его конфига по тегу: цепочка узла ищет в них свой `freedom` */
+      siblings: Siblings;
     }
   | { kind: "problem"; detail: "config" | "outbounds" | "protocol" };
 
@@ -40,6 +45,16 @@ export const looksLikeJson = (text: string): boolean => text.startsWith("[") || 
 
 /** Объект, а не `null`, список или число: остальное в схему Zod не отдаётся, чтобы мусор не плодил её ошибки. */
 const isObject = (value: unknown): value is object => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Выходы конфига по тегу; при повторе тега действует первый, как у Xray. */
+function outboundsByTag(outbounds: readonly unknown[]): Map<string, unknown> {
+  const byTag = new Map<string, unknown>();
+  for (const outbound of outbounds) {
+    const tagged = withTag.safeParse(outbound);
+    if (tagged.success && tagged.data.tag !== "" && !byTag.has(tagged.data.tag)) byTag.set(tagged.data.tag, outbound);
+  }
+  return byTag;
+}
 
 /**
  * `maxLinks` считает выходы-кандидаты (не служебные) и мусор вместо них, как
@@ -69,6 +84,7 @@ export function parseXrayJson(text: string, maxLinks: number): XrayJsonResult {
   };
 
   let configs = 0;
+  const parsedConfigs: object[] = [];
   let typed = 0;
   let problems = 0;
   for (const element of Array.isArray(raw) ? raw : [raw]) {
@@ -79,7 +95,9 @@ export function parseXrayJson(text: string, maxLinks: number): XrayJsonResult {
       continue;
     }
     configs++;
+    parsedConfigs.push(parsed.data);
     const remarks = typeof parsed.data.remarks === "string" ? parsed.data.remarks : "";
+    const siblings = outboundsByTag(parsed.data.outbounds);
     for (const outbound of parsed.data.outbounds) {
       const header = isObject(outbound) ? withProtocol.safeParse(outbound) : null;
       if (header === null || !header.success) {
@@ -89,7 +107,7 @@ export function parseXrayJson(text: string, maxLinks: number): XrayJsonResult {
       }
       typed++;
       const protocol = header.data.protocol.toLowerCase();
-      if (!SERVICE_PROTOCOLS.has(protocol)) add({ kind: "outbound", scheme: SCHEME.test(protocol) ? protocol : "unknown", outbound, remarks });
+      if (!SERVICE_PROTOCOLS.has(protocol)) add({ kind: "outbound", scheme: SCHEME.test(protocol) ? protocol : "unknown", outbound, remarks, siblings });
     }
   }
 
@@ -103,12 +121,12 @@ export function parseXrayJson(text: string, maxLinks: number): XrayJsonResult {
       skipped.push({ index, scheme: "unknown", reason: "malformed", detail: item.detail });
       return;
     }
-    const result = parseOutbound(item.scheme, item.outbound, item.remarks);
+    const result = parseOutbound(item.scheme, item.outbound, item.remarks, item.siblings);
     if (result.ok) {
       if (!nodes.has(result.node.key)) nodes.set(result.node.key, result.node);
       return;
     }
     skipped.push({ index, scheme: item.scheme, reason: result.reason, detail: result.detail });
   });
-  return { kind: "ok", nodes: [...nodes.values()], skipped, truncated: total > maxLinks };
+  return { kind: "ok", nodes: [...nodes.values()], skipped, truncated: total > maxLinks, routing: routingOfConfigs(parsedConfigs) };
 }

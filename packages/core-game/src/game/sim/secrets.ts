@@ -28,7 +28,7 @@ import {
  * - **камень-указатель** — коснуться, и все тайники видны на радаре;
  * - **древо-оберег** — рядом лечит и раз в минуту даёт щит, но не отпускает: оно не исчезает;
  * - **разлом Нави** — вошёл, и выходит волна элит; убил всех за срок — большой сундук;
- * - **огонёк** — появляется у игрока и летит к ближайшему неоткрытому тайнику.
+ * - **огонёк** — появляется у игрока и ведёт к ближайшему неоткрытому тайнику шагами, пока есть куда.
  *
  * Раскладка бросается один раз при создании мира: по кольцам от старта, из
  * собственного потока случайности `world.secrets.rng`. Общий `world.rng`
@@ -41,6 +41,9 @@ export { createSecretState } from "./secrets-layout";
 export { findSecretsProblems } from "./secrets-rules";
 
 const scratch = createDirection();
+
+/** Дальше полутора шагов до края круга — обычный шаг с отклонением, ближе — последний, прямо к цели. */
+const LAST_HOP_MUL = 1.5;
 
 function holdTicksOf(holdSec: number): number {
   return Math.round(holdSec * TICK_HZ);
@@ -335,9 +338,19 @@ export function restoreBlessings(world: World, ids: readonly string[]): void {
 
 // --- Огонёк -------------------------------------------------------------------
 
+/**
+ * Огонёк ведёт шагами (Р214): короткий перелёт в сторону цели с боковым отклонением, ожидание
+ * игрока, следующий шаг в другую сторону. Прямой полёт выдавал цель по одному направлению, и игрок
+ * убегал вперёд, не дожидаясь огонька. Последний шаг — прямо к краю круга цели. Нет места, в круг
+ * которого игрок не входил, — огонёк гаснет: вести некуда.
+ */
 function updateWisp(world: World, index: number, tick: number, elapsedSec: number): void {
   const site = world.secrets.sites[index];
   const rules = world.secretRules;
+  const scale = world.config.unitScale;
+
+  // Погасший не появляется снова: проверка раньше ветки «спит до appearSec».
+  if (site.used) return;
 
   if (!site.active) {
     if (tick < holdTicksOf(rules.wisp.appearSec) || !world.player.alive) return;
@@ -349,23 +362,70 @@ function updateWisp(world: World, index: number, tick: number, elapsedSec: numbe
     return;
   }
 
+  if (site.flying) {
+    flyWisp(world, site);
+    return;
+  }
+
   const target = nearestUnfound(world, site);
-  if (target === null) return;
+  if (target === null) {
+    // Гаснет молча: в журнал использованных и в итог забега это не идёт, игроку огонёк ничего не дал.
+    site.used = true;
+    site.active = false;
+    site.visible = false;
+    return;
+  }
 
   // Ждёт на краю круга, а не на самом тайнике: знак тайника остаётся виден.
-  const stopAt = radiusOf(rules, target.kind) * world.config.unitScale;
+  const stopAt = radiusOf(rules, target.kind) * scale;
   const dx = target.x - site.x;
   const dy = target.y - site.y;
   const distance = vectorLength(dx, dy);
   const remaining = distance - stopAt;
   if (remaining <= 0) return;
 
+  // Игрок отстал — огонёк стоит: ведёт он только того, кто идёт следом.
+  const wait = rules.wisp.waitUnits * scale;
+  const playerDx = world.player.x - site.x;
+  const playerDy = world.player.y - site.y;
+  if (playerDx * playerDx + playerDy * playerDy > wait * wait) return;
+
   scratch.x = dx / distance;
   scratch.y = dy / distance;
-  const step = rules.wisp.speed * world.config.unitScale * TICK_SEC;
-  const travelled = remaining <= step ? remaining : step;
-  site.x += scratch.x * travelled;
-  site.y += scratch.y * travelled;
+  const hop = rules.wisp.hopUnits * scale;
+  if (remaining <= LAST_HOP_MUL * hop) {
+    // Последний шаг — прямо к краю круга цели, без отклонения.
+    site.hopX = target.x - scratch.x * stopAt;
+    site.hopY = target.y - scratch.y * stopAt;
+  } else {
+    // Сторона чередуется по чётности шагов, величина — из потока огонька (одна выборка на шаг).
+    const side = site.hops % 2 === 0 ? 1 : -1;
+    const { swayMin, swayMax } = rules.wisp;
+    const sway = swayMin + world.secrets.wispRng.nextFloat() * (swayMax - swayMin);
+    const sideShift = side * sway * hop;
+    // Перпендикуляр к направлению на цель — поворотом на 90 градусов, без тригонометрии.
+    const bounds = world.config.bounds;
+    site.hopX = clampToBounds(site.x + scratch.x * hop - scratch.y * sideShift, bounds.halfWidth);
+    site.hopY = clampToBounds(site.y + scratch.y * hop + scratch.x * sideShift, bounds.halfHeight);
+  }
+  site.hops++;
+  site.flying = true;
+}
+
+/** Перелёт к точке шага со скоростью огонька; долетел — садится и ждёт игрока. */
+function flyWisp(world: World, site: SecretSite): void {
+  const dx = site.hopX - site.x;
+  const dy = site.hopY - site.y;
+  const distance = vectorLength(dx, dy);
+  const step = world.secretRules.wisp.speed * world.config.unitScale * TICK_SEC;
+  if (distance <= step) {
+    site.x = site.hopX;
+    site.y = site.hopY;
+    site.flying = false;
+    return;
+  }
+  site.x += (dx / distance) * step;
+  site.y += (dy / distance) * step;
 }
 
 /** Ближайший к огоньку тайник на земле, в круг которого игрок ещё не входил. */
@@ -394,7 +454,8 @@ export function secretKindsFound(world: World): SecretKind[] {
 
 /** Использованные виды без повторов, в каноническом порядке. */
 export function secretKindsUsed(world: World): SecretKind[] {
-  return SECRET_KINDS.filter((kind) => world.secrets.sites.some((site) => site.kind === kind && site.used));
+  // Погасший огонёк помечен использованным, но игроку ничего не дал — в итог не идёт (Р214).
+  return SECRET_KINDS.filter((kind) => kind !== "wisp" && world.secrets.sites.some((site) => site.kind === kind && site.used));
 }
 
 /** Сколько записей сцена уже забрала. */

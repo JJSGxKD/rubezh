@@ -8,7 +8,7 @@ import { RestrictionsService } from "../restrictions/restrictions.service.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { TASK_REVOKE_REASON, type WalletResource } from "../wallet/wallet-types.js";
-import { ASK_TIMEOUT_MS, BATCH, CLOSE_MS, closesPartnerTasks, isFinalCheck, nextCheckAfter, shouldGiveUp, watchUntil } from "./channel-watch-rules.js";
+import { ASK_TIMEOUT_MS, BATCH, CLOSE_MS, closesPartnerTasks, isFinalCheck, nextCheckAfter, retentionMarks, shouldGiveUp, watchUntil } from "./channel-watch-rules.js";
 import { CHANNEL_WATCH_REPOSITORY, type ChannelWatchRepository, type Penalty, type Revoked, type WatchKey, type WatchRow } from "./channel-watch.repository.js";
 import type { TaskDef } from "./task-rules.js";
 import { TASKS_REPOSITORY, type TasksRepository } from "./tasks.repository.js";
@@ -31,6 +31,9 @@ import { TASKS_REPOSITORY, type TasksRepository } from "./tasks.repository.js";
  *   уведомление держатся на ключах, ограничение накладывается один раз под
  *   замком пары, поэтому оборвавшийся проход доделывает событие, а не
  *   удваивает;
+ * - те же проверки ставят отметки удержания на 1-й, 3-й и 7-й день (Р139,
+ *   T-0223): в канале — первой успешной проверкой после границы, отписка
+ *   закрывает пустые `false`, нет ответа — нет отметки; штраф от них не зависит;
  * - площадку спрашивают по одному вопросу, без замка и вне транзакции
  *   (docs/15 §4.2); замок пары — только вокруг записей.
  */
@@ -87,14 +90,17 @@ export class ChannelWatchService {
 
   /**
    * Завести окно на выданную награду за подписку. Только у `channel` и только
-   * там, где у площадки есть проверка подписки: MAX и VK штрафа не знают.
+   * там, где у площадки есть проверка подписки и канал — своей площадки игрока:
+   * канал MAX проверяет бот MAX по id игрока там (Р188), а окно спросило бы по
+   * id его площадки и «отписало» бы подписанного. Перепроверка чужих каналов —
+   * отдельная задача после T-0178.
    * `false` — окна не будет или оно уже есть. Зовёт забор награды, поэтому
    * сам решает, наблюдается ли это задание.
    */
   async start(account: AccountRef, def: TaskDef, periodStart: string, at: Date): Promise<boolean> {
     const params = def.params;
     if (def.kind !== "channel" || params === null || params.chat === undefined || params.platform === undefined) return false;
-    if (this.memberships.for(params.platform) === null) return false;
+    if (params.platform !== account.platform || this.memberships.for(params.platform) === null) return false;
     const until = watchUntil(at);
     const created = await this.watch.start({ accountId: account.accountId, taskId: def.taskId, periodStart, startedAt: at, watchUntil: until, nextCheckAt: nextCheckAfter(at, until) });
     if (created) this.logger.log(JSON.stringify({ module: "tasks", event: "channel_watch_started", accountId: account.accountId, taskId: def.taskId, periodStart }));
@@ -181,8 +187,13 @@ export class ChannelWatchService {
     return { kind: "unsure", failed: true };
   }
 
-  /** Состоит: окна на исходе закрываются сохранёнными, остальные откладываются. */
+  /**
+   * Состоит: ставятся отметки удержания, потом окна на исходе закрываются
+   * сохранёнными, остальные откладываются. Отметки первыми: закрытое окно
+   * проверок уже не получит.
+   */
   private async keep(windows: readonly WatchRow[], now: Date, result: TickResult): Promise<void> {
+    await this.watch.markRetention(windows.map((window) => ({ key: keyOf(window), marks: retentionMarks(window, now, true) })));
     const final = windows.filter((window) => isFinalCheck(now, window.watchUntil));
     if (final.length > 0) await this.watch.close(final.map(keyOf), "kept", now);
     result.kept += final.length;
@@ -245,6 +256,9 @@ export class ChannelWatchService {
     const items: Penalty[] = [];
     for (const window of open) items.push({ key: keyOf(window), revoked: await this.revokeReward(window, now) });
     const total = sumOf(items);
+    // Отписка закрывает будущее: пустые отметки удержания — `false`. До `markPenalized`, как и всё
+    // остальное в событии, и так же идемпотентно: поставленное не переписывается.
+    await this.watch.markRetention(open.map((window) => ({ key: keyOf(window), marks: retentionMarks(window, now, false) })));
     const closedUntil = closesPartnerTasks(eventNo) ? await this.closePartnerTasks(accountId, taskId, eventNo, now) : null;
     await this.tell(pair, def, eventNo, total, closedUntil, now);
     await this.watch.markPenalized(items, eventNo, now);

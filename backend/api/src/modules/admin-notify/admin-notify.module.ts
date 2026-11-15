@@ -11,6 +11,7 @@ import { DAILY_STATS_REPOSITORY, PrismaDailyStatsRepository } from "./daily-stat
 import { DAILY_STATS_LOCKS, DailyStatsReporter, RedisDailyStatsLocks } from "./daily-stats.reporter.js";
 import { FxAlertNotifier } from "./fx-alert-notifier.js";
 import { PaymentsAlertNotifier } from "./payments-alert-notifier.js";
+import { ReconcileAlertNotifier } from "./reconcile-alert-notifier.js";
 import { ReportNotifier } from "./report-notifier.js";
 import { RedisReviewThrottle, REVIEW_THROTTLE } from "./review-throttle.js";
 import { ServerErrorAlarm } from "./server-error-alarm.js";
@@ -20,7 +21,8 @@ import { ServerErrorAlarm } from "./server-error-alarm.js";
  * выключаются переключателем `notify.reports` — и забегов на разбор
  * антифрода — выключаются пустым адресом разбора вместе с общим — и алерты
  * курсов валют в общий чат, пока включён их опрос, сообщения о невыданных
- * покупках в поток «Покупки» (`payments-alert-notifier.ts`), тревога о
+ * покупках в поток «Покупки» (`payments-alert-notifier.ts`) и о новых расхождениях сверки оплат
+ * с выпиской площадки туда же (`reconcile-alert-notifier.ts`), тревога о
  * всплеске ответов 5xx в поток «Сбои сервера» (`server-error-alarm.ts`) и ежедневная
  * статистика в чат статистики (`daily-stats.reporter.ts`) и ночной снимок аудитории
  * для рекордов DAU/WAU/MAU (`activity-snapshot.job.ts`). Адреса и переключатель —
@@ -32,6 +34,7 @@ import { ServerErrorAlarm } from "./server-error-alarm.js";
     ReportNotifier,
     FxAlertNotifier,
     PaymentsAlertNotifier,
+    ReconcileAlertNotifier,
     ServerErrorAlarm,
     { provide: REVIEW_THROTTLE, useClass: RedisReviewThrottle },
     DailyStatsReporter,

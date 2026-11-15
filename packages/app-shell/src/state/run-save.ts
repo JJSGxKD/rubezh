@@ -1,4 +1,4 @@
-import { DIFFICULTY_IDS } from "@bh/shared-types";
+import { DEVICE_CLASSES, DIFFICULTY_IDS, RUN_MODES } from "@bh/shared-types";
 import { CONTENT_HASH, RUN_SNAPSHOT_FORMAT, type RunSnapshot } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
@@ -46,6 +46,18 @@ const savedRunSchema = z.object({
   // молча забытый признак превращал продолженный забег разработчика в обычный.
   cheats: z.optional(z.boolean()),
   dev: z.optional(z.boolean()),
+  // Режим, набор и запись для проверки (T-0316) тоже перечислены: без них продолженный забег
+  // терял бы пролог и снаряжение, а запись для проверки — всё прошлое. Запись проверяет движок.
+  mode: z.optional(z.enum(RUN_MODES)),
+  loadout: z.optional(
+    z.object({
+      modifiers: z.record(z.string(), z.number()),
+      boosts: z.array(z.string()),
+      accountLevel: z.optional(z.number()),
+      deviceClass: z.optional(z.enum(DEVICE_CLASSES)),
+    }),
+  ),
+  proof: z.optional(z.unknown()),
   /** когда сохранено, мс UTC — для подписи в лобби */
   savedAt: z.number(),
 });

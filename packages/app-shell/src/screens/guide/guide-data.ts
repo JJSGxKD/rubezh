@@ -12,7 +12,7 @@ import {
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ACCOUNT_UNLOCKS, BOOSTS, CONTENT_SNAPSHOT, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, RUBEZH, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, PATTERN_TRAITS, STALKER, BOOSTS, CONTENT_SNAPSHOT, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, RUBEZH, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -36,31 +36,65 @@ export function speedClass(speed: number): SpeedClass {
 export interface GuideEnemy {
   def: EnemyDef;
   /** на кого распадается при смерти; пусто — не распадается */
-  children: { def: EnemyDef; count: number }[];
+  children: { def: EnemyDef; count: number; opened: boolean }[];
+  /**
+   * Открыта ли запись в кодексе (tasks/T-0127). Закрытая показывается силуэтом без
+   * названия и описания. Гость, ошибка сети и старый сервер — открыто всё.
+   */
+  opened: boolean;
 }
 
 /** Умолчание числа потомков живёт в движке — гайдбук берёт его оттуда же. */
 const DEFAULT_CHILD_COUNT = 3;
 
-function toGuideEnemy(def: EnemyDef): GuideEnemy {
-  if (def.pattern !== "splitter") return { def, children: [] };
+export function toGuideEnemy(def: EnemyDef, opened = true, openedIds: OpenedEnemies = null): GuideEnemy {
+  if (def.pattern !== "splitter") return { def, children: [], opened };
 
   const children = def.params.children.flatMap((entry) => {
     const child = ENEMIES.find((enemy) => enemy.id === entry.enemy);
     const count = entry.count ?? DEFAULT_CHILD_COUNT;
-    return child === undefined || count < 1 ? [] : [{ def: child, count }];
+    // Потомок называется, только если и его запись открыта: иначе открытая матрёшка выдала бы закрытого.
+    return child === undefined || count < 1 ? [] : [{ def: child, count, opened: isOpened(openedIds, child) }];
   });
-  return { def, children };
+  return { def, children, opened };
+}
+
+/**
+ * `openedIds` — id открытых записей кодекса; `null` — кодекса нет, открыто всё.
+ * Состав списка от кодекса не зависит: закрытый враг остаётся в нём силуэтом.
+ */
+export type OpenedEnemies = ReadonlySet<string> | null;
+
+const isOpened = (openedIds: OpenedEnemies, def: EnemyDef): boolean => openedIds === null || openedIds.has(def.id);
+
+function isUnkillable(enemy: EnemyDef): boolean {
+  return PATTERN_TRAITS[enemy.pattern].unkillable;
 }
 
 /** Обычные враги в порядке контента — примерно в том, в каком они приходят. */
-export function regularEnemies(): GuideEnemy[] {
-  return ENEMIES.filter((enemy) => enemy.rank === undefined).map(toGuideEnemy);
+export function regularEnemies(openedIds: OpenedEnemies = null): GuideEnemy[] {
+  return ENEMIES.filter((enemy) => !isUnkillable(enemy) && enemy.rank === undefined).map((def) => toGuideEnemy(def, isOpened(openedIds, def), openedIds));
 }
 
 /** Элита и мини-боссы: приходят только событиями таймлайна. */
-export function eliteEnemies(): GuideEnemy[] {
-  return ENEMIES.filter((enemy) => enemy.rank !== undefined).map(toGuideEnemy);
+export function eliteEnemies(openedIds: OpenedEnemies = null): GuideEnemy[] {
+  return ENEMIES.filter((enemy) => !isUnkillable(enemy) && enemy.rank !== undefined).map((def) => toGuideEnemy(def, isOpened(openedIds, def), openedIds));
+}
+
+/** Неубиваемые (Р205): враги паттерна с признаком `unkillable` — у них нет здоровья и опыта, строка статов врала бы. */
+export function unkillableEnemies(openedIds: OpenedEnemies = null): GuideEnemy[] {
+  return ENEMIES.filter(isUnkillable).map((def) => toGuideEnemy(def, isOpened(openedIds, def), openedIds));
+}
+
+/** Группа записи для закрытой карточки: игрок знает, кого искать — рядового, элиту или босса. */
+export function enemyGroup(def: EnemyDef): "regular" | "elite" | "boss" {
+  return def.rank === "boss" ? "boss" : def.rank === "elite" ? "elite" : "regular";
+}
+
+/** Карачун: с какой секунды приходит и сколько гонится — из контента, чисел в тексте нет. */
+export function stalkerGuide(): { fromSec: number; chaseMinSec: number; chaseMaxSec: number } {
+  const { fromSec, chaseSec } = STALKER.appear;
+  return { fromSec, chaseMinSec: chaseSec.min, chaseMaxSec: chaseSec.max };
 }
 
 /**
@@ -164,6 +198,15 @@ export function weaponElements(): StatusElement[] {
 /** Стихия атаки врага; физическая — `null`. */
 export function enemyAttackElement(def: EnemyDef): StatusElement | null {
   return def.element ?? null;
+}
+
+/**
+ * Ключ строки про лужи на карточке врага со следом (`trail`): по стихии его атаки, без
+ * стихии — общий. У врага без следа — `null`. Строку получает любой враг со следом, без
+ * правки гайдбука под каждого.
+ */
+export function enemyTrailKey(def: EnemyDef): string | null {
+  return def.trail === undefined ? null : `guide.enemy.trail.${def.element ?? "physical"}`;
 }
 
 /** Какие стихии берут врага хуже (`strong`) и какие лучше (`weak`) — в порядке перечня. */

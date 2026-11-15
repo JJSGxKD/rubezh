@@ -51,8 +51,8 @@ describe("эволюции в контенте", () => {
   });
 
   it("шесть эволюций стоят после всех базовых, у каждого базового — ровно одна", () => {
-    expect(BASE_WEAPONS).toHaveLength(7);
-    expect(WEAPON_EVOLUTIONS).toHaveLength(7);
+    expect(BASE_WEAPONS).toHaveLength(8);
+    expect(WEAPON_EVOLUTIONS).toHaveLength(8);
     const firstEvolution = WEAPONS.findIndex((weapon) => weapon.evolvedFrom !== undefined);
     expect(WEAPONS.slice(firstEvolution).every((weapon) => weapon.evolvedFrom !== undefined)).toBe(true);
     for (const weapon of BASE_WEAPONS) {
@@ -70,6 +70,7 @@ describe("эволюции в контенте", () => {
       ["hearth", "mending", "forge"],
       ["sting", "tempering", "viper"],
       ["meteor", "reach", "fire_rain"],
+      ["flail", "might", "whirl"],
     ]);
   });
 
@@ -108,7 +109,7 @@ describe("эволюции в контенте", () => {
       expect(texts[weapon.nameKey] ?? "", weapon.nameKey).not.toBe("");
       expect(texts[weapon.descriptionKey] ?? "", weapon.descriptionKey).not.toBe("");
     }
-    expect(WEAPON_EVOLUTIONS.map((weapon) => texts[weapon.nameKey])).toEqual(["Звездопад", "Буря", "Вихрь клинков", "Ледяной венец", "Горн", "Гадюка", "Огненный ливень"]);
+    expect(WEAPON_EVOLUTIONS.map((weapon) => texts[weapon.nameKey])).toEqual(["Звездопад", "Буря", "Вихрь клинков", "Ледяной венец", "Горн", "Гадюка", "Огненный ливень", "Круговерть"]);
   });
 
   it("навыки рецептов не повторяются и пары разведены по категориям: слотов хватает на каждую", () => {
@@ -119,8 +120,9 @@ describe("эволюции в контенте", () => {
       const category = PASSIVES.find((passive) => passive.id === id)?.category ?? "";
       byCategory.set(category, (byCategory.get(category) ?? 0) + 1);
     }
-    // «Дальнобойность» (рецепт «Метеора», T-0118) — третья пара атаки
-    expect(byCategory.get("attack")).toBe(3);
+    // «Дальнобойность» (рецепт «Метеора», T-0118) — третья пара атаки,
+    // «Мощь» (рецепт «Кистеня», T-0281) — четвёртая
+    expect(byCategory.get("attack")).toBe(4);
     expect(byCategory.get("mobility")).toBe(2);
     expect(byCategory.get("defense")).toBe(2);
     expect(LOADOUT_LIMITS.passives.attack).toBeLessThanOrEqual(3);

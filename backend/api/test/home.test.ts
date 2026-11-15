@@ -55,6 +55,7 @@ function task(patch: Partial<TaskView> = {}): TaskView {
     rung: null,
     prestige: 0,
     hidden: false,
+    recheckDays: null,
     ...patch,
   };
 }

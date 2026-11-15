@@ -146,6 +146,11 @@ class MemoryTasks implements TasksRepository {
     return result;
   }
 
+  /** Сколько из заданий игрок выполнил — один запрос с `count` в базе. */
+  async completedCount(accountId: string, taskIds: readonly string[]): Promise<number> {
+    return [...this.rows.values()].filter((row) => row.accountId === accountId && row.done && taskIds.includes(row.taskId)).length;
+  }
+
   async applyRun(input: { runId: string; accountId: string; at: Date; deltas: readonly TaskDelta[] }): Promise<boolean> {
     if (this.runs.has(input.runId)) return false;
     this.runs.add(input.runId);
@@ -511,6 +516,37 @@ describe("партнёрские цели: ссылка и бот", () => {
     expect(await ctx.service.open(PLAYER, "ach_channel", NOON)).toMatchObject({ url: CHANNEL.url });
     expect(byId(await ctx.service.view(PLAYER, NOON), "ach_channel")).toMatchObject({ done: false });
     await expect(ctx.service.open(PLAYER, "daily_runs", NOON)).rejects.toBeInstanceOf(TaskNotFoundError);
+  });
+});
+
+describe("правило отписки на карточке (T-0183)", () => {
+  const watched = (...ids: string[]) => ({ taskIds: new Set(ids), days: 7 });
+
+  it("viewOf: recheckDays — у наблюдаемого канала, null у остальных; без аргумента — null у всех", () => {
+    const link = def("ach_partner_site", { period: "achievement", kind: "link", params: { url: "https://example.com/partner" }, target: 1, coins: 50, gems: 0 });
+    const bot = def("ach_partner_bot", { period: "achievement", kind: "bot", params: { platform: "telegram", url: "https://t.me/partner_bot?start=rubezh" }, target: 1, coins: 50, gems: 0 });
+    const noPort = channelTask({ taskId: "ach_channel_max", params: { platform: "max", chat: "-100", url: "https://max.ru/x" } });
+    const defs = [channelTask(), noPort, link, bot, def("daily_runs")];
+    const views = viewOf(defs, [], new Map(), NOON, undefined, watched("ach_channel"));
+    expect(views.map((view) => [view.id, view.recheckDays])).toEqual(
+      expect.arrayContaining([["ach_channel", 7], ["ach_channel_max", null], ["ach_partner_site", null], ["ach_partner_bot", null], ["daily_runs", null]]),
+    );
+    expect(viewOf(defs, [], new Map(), NOON).every((view) => view.recheckDays === null)).toBe(true);
+  });
+
+  it("view, open и claim отдают то же поле; площадка без порта проверки — null", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(channelTask(), channelTask({ taskId: "ach_channel_max", params: { platform: "max", chat: "-100", url: "https://max.ru/x" } }), def("ach_partner_site", { period: "achievement", kind: "link", params: { url: "https://example.com/p" }, target: 1, coins: 50, gems: 0 }));
+    const max: AccountRef = { accountId: ME, platform: "max", platformUserId: "555000111" };
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_channel")).toMatchObject({ recheckDays: 7 });
+    expect(byId(await ctx.service.view(max, NOON), "ach_channel_max")).toMatchObject({ recheckDays: null });
+    const opened = await ctx.service.open(PLAYER, "ach_partner_site", NOON);
+    expect(byId(opened.tasks, "ach_channel")).toMatchObject({ recheckDays: 7 });
+    expect(byId(opened.tasks, "ach_partner_site")).toMatchObject({ recheckDays: null });
+    ctx.membership.members.add(`${CHANNEL.chat}|${PLAYER.platformUserId}`);
+    const claimed = await ctx.service.claim(PLAYER, "ach_channel", NOON);
+    expect(byId(claimed.tasks, "ach_channel")).toMatchObject({ recheckDays: 7 });
+    expect(byId(claimed.tasks, "daily_runs")).toMatchObject({ recheckDays: null });
   });
 });
 
@@ -1043,7 +1079,7 @@ describe("каталог из панели", () => {
     const ctx = setup();
     const owner = await person(ctx, OWNER_ID);
     const view = await ctx.service.catalog(owner);
-    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "boss_kills", "elite_kills", "chests_opened", "crystals_collected", "evolution_runs", "friends", "account_level", "channel", "link", "bot", "home_screen", "story_share"]);
+    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "boss_kills", "elite_kills", "chests_opened", "crystals_collected", "evolution_runs", "no_hit_sec", "no_kill_sec", "element_kills", "friends", "account_level", "weapon_masters", "codex_percent", "secrets_kinds", "channel", "link", "bot", "home_screen", "story_share", "status", "season"]);
     expect(view.periods).toEqual(["daily", "weekly", "achievement"]);
     expect(view.tasks).toHaveLength(CATALOG.length);
   });
@@ -1738,5 +1774,135 @@ describe("виды по сигналу клиента в каталоге (T-037
   it("список в панели: главный экран — среди достижений, история — среди недельных", () => {
     expect(taskGroup({ kind: "home_screen", period: "achievement" })).toBe("achievement");
     expect(taskGroup({ kind: "story_share", period: "weekly" })).toBe("weekly");
+  });
+});
+
+describe("заказчик партнёрского задания: модель оплаты, ставка, срок удержания", () => {
+  const sold = (patch: Partial<TaskDef> = {}) => channelTask({ customer: "Канал «Игровой угол»", payModel: "cpa", rate: 40, holdDays: 3, ...patch });
+  const message = (task: TaskDef) => {
+    const result = taskDefSchema.safeParse(task);
+    return result.success ? null : result.error.issues.map((issue) => issue.message).join("; ");
+  };
+
+  it("CPA и RS со ставкой и сроком проходят; без заказчика — задание своё", () => {
+    expect(taskDefSchema.safeParse(sold()).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ payModel: "rs", rate: 1_250, holdDays: 7 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ holdDays: 0 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(channelTask()).success).toBe(true);
+  });
+
+  it("заказчик без модели и модель без заказчика — ошибка; ставка идёт вместе с моделью", () => {
+    expect(taskDefSchema.safeParse(sold({ payModel: null, rate: null })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ customer: null })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ rate: null })).success).toBe(false);
+    expect(taskDefSchema.safeParse(channelTask({ rate: 40 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ customer: "x".repeat(81) })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ customer: "   " })).success).toBe(false);
+  });
+
+  it("ставка: CPA — целые центы до 100 000, RS — сотые доли процента от 1 до 10 000", () => {
+    expect(taskDefSchema.safeParse(sold({ rate: 100_000 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ rate: 100_001 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ rate: 0 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ rate: 1.5 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ payModel: "rs", rate: 10_000 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ payModel: "rs", rate: 10_001 })).success).toBe(false);
+  });
+
+  it("срок удержания — 0, 1, 3 или 7; у ссылки и бота — только 0", () => {
+    for (const days of [0, 1, 3, 7]) expect(taskDefSchema.safeParse({ ...sold(), holdDays: days }).success).toBe(true);
+    for (const days of [2, 5, 14, -1]) expect(taskDefSchema.safeParse({ ...sold(), holdDays: days }).success).toBe(false);
+    const link = def("ach_link", { period: "achievement", kind: "link", params: { url: "https://example.com" }, target: 1, coins: 10, customer: "Сайт", payModel: "cpa", rate: 10 });
+    expect(taskDefSchema.safeParse(link).success).toBe(true);
+    expect(message({ ...link, holdDays: 3 })).toContain("Удержание проверяется только у подписки на канал");
+    expect(taskDefSchema.safeParse({ ...link, kind: "bot", holdDays: 1 }).success).toBe(false);
+  });
+
+  it("цель забега с заказчиком или сроком — ошибка", () => {
+    expect(taskDefSchema.safeParse(def("daily_runs", { customer: "Канал", payModel: "cpa", rate: 10 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("daily_runs", { holdDays: 1 })).success).toBe(false);
+  });
+
+  it("старое тело без полей — умолчания: задание своё, удержания нет", () => {
+    const old = Object.fromEntries(Object.entries(channelTask()).filter(([key]) => !["customer", "payModel", "rate", "holdDays"].includes(key)));
+    expect(taskDefSchema.parse(old)).toMatchObject({ customer: null, payModel: null, rate: null, holdDays: 0 });
+  });
+
+  it("игрок полей заказчика не получает", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(sold({ taskId: "ach_sold" }));
+    const view = byId(await ctx.service.view(PLAYER, NOON), "ach_sold");
+    for (const field of ["customer", "payModel", "rate", "holdDays"]) expect(view).not.toHaveProperty(field);
+  });
+});
+
+describe("«Коллекционер»: цель считается по «Мастерам оружия» (T-0322)", () => {
+  /** «Мастер» оружия: два забега с ним в наборе. */
+  const master = (weapon: string) =>
+    def(`ach_weapon_${weapon}`, { period: "achievement", kind: "weapon_runs", filter: { weapon }, target: 2, coins: 10, category: "collection", prestige: 10 });
+  /** В хранимой цели — единица: она не читается. */
+  const collector = def("ach_collector", { period: "achievement", kind: "weapon_masters", target: 1, coins: 800, category: "collection", prestige: 40 });
+
+  function collecting(weapons: readonly string[]) {
+    const ctx = setup();
+    ctx.repository.defs.push(...weapons.map(master), collector);
+    return ctx;
+  }
+
+  const withWeapon = (id: string) => run({ weapons: [{ id, level: 1 }] });
+
+  it("цель в ответе — сколько «Мастеров» включено сейчас, а не число из строки каталога", async () => {
+    const ctx = collecting(["spark", "knife", "meteor"]);
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_collector")).toMatchObject({ target: 3, value: 0, done: false });
+  });
+
+  it("выполненный «Мастер» двигает «Коллекционера» сразу после забега, без открытия витрины", async () => {
+    const ctx = collecting(["spark", "knife", "meteor"]);
+    await ctx.hooks.emit(withWeapon("spark"));
+    // один забег — «Мастер» ещё не выполнен, считать нечего
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_collector")).toMatchObject({ value: 0, done: false });
+    await ctx.hooks.emit(withWeapon("spark"));
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_collector")).toMatchObject({ target: 3, value: 1, done: false });
+  });
+
+  it("все «Мастера» выполнены — «Коллекционер» выполнен, награда забирается один раз", async () => {
+    const ctx = collecting(["spark", "knife"]);
+    for (const weapon of ["spark", "knife"]) for (let index = 0; index < 2; index++) await ctx.hooks.emit(withWeapon(weapon));
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_collector")).toMatchObject({ target: 2, value: 2, done: true });
+    expect((await ctx.service.claim(PLAYER, "ach_collector", NOON)).credited.coins).toBe(800);
+    expect((await ctx.service.claim(PLAYER, "ach_collector", NOON)).claimed).toBe(false);
+  });
+
+  it("включили ещё одного «Мастера»: цель растёт, выполненный «Коллекционер» остаётся выполненным", async () => {
+    const ctx = collecting(["spark", "knife"]);
+    for (const weapon of ["spark", "knife"]) for (let index = 0; index < 2; index++) await ctx.hooks.emit(withWeapon(weapon));
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_collector")).toMatchObject({ done: true });
+
+    ctx.repository.defs.push(master("storm"));
+    ctx.service.forgetCatalog();
+    await ctx.service.syncMasters(ME, NOON);
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_collector")).toMatchObject({ target: 3, done: true });
+    // тому, кто «Мастеров» не собрал, цель — три
+    const fresh = byId(await ctx.service.view({ ...PLAYER, accountId: "00000000-0000-4000-8000-00000000f002" }, NOON), "ach_collector");
+    expect(fresh).toMatchObject({ target: 3, value: 0, done: false });
+  });
+
+  it("выключенного «Мастера» цель не считает", async () => {
+    const ctx = collecting(["spark", "knife"]);
+    ctx.repository.defs.push({ ...master("storm"), active: false });
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_collector")).toMatchObject({ target: 2 });
+  });
+
+  it("забег, который не двигает ни одного «Мастера», «Коллекционера» не пишет", async () => {
+    const ctx = collecting(["spark"]);
+    await ctx.hooks.emit(run({ weapons: [{ id: "storm", level: 1 }] }));
+    expect([...ctx.repository.rows.values()].some((row) => row.taskId === "ach_collector")).toBe(false);
+  });
+
+  it("«Мастеров» в каталоге нет — «Коллекционер» не падает: цель — единица", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(collector);
+    await ctx.hooks.emit(run());
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_collector")).toMatchObject({ target: 1, done: false });
   });
 });

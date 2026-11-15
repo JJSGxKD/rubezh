@@ -211,6 +211,8 @@ export function chainTargets(world: World, index: number, out: Int32Array): numb
   for (let k = 0; k < found; k++) {
     const other = world.chainBuffer[k];
     if (other === index || enemies.alive[other] === 0) continue;
+    // Неубиваемого молния не берёт: перескок его бы только толкал, а толчок — это удар оружия.
+    if (world.enemyTypes[enemies.type[other]].unkillable) continue;
     const dx = enemies.x[other] - x;
     const dy = enemies.y[other] - y;
     const distance = dx * dx + dy * dy;

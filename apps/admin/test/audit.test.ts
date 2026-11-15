@@ -55,6 +55,11 @@ describe("журнал аудита", () => {
     expect(auditObject(entry({ action: "ads.test", target: "richads:interstitial" }))).toEqual({ kind: "проверка", label: "richads · interstitial", route: { section: "ads", id: null } });
   });
 
+  it("архив рекламных блоков: подписи действий (T-0409)", () => {
+    expect(actionTitle("ads.block.archive")).toBe("Рекламный блок в архив");
+    expect(actionTitle("ads.block.unarchive")).toBe("Рекламный блок из архива");
+  });
+
   it("правила фильтра имён: подписи, область «Поддержка» и объект «правило» (T-0338)", () => {
     expect(actionTitle("names.rule.create")).toBe("Новое правило фильтра имён");
     expect(actionTitle("names.rule.update")).toBe("Правка правила фильтра имён");
@@ -70,6 +75,13 @@ describe("журнал аудита", () => {
     expect(actionTitle("names.reclean.stop")).toBe("Остановка перечистки ников");
     expect(actionTitle("names.reclean.finish")).toBe("Итог перечистки ников");
     expect(auditObject(entry({ action: "names.reclean.start", target: "00000000-0000-4000-8000-000000000009" }))).toEqual({ kind: "перечистка", label: "00000000", route: { section: "names", id: null } });
+  });
+
+  it("запуск обновления ядра Xray (T-0416): название, объект «ядро Xray», версии словами; ручные прокси — как были", () => {
+    expect(actionTitle("proxies.xray_core.update")).toBe("Запуск обновления ядра Xray");
+    expect(fieldTitle("running")).toBe("запущенная версия");
+    expect(auditObject(entry({ action: "proxies.xray_core.update", target: "26.11.5", after: { version: "26.11.5", running: "26.10.31" } }))).toEqual({ kind: "ядро Xray", label: "26.11.5", route: { section: "proxies", id: null } });
+    expect(auditObject(entry({ action: "proxies.create", target: "00000000-0000-4000-8000-000000000002" }))).toEqual({ kind: "объект", label: "00000000", route: null });
   });
 
   it("отбор уходит серверу началами действий, человеком, объектом и курсором", async () => {
@@ -165,6 +177,15 @@ describe("журнал аудита", () => {
     expect(auditObject(unranked)).toMatchObject({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
   });
 
+  it("решения разбора забега (Р203) — три подписи, объект — игрок", () => {
+    expect(actionTitle("players.run.honest")).toBe("Разбор: честный забег");
+    expect(actionTitle("players.run.annul")).toBe("Разбор: забег аннулирован");
+    expect(actionTitle("players.run.restore")).toBe("Разбор: аннулирование отменено");
+    for (const action of ["players.run.honest", "players.run.annul", "players.run.restore"]) {
+      expect(auditObject(entry({ action, target: ACCOUNT, targetName: "Оля", after: { runId: "9a1b2c3d-0000-4000-8000-000000000001", comment: "проверили" } }))).toMatchObject({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
+    }
+  });
+
   it("объект: имя и ссылка на его экран, а где экрана нет — без ссылки", () => {
     expect(auditObject(entry({ action: "players.ban", target: ACCOUNT, targetName: "Оля" }))).toEqual({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
     // Аккаунт удалён — имени нет, остаётся начало id.
@@ -231,6 +252,13 @@ describe("действия поддержки покупок, партнёров
   it("названы словами и ведут к своему объекту", () => {
     expect(actionTitle("payments.refund")).toBe("Возврат звёзд вручную");
     expect(actionTitle("payments.fulfill")).toBe("Повторная выдача покупки");
+    expect(actionTitle("payments.retry")).toBe("Повтор учёта покупки");
+    expect(actionTitle("payments.job.retry")).toBe("Повтор брошенного задания оплаты");
+    expect(actionTitle("payments.compensate")).toBe("Компенсация за сбой оплаты");
+    expect(actionTitle("payments.reconcile.run")).toBe("Сверка оплат вручную");
+    expect(actionTitle("payments.discrepancy.retry")).toBe("Повтор учёта по сверке");
+    expect(actionTitle("payments.discrepancy.refund")).toBe("Возврат звёзд по сверке");
+    expect(actionTitle("payments.discrepancy.dismiss")).toBe("Расхождение сверки разобрано");
     expect(actionTitle("partner.status")).toBe("Смена статуса партнёра");
     expect(actionTitle("links.retarget")).toBe("Смена цели ссылки");
     expect(actionTitle("links.postback.set")).toBe("Адрес постбэка ссылки");

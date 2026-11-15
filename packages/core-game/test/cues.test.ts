@@ -1,5 +1,7 @@
+import type { EnemyDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { DROPS } from "../src/content/drops";
+import { STALKER } from "../src/content/stalker";
 import { ENEMIES } from "../src/content/enemies";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
@@ -8,8 +10,9 @@ import { addPassive } from "../src/game/progression/loadout";
 import { CueTracker } from "../src/game/run/cues";
 import { killEnemy } from "../src/game/sim/combat";
 import { pushSimEvent, SIM_EVENT } from "../src/game/sim/events";
+import { stalkerTouch } from "../src/game/sim/stalker-body";
 import { IDLE_INPUT, stepWorld } from "../src/game/sim/step";
-import { createWorld, damagePlayer, spawnEnemy, type World } from "../src/game/sim/world";
+import { createWorld, damagePlayer, DEFAULT_SIM_CONFIG, spawnEnemy, TICK_SEC, type World } from "../src/game/sim/world";
 
 // Сигналы забега для вибрации и звука: из буфера событий и счётчиков мира.
 
@@ -142,6 +145,60 @@ describe("сигналы забега", () => {
     pushSimEvent(target.events, { kind: SIM_EVENT.strike, x: 10, y: 10, radius: 80, tick: 1 });
     pushSimEvent(target.events, { kind: SIM_EVENT.strikeFire, x: 20, y: 10, radius: 90, tick: 1 });
     expect(tracker.collect()).toMatchObject({ strikes: 2 });
+  });
+});
+
+// Карачун (Р205, tasks/T-0426): предвестие и касание — сигналы для звука и вибрации.
+describe("сигналы Карачуна", () => {
+  const RAT: EnemyDef = { id: "rat", hp: 10, speed: 0.001, damage: 0, xp: 1, pattern: "swarm" };
+  const KARACHUN: EnemyDef = { id: "karachun", hp: 1, speed: 110, damage: 0, xp: 0, pattern: "stalker" };
+
+  function stalkerWorld(): World {
+    const target = createWorld({
+      seed: 7,
+      enemies: [RAT, KARACHUN],
+      stalker: STALKER,
+      config: { progressionEnabled: false, player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 1000 } },
+    });
+    target.cheats.godMode = true;
+    return target;
+  }
+
+  function startOmen(target: World): void {
+    target.stats.tick = target.stalker.nextOmenTick;
+    target.stats.elapsedSec = target.stats.tick * TICK_SEC;
+    stepWorld(target, IDLE_INPUT);
+  }
+
+  it("предвестие даёт stalkerOmens: 1 в ближайшей пачке и не повторяется", () => {
+    const target = stalkerWorld();
+    const tracker = new CueTracker(target);
+    expect(tracker.collect()).toBeNull();
+    startOmen(target);
+    expect(tracker.collect()).toMatchObject({ stalkerOmens: 1, stalkerTouches: 0 });
+    expect(tracker.collect()).toBeNull();
+  });
+
+  it("повторное предвестие тоже даёт сигнал", () => {
+    const target = stalkerWorld();
+    const tracker = new CueTracker(target);
+    startOmen(target);
+    expect(tracker.collect()).toMatchObject({ stalkerOmens: 1 });
+    pushSimEvent(target.events, { kind: SIM_EVENT.stalkerOmen, x: 100, y: 0, radius: 1.5, tick: 2 });
+    expect(tracker.collect()).toMatchObject({ stalkerOmens: 1 });
+  });
+
+  it("касание Карачуна даёт stalkerTouches: 1, обычное попадание — нет", () => {
+    const target = stalkerWorld();
+    startOmen(target);
+    for (let i = 0; i < 200 && target.stalker.phase !== "chase"; i++) stepWorld(target, IDLE_INPUT);
+    expect(target.stalker.phase).toBe("chase");
+    const tracker = new CueTracker(target);
+    damagePlayer(target, 5, 0);
+    expect(tracker.collect()).toMatchObject({ playerHit: 1, stalkerTouches: 0 });
+    stalkerTouch(target, target.stalkerBody.slot);
+    expect(tracker.collect()).toMatchObject({ playerHit: 1, stalkerTouches: 1 });
+    expect(tracker.collect()).toBeNull();
   });
 });
 

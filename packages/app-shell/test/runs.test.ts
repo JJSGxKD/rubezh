@@ -140,6 +140,53 @@ describe("очередь забегов", () => {
     expect(requests[1]?.body).not.toHaveProperty("loadout");
   });
 
+  describe("запись для проверки (tasks/T-0316)", () => {
+    const PROOF_OK = { data: { status: "stored", keepUntil: "2026-11-02T00:00:00.000Z" } };
+
+    it("уходит PUT-ом после ответа сервера на итог этого забега, и только после него", async () => {
+      const calls: { method: string; url: string; body: unknown }[] = [];
+      vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+        if (url === "/api/v1/auth/telegram") return json(200, SESSION);
+        calls.push({ method: init.method ?? "GET", url, body: init.body === undefined ? null : JSON.parse(String(init.body)) });
+        return url.endsWith("/proof") ? json(200, PROOF_OK) : json(200, url === "/api/v1/runs/start" ? STARTED : FINISHED);
+      });
+      mount();
+      const { runProofs } = await import("../src/state/run-proof-queue");
+
+      // Запись ложится в очередь раньше итога: забег ещё не записан — слать её рано.
+      runProofs().enqueue("run-00000021", "H4sIAAAA");
+      await Promise.resolve();
+      expect(calls).toEqual([]);
+
+      useRuns.getState().submitRun(result("run-00000021"));
+      await vi.waitFor(() => expect(calls.map((call) => call.url)).toEqual(["/api/v1/runs", "/api/v1/runs/run-00000021/proof"]));
+      expect(calls[1]).toEqual({ method: "PUT", url: "/api/v1/runs/run-00000021/proof", body: { proof: "H4sIAAAA" } });
+      expect(runProofs().state().pending).toEqual([]);
+    });
+
+    it("итог без ответа сервера: запись ждёт на устройстве, а на следующем запуске уходит", async () => {
+      const calls: string[] = [];
+      let online = false;
+      vi.stubGlobal("fetch", async (url: string) => {
+        if (url === "/api/v1/auth/telegram") return json(200, SESSION);
+        if (!online) throw new TypeError("Failed to fetch");
+        calls.push(url);
+        return url.endsWith("/proof") ? json(200, PROOF_OK) : json(200, FINISHED);
+      });
+      mount();
+      const { runProofs } = await import("../src/state/run-proof-queue");
+      runProofs().enqueue("run-00000022", "H4sIAAAA");
+      useRuns.getState().submitRun(result("run-00000022"));
+      await vi.waitFor(() => expect(synced().length).toBeGreaterThan(0));
+      expect(runProofs().state().pending).toHaveLength(1);
+
+      online = true;
+      mount();
+      await useRuns.getState().flush("launch");
+      await vi.waitFor(() => expect(calls).toEqual(["/api/v1/runs", "/api/v1/runs/run-00000022/proof"]));
+    });
+  });
+
   it("старт уходит раньше итога, а место из ответа ждёт экран смерти", async () => {
     reply = async (url) => json(200, url === "/api/v1/runs/start" ? STARTED : FINISHED);
     mount();

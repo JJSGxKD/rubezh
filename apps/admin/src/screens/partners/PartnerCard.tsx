@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { CABINET_DIALOG, CABINET_TEXTS, setCabinetOpen } from "../../api/cabinet";
 import { LINK_PARTNER_ROUTE, NETWORK_TITLES, POSTBACK_PARTNER_BLOCK_TITLE, POSTBACK_PARTNER_LABEL, TARGET_TITLES, launchesLabel } from "../../api/links";
 import {
   LINKS_BOUND_HELP,
@@ -22,12 +23,15 @@ import { formatDateTime, formatNumber } from "../../format";
 import { api } from "../../services";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
+import { ConfirmDialog } from "../../ui/confirm-dialog";
 import { DailyBars } from "../../ui/daily-bars";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
 import { Badge, Button, DataTable, ErrorNotice, Help, KeyValue, Loading } from "../../ui/kit";
 import { navigate } from "../../ui/router";
+import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
+import { CabinetScreen } from "../cabinet/CabinetScreen";
 import { PostbackBlock } from "../links/PostbackBlock";
 import { PartnerDialog } from "./PartnerDialog";
 import { PartnerFunnelBlock } from "./partner-funnel";
@@ -45,8 +49,12 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
   const { state, reload } = useApi(() => fetchPartner(api, partnerId), [partnerId]);
   const view = useSession((session) => session.view);
   const canLink = can(view, "links.manage");
+  // Открывает и закрывает кабинет тот, кто выдаёт роли: сервер проверит право и уровень сам.
+  const canCabinet = can(view, "roles.assign");
   const [editing, setEditing] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
+  const [togglingCabinet, setTogglingCabinet] = useState(false);
+  const [viewingCabinet, setViewingCabinet] = useState(false);
   const detail = state.status === "ok" ? state.data : null;
   const refresh = () => {
     reload();
@@ -79,6 +87,14 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
     );
   }
 
+  if (viewingCabinet && detail !== null) {
+    return (
+      <Dialog open onOpenChange={(open) => (open ? undefined : setViewingCabinet(false))} title={`Кабинет глазами партнёра «${detail.partner.name}»`} description={CABINET_DIALOG.viewDescription} size="wide">
+        <CabinetScreen partnerId={detail.partner.partnerId} />
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog
       open
@@ -89,7 +105,7 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
       description={detail === null ? undefined : (detail.partner.contact ?? "Связь не указана")}
       footer={
         detail === null ? undefined : (
-          <>
+          <div className="flex w-full flex-wrap items-center justify-end gap-2">
             {canEdit ? (
               <Button className="mr-auto" onClick={() => setEditing(true)}>
                 Изменить
@@ -107,13 +123,44 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
             <Button tone="primary" onClick={() => navigate({ section: "promo-codes", id: `${PARTNER_CODE_ROUTE}${detail.partner.partnerId}` })}>
               Завести код партнёра
             </Button>
-          </>
+          </div>
         )
       }
     >
       {state.status === "loading" ? <Loading /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
-      {detail === null ? null : <CardBody detail={detail} canEdit={canEdit} canLink={canLink} onChangeStatus={() => setChangingStatus(true)} onChanged={refresh} />}
+      {detail === null ? null : (
+        <ConfirmDialog
+          open={togglingCabinet}
+          onOpenChange={setTogglingCabinet}
+          title={detail.cabinet.open ? CABINET_DIALOG.closeTitle(detail.partner.name) : CABINET_DIALOG.openTitle(detail.partner.name)}
+          subject={detail.partner.name}
+          action={detail.cabinet.open ? "Закрыть кабинет" : "Открыть кабинет"}
+          tone={detail.cabinet.open ? "danger" : "primary"}
+          changes={[{ label: "Кабинет", value: detail.cabinet.open ? "открыт → закрыт" : "закрыт → открыт" }]}
+          onConfirm={async () => {
+            const result = await setCabinetOpen(api, detail.partner.partnerId, !detail.cabinet.open);
+            if (!result.ok) return { ok: false, error: result.error.message };
+            toast.success(result.data.open ? "Кабинет открыт — партнёр увидит его при следующем входе в панель" : "Кабинет закрыт");
+            refresh();
+            return { ok: true };
+          }}
+        >
+          <p className="text-sm text-text-muted">{detail.cabinet.open ? CABINET_DIALOG.closeNote : CABINET_DIALOG.openNote}</p>
+        </ConfirmDialog>
+      )}
+      {detail === null ? null : (
+        <CardBody
+          detail={detail}
+          canEdit={canEdit}
+          canLink={canLink}
+          canCabinet={canCabinet}
+          onChangeStatus={() => setChangingStatus(true)}
+          onViewCabinet={() => setViewingCabinet(true)}
+          onToggleCabinet={() => setTogglingCabinet(true)}
+          onChanged={refresh}
+        />
+      )}
     </Dialog>
   );
 }
@@ -122,15 +169,22 @@ function CardBody({
   detail,
   canEdit,
   canLink,
+  canCabinet,
   onChangeStatus,
+  onViewCabinet,
+  onToggleCabinet,
   onChanged,
 }: {
   detail: PartnerDetail;
   canEdit: boolean;
   canLink: boolean;
+  canCabinet: boolean;
   onChangeStatus: () => void;
+  onViewCabinet: () => void;
+  onToggleCabinet: () => void;
   onChanged: () => void;
 }) {
+  const needsTelegramId = !detail.cabinet.open && detail.partner.telegramId === null;
   const { stats, status } = detail.partner;
   return (
     <div className="flex flex-col gap-5">
@@ -142,6 +196,18 @@ function CardBody({
         <Badge tone={statusTone(status)}>{STATUS_TITLES[status]}</Badge>
         {canEdit ? <Button onClick={onChangeStatus}>Сменить статус…</Button> : null}
         {bindsNewPlayers(status) ? null : <span className="text-xs text-warning">{NO_BINDING_NOTE}</span>}
+      </section>
+
+      {/* Кабинет — здесь, а не в нижней панели: пять кнопок внизу на 320 px съедали половину окна, а состояние кабинета нигде не читалось. */}
+      <section className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-text-muted">Кабинет партнёра</span>
+        <Badge tone={detail.cabinet.open ? "success" : "neutral"}>{detail.cabinet.open ? "открыт" : "закрыт"}</Badge>
+        <Button onClick={onViewCabinet}>Кабинет глазами партнёра</Button>
+        {canCabinet ? (
+          <Button disabled={needsTelegramId} blockedBy={needsTelegramId ? CABINET_TEXTS.needTelegramId : null} onClick={onToggleCabinet}>
+            {detail.cabinet.open ? "Закрыть кабинет" : "Открыть кабинет"}
+          </Button>
+        ) : null}
       </section>
 
       <section className="grid grid-cols-2 gap-2 md:grid-cols-4">

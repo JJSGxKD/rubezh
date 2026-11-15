@@ -9,6 +9,7 @@ import {
 } from "@bh/shared-types";
 import { z } from "zod/mini";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
+import { publicEmblemSchema } from "./public-emblem";
 
 /**
  * Клиент модуля забегов бэкенда (docs/34-stage3-plan.md, WP4): старт, итог,
@@ -75,6 +76,8 @@ export const leaderboardSchema = z.object({
       tester: z.optional(z.literal(true)),
       /** поддержал проект (Р109, T-0161); сервер до знака поля не отдавал */
       supporter: z.optional(z.literal(true)),
+      /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен, тогда рисуются метки `tester` и `supporter` */
+      emblem: z.optional(publicEmblemSchema),
       /** очки престижа (T-0107); сервер до достижений поля не отдавал */
       prestige: z.optional(z.number()),
       /** победа над стражем рубежа засчитана (T-0121); сервер шлёт только `true` или ничего */
@@ -124,7 +127,7 @@ export const runCardSchema = z.object({
 
 export type RunCard = z.infer<typeof runCardSchema>;
 
-const bestSchema = z.nullable(z.object({ survivalSec: z.number(), rank: z.number() }));
+const bestSchema = z.nullable(z.object({ survivalSec: z.number(), rank: z.number(), points: z.optional(z.nullable(z.number())) }));
 
 const profileSchema = z.object({
   runs: z.number(),

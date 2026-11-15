@@ -121,6 +121,22 @@ describe("время начала, которому можно верить", ()
   });
 });
 
+describe("рекламный переброс в вердикте (tasks/T-0199)", () => {
+  it("заявлен без записи показа — отказ с нейтральной причиной unpaid_ad_reroll", () => {
+    expect(judgeRun(run({ adRerolls: 1, paidAdRerolls: 0 }), limits)).toEqual({ verdict: "rejected", reasons: ["unpaid_ad_reroll"] });
+  });
+
+  it("заявлен и записан, не заявлен вовсе, поля нет — честный забег", () => {
+    expect(judgeRun(run({ adRerolls: 1, paidAdRerolls: 1 }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run({ adRerolls: 0, paidAdRerolls: 0 }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run(), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+
+  it("забег с читами разработчика этой причиной не отклоняется, как и неоплаченное продолжение", () => {
+    expect(judgeRun(run({ adRerolls: 1, paidAdRerolls: 0, cheats: true }), limits).reasons).not.toContain("unpaid_ad_reroll");
+  });
+});
+
 describe("второй шанс в вердикте", () => {
   it("продолжение без оплаты — отказ: честный клиент продолжает только после подтверждения сервером", () => {
     expect(judgeRun(run({ continues: 1, paidContinues: 0 }), limits)).toEqual({ verdict: "rejected", reasons: ["unpaid_continue"] });

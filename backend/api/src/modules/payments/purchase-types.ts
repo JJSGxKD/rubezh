@@ -4,14 +4,16 @@
  * сервису и тестам незачем знать о Prisma.
  */
 
-export type PaymentMode = "live" | "test";
+export const PAYMENT_MODES = ["live", "test"] as const;
+export type PaymentMode = (typeof PAYMENT_MODES)[number];
 export type PurchaseStatus = "pending" | "paid" | "refunded";
 export type RefundReason = "test_mode" | "unused" | "external" | "undeliverable" | "manual";
 /**
  * Что продаётся: второй шанс в забеге, товар каталога магазина, VIP (WP10) или
  * донат проекту (Р109) — добровольная сумма без игровых ценностей.
  */
-export type PurchaseProduct = "continue_run" | "shop_item" | "vip" | "donation";
+export const PURCHASE_PRODUCTS = ["continue_run", "shop_item", "vip", "donation"] as const;
+export type PurchaseProduct = (typeof PURCHASE_PRODUCTS)[number];
 
 /** Донат — поддержка, а не покупка (Р109): отчёты, цели сетей и разрезы считают покупки как `product <> DONATION_PRODUCT`. */
 export const DONATION_PRODUCT = "donation" satisfies PurchaseProduct;
@@ -22,8 +24,15 @@ export const DONATION_PRODUCT = "donation" satisfies PurchaseProduct;
  */
 export const SUBSCRIPTION_PRODUCTS: readonly PurchaseProduct[] = ["vip"];
 
-/** Что поддержка может сделать с покупкой сейчас: вернуть звёзды или повторить выдачу. */
-export type PurchaseAction = "refund" | "fulfill";
+/** Что команда может сделать с покупкой: вернуть звёзды, повторить выдачу, повторить учёт (Р209), компенсировать (Р209). */
+export type PurchaseAction = "refund" | "fulfill" | "retry" | "compensate";
+
+/**
+ * Состояния фильтра ленты платежей в панели (Р209, WP53). Условия каждого — в
+ * `payments-feed.repository.ts`; значения идут в запрос и в панель как есть.
+ */
+export const FEED_STATUSES = ["pending", "paid", "undelivered", "refund_requested", "refunded"] as const;
+export type FeedStatus = (typeof FEED_STATUSES)[number];
 
 export interface StoredPurchase {
   purchaseId: string;

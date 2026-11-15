@@ -35,12 +35,12 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0221. Материалы для партнёров — баннеры, тексты постов и правила в кабинете
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0221.json)](README.md#значки-статуса) [![T-0219](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0219.json&label=T-0219)](T-0219-partner-cabinet-funnel.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0221.json)](README.md#значки-статуса) [![T-0219](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0219.json&label=T-0219)](archive/T-0219-partner-cabinet-funnel.md)
 
 ## Зачем
 

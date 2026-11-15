@@ -8,7 +8,7 @@ import type { LinkOrigin } from "../src/platforms/telegram/telegram-link-format.
 // панели начнёт действовать без перезапуска.
 
 const config = loadAppConfig({ TELEGRAM_BOT_TOKEN: "123:abc", TELEGRAM_BOT_UPDATES: "polling" });
-const api = { async getMe() { return { id: 1, username: "rubezh_bot" }; } };
+const api = { async getMe() { return { id: 1, username: "rubezh_bot", topicsEnabled: false }; } };
 
 function origin(initial: string): { source: LinkOrigin; set(value: string): void } {
   let current = initial;

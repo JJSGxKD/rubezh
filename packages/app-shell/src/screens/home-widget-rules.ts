@@ -135,6 +135,20 @@ export function recordFace(best: number, difficultyId: DifficultyId, lastRun: La
   return gap <= 0 ? { state: "record", bestSec: best } : { state: "gap", bestSec: best, gapSec: gap };
 }
 
+export type RecordPointsFace =
+  | { state: "best"; points: number; bestSec: number; runs: number }
+  | { state: "record"; points: number; bestSec: number }
+  | { state: "gap"; points: number; bestSec: number; gapPoints: number };
+
+/** Плитка по очкам (Р212); `null` — очков нет, плитка остаётся по времени (`recordFace`). */
+export function recordPointsFace(best: { points?: number | null; survivalSec: number } | null, lastPoints: number | null, runs: number): RecordPointsFace | null {
+  if (best === null || typeof best.points !== "number") return null;
+  if (lastPoints === null) return { state: "best", points: best.points, bestSec: best.survivalSec, runs };
+  // Профиль мог не успеть обновиться после нового рекорда: «больше» тоже рекорд.
+  if (lastPoints >= best.points) return { state: "record", points: Math.max(best.points, lastPoints), bestSec: best.survivalSec };
+  return { state: "gap", points: best.points, bestSec: best.survivalSec, gapPoints: Math.round(best.points - lastPoints) };
+}
+
 export type FriendsFace = { state: "news"; count: number } | { state: "idle" };
 
 /** Друзья: подарки и заявки ждут — числом со знака меню. */

@@ -102,10 +102,12 @@ describe("ключи панели rating.points-from и rating.season-threshold-
     expect(SETTINGS.ratingPointsFrom.schema.safeParse(20261110).success).toBe(false);
   });
 
-  it("менять правила идущей недели нельзя: дата не раньше следующей недели", () => {
+  it("понедельник идущей недели пускает, прошлые недели — нет", () => {
     const check = SETTINGS.ratingPointsFrom.saveCheck;
     const wednesday = new Date("2026-11-04T12:00:00Z");
-    expect(check?.(20261102, wednesday)).not.toBeNull();
+    // идущая неделя начинается 02.11: её можно перевести на очки сразу
+    expect(check?.(20261102, wednesday)).toBeNull();
+    expect(check?.(20261026, wednesday)).toBe("Сезоны по очкам не могут начаться с прошлой недели — укажите понедельник идущей недели или позже");
     expect(check?.(20261109, wednesday)).toBeNull();
     expect(check?.(0, wednesday)).toBeNull();
   });

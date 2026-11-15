@@ -3,7 +3,9 @@ import { withTimeout } from "../../common/with-timeout.js";
 import { ProgressService } from "../progress/progress.service.js";
 import { PrologueService } from "../runs/prologue.service.js";
 import { WalletService } from "../wallet/wallet.service.js";
-import { DAYS_IN_WEEK, dailyReward, dayPosition, stepMul } from "./daily-rules.js";
+import { SETTINGS } from "../settings/setting-catalog.js";
+import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
+import { DAYS_IN_WEEK, dailyLadderOf, dailyReward, dayPosition, stepMul, type DailyLadder } from "./daily-rules.js";
 import { DAILY_REPOSITORY, type DailyRepository } from "./daily.repository.js";
 
 /**
@@ -61,21 +63,23 @@ export class DailyService {
     private readonly wallet: WalletService,
     // Нет сервиса пролога (старый состав модуля) — награда открыта.
     @Optional() private readonly prologue?: PrologueService,
+    // Нет настроек — неделя награды прежняя; число читается на каждом запросе, правка из панели действует сразу.
+    @Optional() @Inject(SETTINGS_READER) private readonly settings?: SettingsReader,
   ) {}
 
   async view(accountId: string, at = new Date()): Promise<DailyView> {
     const [state, level] = await Promise.all([this.state(accountId, at), this.level(accountId)]);
-    return viewOf(state.claimedDays, state.claimedToday, level);
+    return viewOf(state.claimedDays, state.claimedToday, level, this.ladder());
   }
 
   async claim(accountId: string, at = new Date()): Promise<DailyClaimResult> {
     // Закрыто до победы в прологе (Р151): новичка не встречает кнопка до первого забега.
     await this.prologue?.requireOpen(accountId);
     const [state, level] = await Promise.all([this.state(accountId, at), this.level(accountId)]);
-    if (state.claimedToday) return { claimed: false, coins: 0, shards: 0, view: viewOf(state.claimedDays, true, level) };
+    if (state.claimedToday) return { claimed: false, coins: 0, shards: 0, view: viewOf(state.claimedDays, true, level, this.ladder()) };
 
     const day = state.claimedDays + 1;
-    const reward = dailyReward(day, level);
+    const reward = dailyReward(day, level, this.ladder());
     const key = `daily_reward:${accountId}:${String(day)}`;
     const coins = await this.wallet.grant({ accountId, resource: "coins", amount: reward.coins, reason: "daily_reward", source: `daily:${String(day)}`, idempotencyKey: key, at });
     const shards =
@@ -84,7 +88,7 @@ export class DailyService {
         : null;
     const advanced = await withTimeout(this.repository.advance(accountId, state.claimedDays, at), DB_TIMEOUT_MS, "награда дня");
     if (advanced) this.logger.log(JSON.stringify({ module: "daily", event: "daily_claimed", accountId, day, coins: coins.credited, shards: shards?.credited ?? 0 }));
-    return { claimed: advanced, coins: coins.credited, shards: shards?.credited ?? 0, view: viewOf(advanced ? day : state.claimedDays, advanced, level) };
+    return { claimed: advanced, coins: coins.credited, shards: shards?.credited ?? 0, view: viewOf(advanced ? day : state.claimedDays, advanced, level, this.ladder()) };
   }
 
   /** Знак меню: 1 — награда этих суток ждёт. */
@@ -92,6 +96,10 @@ export class DailyService {
     // Закрытая награда знака не даёт: он позвал бы туда, куда нельзя.
     if (this.prologue !== undefined && !(await this.prologue.isDone(accountId))) return 0;
     return (await this.state(accountId, at)).claimedToday ? 0 : 1;
+  }
+
+  private ladder(): DailyLadder | undefined {
+    return this.settings === undefined ? undefined : dailyLadderOf(this.settings.get(SETTINGS.rewardsDailyLadder));
   }
 
   private async state(accountId: string, at: Date) {
@@ -108,14 +116,14 @@ export class DailyService {
  * Забрал седьмой день — до следующих суток видна закрытая неделя, а не
  * пустая новая: иначе забор выглядел бы как сброс.
  */
-export function viewOf(claimedDays: number, claimedToday: boolean, level: number): DailyView {
+export function viewOf(claimedDays: number, claimedToday: boolean, level: number, ladder?: DailyLadder): DailyView {
   const today = claimedToday ? claimedDays : claimedDays + 1;
   const { dayOfWeek, closedWeeks } = dayPosition(today);
   const first = today - dayOfWeek;
   const days: DailyDayView[] = [];
   for (let index = 0; index < DAYS_IN_WEEK; index++) {
     const day = first + index;
-    days.push({ day, ...dailyReward(day, level), claimed: day <= claimedDays, today: day === today });
+    days.push({ day, ...dailyReward(day, level, ladder), claimed: day <= claimedDays, today: day === today });
   }
-  return { week: closedWeeks + 1, days, canClaim: !claimedToday, step: stepMul(closedWeeks), nextStep: stepMul(closedWeeks + 1), next: dailyReward(today + 1, level) };
+  return { week: closedWeeks + 1, days, canClaim: !claimedToday, step: stepMul(closedWeeks), nextStep: stepMul(closedWeeks + 1), next: dailyReward(today + 1, level, ladder) };
 }

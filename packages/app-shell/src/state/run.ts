@@ -147,6 +147,12 @@ export interface RunStore {
   toolsTotal: CardTools;
   /** есть ли чем заменить карточки при переброске */
   canReroll: boolean;
+  /** сработает ли переброс за рекламу (T-0199): зарядов нет, право «раз за забег» не потрачено, есть чем заменить */
+  canAdReroll: boolean;
+  /** сколько раз движок присылал новый выбор улучшения — отличает новый выбор от обновления карточек */
+  offerSeq: number;
+  /** идентификатор идущего забега: из события `started` или из сохранения продолженного; `null` — забега нет */
+  runId: string | null;
   /** открытый сундук — пока фаза `chest` */
   chest: OpenedChest | null;
   /** последнее сообщение рубежа для баннера; `null` — в этом забеге рубеж ещё не заговорил */
@@ -191,6 +197,11 @@ export interface RunStore {
   skip(): void;
   /** Изгнание предмета карточки из забега. */
   banish(optionId: string): void;
+  /**
+   * Переброс карточек за рекламу (T-0199): зовётся только после того, как сервер записал показ
+   * (`ad-reroll.ts`); движок сам проверит, что зарядов нет и право не потрачено.
+   */
+  rerollViaAd(): void;
   restart(): void;
   stop(): void;
   /** характеристики забега для листа «Характеристики»; `null` — забега нет */
@@ -270,6 +281,9 @@ const IDLE = {
   tools: NO_TOOLS,
   toolsTotal: NO_TOOLS,
   canReroll: false,
+  canAdReroll: false,
+  offerSeq: 0,
+  runId: null as string | null,
   chest: null as OpenedChest | null,
   rubezhNotice: null as RubezhNotice | null,
   blessing: null as OfferedBlessings | null,
@@ -321,7 +335,8 @@ export const useRun = create<RunStore>((set, get) => ({
     const seed = resume?.seed ?? nextSeed();
     // Продолженный забег берёт режим из снимка: пролог, сохранённый на выходе, остаётся прологом.
     const mode: RunMode = resume?.mode ?? options.mode ?? "endless";
-    set({ ...IDLE, phase: "loading", loadingStage: "engine", seed, mode });
+    // Продолженный забег события `started` не присылает — его id берётся из сохранения.
+    set({ ...IDLE, phase: "loading", loadingStage: "engine", seed, mode, runId: resume?.runId ?? null });
     if (resume === undefined) {
       if (mode === "prologue") usePrologue.getState().beginRun();
       // Подпись у «Играть» после победы живёт до второго забега.
@@ -521,6 +536,12 @@ export const useRun = create<RunStore>((set, get) => ({
     session?.banishOffer(optionId);
   },
 
+  rerollViaAd(): void {
+    if (get().phase !== "levelUp") return;
+    audio.runEvent("choose");
+    session?.rerollOffersViaAd();
+  },
+
   restart(): void {
     if (session === null || get().restarting) return;
     // «Ещё раз» с экрана смерти — отказ от второго шанса: забег закрывается
@@ -613,6 +634,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
     // забег события не присылает — его начало уже было, и снимок снаряжения
     // к нему привязан тогда же: итог понесёт его серверу.
     created.on("started", (started) => {
+      set({ runId: started.runId });
       bindLoadout?.(started.runId);
       useRuns.getState().registerStart({ ...started, ...(get().mode === "prologue" ? { mode: "prologue" as const } : {}) });
       if (get().mode === "prologue") usePrologue.getState().step("start", 0);
@@ -664,7 +686,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       if ((cues.ward ?? 0) > 0) usePrologue.getState().wardNoticed(sec);
     }),
 
-    created.on("levelUp", ({ level, options, queued, tools, toolsTotal, canReroll, refreshed }) => {
+    created.on("levelUp", ({ level, options, queued, tools, toolsTotal, canReroll, canAdReroll, refreshed }) => {
       const first = options[0];
       if (get().devRun && useDevMode.getState().settings.autoPickUpgrades && first !== undefined) {
         // Без экрана и без аналитики выбора: это не решение игрока.
@@ -679,13 +701,26 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
         haptic("levelUp");
         audio.runEvent("levelUp");
       }
-      set({ phase: "levelUp", offers: options, queued, level, chest: null, blessing: null, tools, toolsTotal, canReroll });
+      set({
+        phase: "levelUp",
+        offers: options,
+        queued,
+        level,
+        chest: null,
+        blessing: null,
+        tools,
+        toolsTotal,
+        canReroll,
+        canAdReroll,
+        // Обновление карточек (переброс, изгнание) — тот же выбор: номер растёт только у нового.
+        offerSeq: refreshed ? get().offerSeq : get().offerSeq + 1,
+      });
       saveRun();
     }),
 
-    created.on("cardTool", ({ kind, left, level, item }) => {
+    created.on("cardTool", ({ kind, left, level, item, viaAd }) => {
       // Только когда движок применил действие: нажатие без заряда в аналитику не идёт.
-      if (kind === "reroll") track("card_rerolled", { level, left });
+      if (kind === "reroll") track("card_rerolled", { level, left, ...(viaAd === true ? { via: "ad" } : {}) });
       else if (kind === "skip") track("card_skipped", { level, left });
       else track("card_banished", { level, left, item: item ?? "" });
     }),
@@ -719,7 +754,11 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       track("ring_ended", { index, outcome, guards, killed, lifeSec: Math.round(lifeSec), elapsedSec: Math.round(elapsedSec) });
     }),
 
-    created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
+    created.on("stalkerEnded", ({ index, outcome, hits, pushes, relocations, lifeSec, elapsedSec }) => {
+      track("stalker_ended", { index, outcome, hits, pushes, relocations, lifeSec: Math.round(lifeSec), elapsedSec: Math.round(elapsedSec) });
+    }),
+
+    created.on("chestOpened",({ index, size, rewards, fallbacks, elapsedSec }) => {
       track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
       for (const reward of rewards) {
         if (reward.kind !== "weapon_evolve") continue;
@@ -764,6 +803,14 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
 
     created.on("diagnostics", (diagnostics) => {
       pendingDiagnostics = diagnostics;
+      // Запись для проверки — у каждого забега, а не только у тестеров: сжатие и отправка
+      // уходят в фон отдельным чанком, забег уже записан (docs/28-diagnostics.md §3.4).
+      const proof = diagnostics.proof;
+      if (proof !== null) {
+        import("./run-proof-queue")
+          .then(({ queueRunProof }) => queueRunProof(proof))
+          .catch((error: unknown) => reportError("proofs", `запись для проверки не поставлена в очередь: ${String(error)}`));
+      }
       const recording = diagnostics.recording;
       if (recording === null) return;
       const clientErrors = clientErrorCount() - errorsAtRunStart;

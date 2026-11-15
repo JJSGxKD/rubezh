@@ -5,6 +5,7 @@ import { ClientScriptsModule } from "../client-scripts/client-scripts.module.js"
 import { FlagsModule } from "../flags/flags.module.js";
 import { FlagsService } from "../flags/flags.service.js";
 import { AdAudience } from "./ad-audience.js";
+import { AdBlockArchiveService } from "./ad-block-archive.service.js";
 import { AD_CREATIVES, NetworkCreatives, TADDY_API } from "./ad-creatives.js";
 import { AdNetworkKeys } from "./ad-network-keys.js";
 import { AdTaskFeeds } from "./ad-task-feeds.js";
@@ -52,6 +53,7 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
     AdTaskFeeds,
     AdTaskHooks,
     AdsCatalogService,
+    AdBlockArchiveService,
     AdPasses,
     AdNetworkKeys,
     AdAudience,
@@ -64,6 +66,6 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
     { provide: ADS_CATALOG_REPOSITORY, useClass: PrismaAdsCatalogRepository },
     { provide: ADS_ROLL, useValue: cryptoRoll },
   ],
-  exports: [AdsService, AdsCatalogService, AdPasses, AdAudience, AdTasks, AdTaskFeeds, AdTaskHooks, ADS_CATALOG_REPOSITORY],
+  exports: [AdsService, AdsCatalogService, AdBlockArchiveService, AdPasses, AdAudience, AdTasks, AdTaskFeeds, AdTaskHooks, ADS_CATALOG_REPOSITORY],
 })
 export class AdsModule {}

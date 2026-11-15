@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groundTint, hash01, valueNoise, zoneAt } from "../src/game/render/art-ground";
+import { GROUND_CELL_UNITS, groundCellRect, groundTint, hash01, valueNoise, zoneAt } from "../src/game/render/art-ground";
 
 // Земля чернового арта (design/art/environment.md): рендер, на исход забега
 // не влияет, но шов между клетками и пропавшая зона видны сразу.
@@ -31,5 +31,42 @@ describe("раскладка земли", () => {
     expect(groundTint(3 * 256, 5 * 256)).toBe(corner);
     expect(corner).toBeGreaterThan(0);
     expect(corner).toBeLessThanOrEqual(0xffffff);
+  });
+});
+
+describe("клетки земли без щели", () => {
+  it("клетки стыкуются без щели: правый край не левее левого края соседа", () => {
+    for (const s of [1, 1.7]) {
+      for (let gx = -3; gx <= 3; gx++) {
+        const a = groundCellRect(gx, 0, s);
+        const b = groundCellRect(gx + 1, 0, s);
+        expect(a.x + a.width).toBeGreaterThanOrEqual(b.x);
+      }
+    }
+  });
+
+  it("то же по вертикали: низ клетки не выше верха соседа", () => {
+    for (const s of [1, 1.7]) {
+      for (let gy = -3; gy <= 3; gy++) {
+        const a = groundCellRect(0, gy, s);
+        const b = groundCellRect(0, gy + 1, s);
+        expect(a.y + a.width).toBeGreaterThanOrEqual(b.y);
+      }
+    }
+  });
+
+  it("перекрытие меньше пикселя мира на единицу: ширина больше стороны не более чем на unitScale", () => {
+    for (const s of [1, 1.7]) {
+      const rect = groundCellRect(2, 1, s);
+      const size = GROUND_CELL_UNITS * s;
+      expect(rect.width).toBeGreaterThan(size);
+      expect(rect.width - size).toBeLessThanOrEqual(s + 1e-9);
+    }
+  });
+
+  it("позиция клетки прежняя: gx * сторона", () => {
+    const rect = groundCellRect(-2, 3, 1.7);
+    expect(rect.x).toBeCloseTo(-2 * GROUND_CELL_UNITS * 1.7, 9);
+    expect(rect.y).toBeCloseTo(3 * GROUND_CELL_UNITS * 1.7, 9);
   });
 });

@@ -356,14 +356,17 @@ function withStepClaimed(points: TaskPoints, period: PointsPeriod, step: number)
   return { ...points, [period]: { ...bar, steps: bar.steps.map((candidate) => (candidate.points === step ? { ...candidate, state: "claimed" as const } : candidate)) } };
 }
 
-function ResetLine(props: { period: ResetPeriod }): ReactNode {
+export function ResetLine(props: { period: ResetPeriod }): ReactNode {
   // Время считается при открытии вида, без тикающего таймера: минутная
   // точность не стоит перерисовки экрана раз в секунду.
   const [resetIn] = useState(() => msUntilReset(Date.now(), props.period));
+  // Плашка, а не голый текст: точки живого фона не должны попадать между буквами.
   return (
-    <p className="mb-3 flex items-center gap-1.5 text-xs text-text-muted">
-      <Clock size={14} aria-hidden="true" />
-      {t("tasks.resetIn", { time: formatCountdown(resetIn) })}
-    </p>
+    <div className="mb-3">
+      <p className="surface-sunken inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs text-text-muted">
+        <Clock size={14} aria-hidden="true" />
+        {t("tasks.resetIn", { time: formatCountdown(resetIn) })}
+      </p>
+    </div>
   );
 }

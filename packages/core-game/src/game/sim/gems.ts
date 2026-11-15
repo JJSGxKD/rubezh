@@ -49,14 +49,19 @@ export function findDropsContentProblems(drops: DropsDef): string[] {
 
 /**
  * Выпадение опыта с убитого врага: несколько кристаллов разной ценности,
- * разлетающихся от места смерти. Сумма ценности всегда равна `xp` врага —
- * разброс меняет ощущение добычи, а не скорость прокачки.
+ * разлетающихся от места смерти. Сумма ценности всегда равна `xp` врага (с
+ * модификатором — `round(xp · xpMul)`): разброс меняет ощущение добычи, а не скорость
+ * прокачки.
  *
  * Сколько кристаллов, решает генератор мира: одинаковый seed — одинаковая
  * горсть. Когда делить нечего (опыт 1 или потолок 1), генератор не
  * вызывается вовсе, и последовательность случайных чисел не сдвигается.
  */
-export function dropGems(world: World, x: number, y: number, xp: number): void {
+export function dropGems(world: World, x: number, y: number, baseXp: number): void {
+  // Модификатор забега ускоряет опыт в бою: сумма горсти — округлённое произведение.
+  // Без модификатора множителя нет, и опыт идёт как есть: дробный опыт не теряется.
+  const xpMul = world.difficultyLevel.xpMul;
+  const xp = xpMul === undefined ? baseXp : Math.round(baseXp * xpMul);
   if (xp <= 0) return;
 
   const maxCount = Math.max(1, Math.min(Math.floor(xp), world.drops.gems.maxPerKill, shares.length));

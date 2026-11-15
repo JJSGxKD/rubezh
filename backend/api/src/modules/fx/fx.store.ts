@@ -16,6 +16,7 @@ import {
 import { z } from "zod";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import type { FxHistoryStore, HistoryRow, ManualRow } from "./fx-history.js";
 
 /**
  * Хранилище курсов на Postgres — порт `RateStore` ядра `packages/fx`
@@ -28,6 +29,9 @@ import { PRISMA } from "../../infra/database.js";
  */
 
 export const FX_STORE = Symbol("FX_STORE");
+
+/** Порт «курс на дату» (`fx-history.ts`): тот же `PrismaRateStore`, отдельный токен — сервису нужна только история. */
+export const FX_HISTORY_STORE = Symbol("FX_HISTORY_STORE");
 
 /** Лимит источника, заданный в панели; строки нет — действует тариф из кода (Р89). */
 export interface SourceLimit {
@@ -63,7 +67,7 @@ const rateJson = z.object({ usdPerUnit: z.string(), sources: z.array(z.string())
 const ratesJson = z.record(z.string(), rateJson);
 
 @Injectable()
-export class PrismaRateStore implements FxStore {
+export class PrismaRateStore implements FxStore, FxHistoryStore {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
   async latestQuotes(currency: CurrencyCode): Promise<Quote[]> {
@@ -173,6 +177,35 @@ export class PrismaRateStore implements FxStore {
     });
   }
 
+  async historyAt(currency: CurrencyCode, at: Date): Promise<HistoryRow | null> {
+    // Индекс (currency, accepted_at): одна строка, без выборки всей истории.
+    const row = await this.prisma.fxRateHistory.findFirst({ where: { currency, acceptedAt: { lte: at } }, orderBy: { acceptedAt: "desc" } });
+    return row === null ? null : historyRow(row);
+  }
+
+  async historySpan(currency: CurrencyCode, from: Date, to: Date): Promise<HistoryRow[]> {
+    // Две выборки по одному индексу одним обращением к базе: действовавшая на
+    // начало суток и всё, что принято внутри них.
+    const [base, within] = await this.prisma.$transaction([
+      this.prisma.fxRateHistory.findFirst({ where: { currency, acceptedAt: { lte: from } }, orderBy: { acceptedAt: "desc" } }),
+      this.prisma.fxRateHistory.findMany({ where: { currency, acceptedAt: { gt: from, lt: to } }, orderBy: { acceptedAt: "asc" } }),
+    ]);
+    return [...(base === null ? [] : [historyRow(base)]), ...within.map(historyRow)];
+  }
+
+  async manualAt(currency: CurrencyCode, purpose: ManualRatePurpose, at: Date): Promise<ManualRow | null> {
+    const row = await this.prisma.fxManualRate.findFirst({ where: { currency, purpose, setAt: { lte: at } }, orderBy: { setAt: "desc" } });
+    return row === null ? null : manualRow(row);
+  }
+
+  async manualSpan(currency: CurrencyCode, purpose: ManualRatePurpose, from: Date, to: Date): Promise<ManualRow[]> {
+    const [base, within] = await this.prisma.$transaction([
+      this.prisma.fxManualRate.findFirst({ where: { currency, purpose, setAt: { lte: from } }, orderBy: { setAt: "desc" } }),
+      this.prisma.fxManualRate.findMany({ where: { currency, purpose, setAt: { gt: from, lt: to } }, orderBy: { setAt: "asc" } }),
+    ]);
+    return [...(base === null ? [] : [manualRow(base)]), ...within.map(manualRow)];
+  }
+
   async saveSnapshot(snapshot: Omit<RatesSnapshot, "id">): Promise<RatesSnapshot> {
     const row = await this.prisma.fxSnapshot.create({
       data: { takenAt: snapshot.takenAt, rates: toJson(snapshot.rates), payout: toJson(snapshot.payout) },
@@ -189,6 +222,20 @@ export class PrismaRateStore implements FxStore {
     if (row === null) return null;
     return { id: row.id, takenAt: row.takenAt, rates: fromJson(row.rates), payout: fromJson(row.payout) };
   }
+}
+
+function historyRow(row: { usdPerUnit: { toFixed(): string }; acceptedAt: Date }): HistoryRow {
+  return { usdPerUnit: decimal(row.usdPerUnit.toFixed()), at: row.acceptedAt };
+}
+
+/**
+ * Котировка из базы — граница: незнакомая валюта значит, что строку писал кто-то
+ * мимо ядра. Для прошлой даты молча взять более раннюю строку нельзя — оценка
+ * проводок поедет, — поэтому это ошибка, а не пропуск.
+ */
+function manualRow(row: { price: { toFixed(): string }; quote: string; setAt: Date; expiresAt: Date }): ManualRow {
+  if (!isCurrencyCode(row.quote)) throw new RangeError(`заданный курс от ${row.setAt.toISOString()}: незнакомая валюта котировки ${row.quote}`);
+  return { price: decimal(row.price.toFixed()), quote: row.quote, setAt: row.setAt, expiresAt: row.expiresAt };
 }
 
 export function isManualPurpose(value: string): value is ManualRatePurpose {

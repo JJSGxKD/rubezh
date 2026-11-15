@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, CalendarCheck, Gift, LogOut, Megaphone, Newspaper, PackageOpen, Sparkles, Trophy, UserPlus } from "lucide-react";
+import { Bell, CalendarCheck, Gem, Gift, LogOut, Megaphone, Newspaper, PackageOpen, Sparkles, Trophy, Undo2, UserPlus } from "lucide-react";
 import { DIFFICULTY_IDS, type DifficultyId } from "@bh/shared-types";
 import { Button, Card, ContentColumn, EmptyState, ErrorState, Screen } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
@@ -13,7 +13,8 @@ import { track } from "../../state/shell";
 /**
  * Лента уведомлений (docs/35-stage4-plan.md Р51, §3.17): всё, что случилось с
  * игроком, — заявка и подарок друга, редкая добыча, возврат бустов, списание
- * награды за отписку от канала, сообщение команды, выход версии. Открыл
+ * награды за отписку от канала, сообщение команды, извинение команды за сбой
+ * оплаты и возврат звёзд, выход версии. Открыл
  * ленту — увиденное прочитано; пришедшее, пока лента открыта, останется
  * новым. Вид, которого экран не знает, не показывается: сервер новее клиента.
  */
@@ -102,6 +103,8 @@ export function describeNotification(item: NotificationItem): Described | null {
       return { icon: <LogOut size={20} />, text: unsubscribedText(item.data), target: null };
     case "team_message":
       return typeof item.data.text === "string" ? { icon: <Megaphone size={20} />, title: t("notification.team_message"), text: item.data.text, target: null } : null;
+    case "purchase_support":
+      return purchaseSupport(item.data);
     case "app_update":
       return typeof item.data.version === "string" ? { icon: <Newspaper size={20} />, text: t("notification.app_update", { version: item.data.version }), ...(changelogAvailable() ? { target: "changelog" as const, over: true } : { target: null }) } : null;
     // Напоминания бота (tasks/T-0128): тот же текст, что в сообщении бота, чтобы колокольчик не показал «1» над пустой лентой.
@@ -116,6 +119,12 @@ export function describeNotification(item: NotificationItem): Described | null {
     }
     case "daily_reward_ready":
       return { icon: <CalendarCheck size={20} />, text: t("notification.daily_reward_ready"), target: "daily", over: true };
+    // Пасс месяца закрыт (T-0312): тот же текст, что в сообщении бота. Экран пасса — T-0314, пока касание никуда не ведёт.
+    case "pass_closed":
+      return passClosed(item.data);
+    // Команде (T-0309): заявка на правку цены ждёт подтверждения; решается в панели, поэтому касание никуда не ведёт.
+    case "change_request_pending":
+      return { icon: <Megaphone size={20} />, title: t("notification.change_request_pending.title"), text: t("notification.change_request_pending", { name: typeof item.data.authorName === "string" ? item.data.authorName : t("notifications.someone") }), target: null };
     default:
       return null;
   }
@@ -123,6 +132,9 @@ export function describeNotification(item: NotificationItem): Described | null {
 
 /** Сезон кончается в 03:00 по Москве, и игроку важно именно московское время. */
 const MOSCOW_TIME = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+/** День оплаты — `ДД.ММ` по Москве, как в сообщении бота: игровые сутки не зависят от пояса устройства. */
+const PAID_DATE = new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit" });
 
 function difficultyOf(value: unknown): DifficultyId | null {
   return DIFFICULTY_IDS.find((id) => id === value) ?? null;
@@ -137,6 +149,46 @@ function refundText(data: Record<string, unknown>): string {
   ].filter((part): part is string => part !== null);
   return returned.length === 0 ? t("notification.boosts_refunded") : t("notification.boosts_refunded.with", { returned: returned.join(t("notification.and")) });
 }
+
+/**
+ * Извинение команды за сбой оплаты и возврат звёзд (Р209, tasks/T-0436): значок и заголовок по
+ * действию, текст — по причине возврата; касание ни к чему не ведёт. Сервер новее клиента — данные
+ * не по виду (нет чисел, битая дата, незнакомое действие или причина) дают `null`: строки нет.
+ */
+function purchaseSupport(data: Record<string, unknown>): Described | null {
+  const stars = amountOf(data.stars);
+  const paidAt = typeof data.paidAt === "string" ? Date.parse(data.paidAt) : Number.NaN;
+  if (stars === 0 || !Number.isFinite(paidAt)) return null;
+  const date = PAID_DATE.format(new Date(paidAt));
+  if (data.action === "compensated") {
+    const gems = amountOf(data.gems);
+    if (gems === 0) return null;
+    return {
+      icon: <Gem size={20} />,
+      title: t("notification.purchase_support.compensated.title"),
+      text: t("notification.purchase_support.compensated", { stars: formatNumber(stars), date, amount: formatNumber(gems), n: gems }),
+      target: null,
+    };
+  }
+  if (data.action !== "refunded" || (data.reason !== "manual" && data.reason !== "undeliverable")) return null;
+  const text = t(`notification.purchase_support.refunded.${data.reason}`, { stars: formatNumber(stars), date });
+  return { icon: <Undo2 size={20} />, title: t("notification.purchase_support.refunded.title"), text: data.revoked === true ? `${text} ${t("notification.purchase_support.revoked")}` : text, target: null };
+}
+
+/**
+ * «Пасс октября закрыт: 5 наград зачислено на счёт.» Месяц приходит как `ГГГГ-ММ`; родительный падеж
+ * берётся у числа с днём — отдельно названный месяц стоит в именительном. Битые данные — строки нет.
+ */
+function passClosed(data: Record<string, unknown>): Described | null {
+  const rewards = amountOf(data.rewards);
+  const match = typeof data.month === "string" ? /^(\d{4})-(0[1-9]|1[0-2])$/.exec(data.month) : null;
+  if (rewards === 0 || match === null) return null;
+  const month = PASS_MONTH.formatToParts(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1))).find((part) => part.type === "month")?.value;
+  if (month === undefined) return null;
+  return { icon: <Gift size={20} />, text: t("notification.pass_closed", { month, amount: formatNumber(rewards), n: rewards }), target: null };
+}
+
+const PASS_MONTH = new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC", day: "numeric", month: "long" });
 
 /** Срок закрытия — датой вперёд: относительное «минут назад» из `formatWhen` для будущего не годится. */
 const CLOSED_DATE = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });

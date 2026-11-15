@@ -1,13 +1,14 @@
 import { useState } from "react";
 import type { SubscriptionInfo } from "../../api/proxy-subscription";
-import { Badge, Button } from "../../ui/kit";
+import { Badge, Button, Help } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { SubscriptionNodes } from "./SubscriptionNodes";
-import { nodesSummary, refreshLine, trafficLine } from "./subscription-view";
+import { deviceLine, nodesSummary, refreshLine, routingLine, trafficLine } from "./subscription-view";
 
 /**
  * Карточка одной подписки Xray (docs/35-stage4-plan.md Р101, Р192): название,
- * состояние, подсказка адреса, итог обновления, трафик и срок, страны, сводка по
- * узлам и свои кнопки. Адрес не показывается никогда — только «хост …abcd».
+ * состояние, подсказка адреса, итог обновления, трафик и срок, устройство у
+ * поставщика, своя маршрутизация, страны, сводка по узлам и свои кнопки. Адрес не показывается никогда — только «хост …abcd».
  * Менять может владелец (`proxies.edit`), остальным виден список.
  */
 
@@ -51,6 +52,10 @@ export function SubscriptionCard({
           <code className="font-mono text-xs break-all">{subscription.urlHint}</code>
           <p className={`text-xs ${refresh.tone === "danger" ? "text-danger" : "text-text-muted"}`}>{refresh.text}</p>
           {traffic === null ? null : <p className="text-xs text-text-muted">{traffic}</p>}
+          <p className="text-xs text-text-muted">
+            {deviceLine(subscription.device)} <Help text={HELP.proxies.device} />
+          </p>
+          <p className="text-xs text-text-muted">{routingLine(subscription.routing)}</p>
           <p className="text-xs text-text-muted">{subscription.countries.length === 0 ? "Страны узлов: любые" : `Страны узлов: ${subscription.countries.join(", ")}`}</p>
           <p className="text-xs text-text-muted">{nodesSummary(subscription.nodes)}</p>
           {subscription.enabled ? null : <p className="text-xs text-text-muted">Узлы не в переборе; входы Xray за подпиской сохранены</p>}

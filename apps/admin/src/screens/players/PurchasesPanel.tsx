@@ -13,6 +13,9 @@ import {
   type PlayerPurchase,
 } from "../../api/players";
 import { formatDateTime, formatNumber } from "../../format";
+import { hrefOf } from "../../routes";
+import { can } from "../../state/session";
+import { useSession } from "../../state/use-session";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
 import { Badge, Button, DataTable, Field, Notice, Panel, TextArea } from "../../ui/kit";
@@ -29,9 +32,10 @@ const NOT_FULFILLED_HINT = "Выдача ещё не прошла: задани�
  */
 export function PurchasesPanel({ card, onChanged }: { card: PlayerCard; onChanged: () => void }) {
   const [acting, setActing] = useState<{ purchase: PlayerPurchase; action: SupportAction } | null>(null);
+  const inFeed = useSession((session) => can(session.view, "payments.view"));
   const purchases = card.purchases;
   // Пустую колонку кнопок не рисуем: у геймдизайнера и маркетолога действий нет.
-  const withActions = purchases?.some((purchase) => purchase.actions.length > 0) === true;
+  const withActions = purchases?.some((purchase) => purchase.actions.length > 0) === true || inFeed;
 
   return (
     <Panel title="Покупки" help={HELP.players.purchases}>
@@ -55,7 +59,12 @@ export function PurchasesPanel({ card, onChanged }: { card: PlayerCard; onChange
                     title: "",
                     align: "right" as const,
                     render: (purchase: PlayerPurchase) => (
-                      <span className="inline-flex gap-1.5">
+                      <span className="inline-flex items-center gap-1.5">
+                        {inFeed ? (
+                          <a href={hrefOf({ section: "payments", id: purchase.purchaseId })} className="whitespace-nowrap text-sm text-accent underline-offset-2 hover:underline">
+                            В ленте →
+                          </a>
+                        ) : null}
                         {purchase.actions.includes("fulfill") ? (
                           <Button className="whitespace-nowrap" onClick={() => setActing({ purchase, action: "fulfill" })}>
                             Выдать…
@@ -98,7 +107,7 @@ function PurchaseState({ purchase }: { purchase: PlayerPurchase }) {
   );
 }
 
-const DIALOG_TEXT: Record<SupportAction, { title: string; body: string }> = {
+export const DIALOG_TEXT: Record<SupportAction, { title: string; body: string }> = {
   refund: {
     title: "Вернуть звёзды",
     body: "Звёзды вернутся игроку в течение минуты. Если покупка уже выдана, после возврата у игрока заберём остаток: самоцветы и другие ресурсы покупки — до того, что есть на счёте, у VIP — неиспользованную часть, продление выключится. Отменить возврат нельзя.",

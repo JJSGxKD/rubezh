@@ -27,6 +27,8 @@ export type HapticEvent =
   | "pickup"
   | "dynamite"
   | "blast"
+  | "stalkerOmen"
+  | "stalkerTouch"
   | "eliteSpawn"
   | "eliteKill"
   | "death"
@@ -49,6 +51,8 @@ export const HAPTIC_RULES: Record<HapticEvent, HapticRule> = {
   pickup: { type: "soft", minIntervalMs: 200 },
   dynamite: { type: "heavy", minIntervalMs: 300 },
   blast: { type: "rigid", minIntervalMs: 350 },
+  stalkerOmen: { type: "warning", minIntervalMs: 1500 },
+  stalkerTouch: { type: "heavy", minIntervalMs: 500 },
   eliteSpawn: { type: "warning", minIntervalMs: 1500 },
   eliteKill: { type: "medium", minIntervalMs: 300 },
   death: { type: "error", minIntervalMs: 1000 },
@@ -61,10 +65,17 @@ const GLOBAL_MIN_INTERVAL_MS = 35;
 const lastAt = new Map<HapticEvent, number>();
 let lastAnyAt = Number.NEGATIVE_INFINITY;
 
-export function haptic(event: HapticEvent, nowMs: number = performance.now()): boolean {
+export function haptic(
+  event: HapticEvent,
+  nowMs: number = performance.now(),
+): boolean {
   if (!useSettings.getState().haptics) return false;
   const rule = HAPTIC_RULES[event];
-  if (nowMs - (lastAt.get(event) ?? Number.NEGATIVE_INFINITY) < rule.minIntervalMs) return false;
+  if (
+    nowMs - (lastAt.get(event) ?? Number.NEGATIVE_INFINITY) <
+    rule.minIntervalMs
+  )
+    return false;
   if (nowMs - lastAnyAt < GLOBAL_MIN_INTERVAL_MS) return false;
   lastAt.set(event, nowMs);
   lastAnyAt = nowMs;
@@ -77,21 +88,28 @@ export function haptic(event: HapticEvent, nowMs: number = performance.now()): b
  * важнее почувствовать: взрыв динамита и взрыв рядом сильнее попадания,
  * появление элиты — предупреждение, подбор — мягкое подтверждение.
  */
-export function hapticForCues(cues: RunCues, nowMs: number = performance.now()): HapticEvent | null {
+export function hapticForCues(
+  cues: RunCues,
+  nowMs: number = performance.now(),
+): HapticEvent | null {
   const event: HapticEvent | null =
-    cues.dynamite > 0
-      ? "dynamite"
-      : cues.explosionsNear > 0
-        ? "blast"
-        : cues.eliteSpawns > 0
-          ? "eliteSpawn"
-          : cues.playerHit > 0
-            ? "hit"
-            : cues.eliteKills > 0
-              ? "eliteKill"
-              : cues.heal > 0 || cues.magnet > 0 || cues.freeze > 0
-                ? "pickup"
-                : null;
+    (cues.stalkerTouches ?? 0) > 0
+      ? "stalkerTouch"
+      : cues.dynamite > 0
+        ? "dynamite"
+        : cues.explosionsNear > 0
+          ? "blast"
+          : (cues.stalkerOmens ?? 0) > 0
+            ? "stalkerOmen"
+            : cues.eliteSpawns > 0
+              ? "eliteSpawn"
+              : cues.playerHit > 0
+                ? "hit"
+                : cues.eliteKills > 0
+                  ? "eliteKill"
+                  : cues.heal > 0 || cues.magnet > 0 || cues.freeze > 0
+                    ? "pickup"
+                    : null;
   if (event === null) return null;
   return haptic(event, nowMs) ? event : null;
 }

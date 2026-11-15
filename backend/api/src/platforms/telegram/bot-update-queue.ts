@@ -39,12 +39,33 @@ const ORDINARY_PRIORITY = 2;
 const WORKER_CONCURRENCY = 8;
 
 /**
- * Обновление, на которое Telegram ждёт ответа за считанные секунды: оплата.
- * Предварительную проверку надо ответить за десять секунд, а карточка
- * приветствия в соседнем обновлении рисуется секунды.
+ * Обновление, на которое Telegram ждёт ответа за считанные секунды: оплата и
+ * запросы из живых карточек. Предварительную проверку надо ответить за десять
+ * секунд, а карточка приветствия в соседнем обновлении рисуется секунды.
+ * Ответ на запрос карточки — 15 секунд всего: повтор после паузы опоздает.
  */
 export function isUrgent(update: TelegramUpdate): boolean {
-  return update.pre_checkout_query !== undefined || update.message?.successful_payment !== undefined;
+  return (
+    update.pre_checkout_query !== undefined ||
+    update.message?.successful_payment !== undefined ||
+    update.widget_query !== undefined ||
+    update.shared_widget_query !== undefined
+  );
+}
+
+/** Запрос карточки: ответ через паузу BullMQ Telegram уже не примет, поэтому одна попытка. */
+function isWidgetQuery(update: TelegramUpdate): boolean {
+  return update.widget_query !== undefined || update.shared_widget_query !== undefined;
+}
+
+/** Параметры задания: id без повторов, приоритет по срочности, попытки — по смыслу ответа. */
+export function jobOptionsFor(update: TelegramUpdate) {
+  return {
+    ...JOB_OPTIONS,
+    jobId: `update-${String(update.update_id)}`,
+    priority: isUrgent(update) ? URGENT_PRIORITY : ORDINARY_PRIORITY,
+    attempts: isWidgetQuery(update) ? 1 : JOB_OPTIONS.attempts,
+  };
 }
 
 const updateIdSchema = z.object({ update_id: z.number().int() });
@@ -93,9 +114,7 @@ export class BotUpdateQueue implements OnApplicationBootstrap, OnModuleDestroy {
    */
   async enqueue(update: TelegramUpdate): Promise<void> {
     if (this.queue === null) throw new Error("Очередь обновлений бота не запущена");
-    const priority = isUrgent(update) ? URGENT_PRIORITY : ORDINARY_PRIORITY;
-    const options = { ...JOB_OPTIONS, jobId: `update-${String(update.update_id)}`, priority };
-    await withTimeout(this.queue.add("update", update, options), ENQUEUE_TIMEOUT_MS, "очередь обновлений бота");
+    await withTimeout(this.queue.add("update", update, jobOptionsFor(update)), ENQUEUE_TIMEOUT_MS, "очередь обновлений бота");
   }
 
   /** Одно задание. Вынесено ради тестов: очередь вокруг — BullMQ. */

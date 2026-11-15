@@ -41,7 +41,7 @@ batch: 5
 
 # T-0376. Задания «главный экран» и «история» — порт площадки и экран заданий
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0376.json)](README.md#значки-статуса) [![T-0375](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0375.json&label=T-0375)](T-0375-client-signal-tasks-server.md) [![T-0373](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0373.json&label=T-0373)](T-0373-tasks-screen-claimable-group.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0376.json)](README.md#значки-статуса) [![T-0375](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0375.json&label=T-0375)](archive/T-0375-client-signal-tasks-server.md) [![T-0373](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0373.json&label=T-0373)](archive/T-0373-tasks-screen-claimable-group.md)
 
 ## Зачем
 

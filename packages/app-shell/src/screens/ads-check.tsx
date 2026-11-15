@@ -82,7 +82,6 @@ export function AdsCheckScreen(): ReactNode {
             {groupCatalog(catalog.networks, catalog.blocks).map((group) => (
               <div key={group.network.network}>
                 <SectionTitle>{group.network.active ? group.network.name : `${group.network.name} · ${t("adsCheck.network.off")}`}</SectionTitle>
-                {group.network.network === "adsonar" ? <p className="mb-2 text-xs text-text-muted">{t("adsCheck.sonarNote")}</p> : null}
                 <div className="flex flex-col gap-2">
                   {group.blocks.map((block) => {
                     const result = results[block.blockId];

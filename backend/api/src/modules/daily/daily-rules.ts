@@ -17,7 +17,12 @@ export interface DayBase {
   shards: number;
 }
 
-/** День недели награды — по порядку забора, а не по календарю: пропуск дня его не сдвигает. */
+/**
+ * День недели награды — по порядку забора, а не по календарю: пропуск дня его не сдвигает.
+ * Это умолчание ключа `rewards.daily-ladder` (tasks/T-0310): действующую неделю
+ * правят в панели заявкой со вторым участником, ступень недели и множитель
+ * уровня остаются здесь.
+ */
 export const DAILY_BASE: readonly DayBase[] = [
   { coins: 60, shards: 0 },
   { coins: 80, shards: 0 },
@@ -29,6 +34,49 @@ export const DAILY_BASE: readonly DayBase[] = [
 ];
 
 export const DAYS_IN_WEEK = DAILY_BASE.length;
+
+/**
+ * Неделя награды дня текстом: «монеты/осколки» на каждый из семи дней через
+ * запятую. Монеты — от 1: нулевой день начислением не бывает. Осколки — только
+ * обычные (Р2: самоцветов в награде дня нет).
+ */
+export const DEFAULT_DAILY_LADDER_TEXT = "60/0, 80/0, 100/0, 120/0, 150/0, 180/0, 300/10";
+export const DAILY_COINS_MAX = 5_000;
+export const DAILY_SHARDS_MAX = 100;
+export const DAILY_LADDER_FORMAT = "семь дней через запятую, у каждого «монеты/осколки», например 60/0, 80/0, 100/0, 120/0, 150/0, 180/0, 300/10";
+
+export type DailyLadder = readonly DayBase[];
+
+const WHOLE = /^\d{1,9}$/;
+
+export function formatDailyLadder(ladder: DailyLadder): string {
+  return ladder.map((day) => `${String(day.coins)}/${String(day.shards)}`).join(", ");
+}
+
+/** Разбор недели: ровно семь дней, числа в пределах; `text` — канонический вид для сравнения «было». */
+export function parseDailyLadder(text: string): { ok: true; ladder: DailyLadder; text: string } | { ok: false; problem: string } {
+  const parts = text.split(",").map((part) => part.trim());
+  if (parts.length !== DAYS_IN_WEEK) return { ok: false, problem: `В неделе ${String(DAYS_IN_WEEK)} дней, а указано ${parts[0] === "" ? "0" : String(parts.length)}. Формат: ${DAILY_LADDER_FORMAT}` };
+  const ladder: DayBase[] = [];
+  for (const part of parts) {
+    const [coinsText, shardsText, ...rest] = part.split("/").map((field) => field.trim());
+    if (rest.length > 0 || coinsText === undefined || shardsText === undefined || !WHOLE.test(coinsText) || !WHOLE.test(shardsText)) {
+      return { ok: false, problem: `День «${part}» не разобран: «монеты/осколки» целыми числами. Формат: ${DAILY_LADDER_FORMAT}` };
+    }
+    const coins = Number(coinsText);
+    const shards = Number(shardsText);
+    if (coins < 1 || coins > DAILY_COINS_MAX) return { ok: false, problem: `День «${part}»: монет от 1 до ${String(DAILY_COINS_MAX)}` };
+    if (shards > DAILY_SHARDS_MAX) return { ok: false, problem: `День «${part}»: осколков не больше ${String(DAILY_SHARDS_MAX)}` };
+    ladder.push({ coins, shards });
+  }
+  return { ok: true, ladder, text: formatDailyLadder(ladder) };
+}
+
+/** Неделя из настройки. Битое значение не роняет награду дня: действует прежняя неделя. */
+export function dailyLadderOf(text: string): DailyLadder {
+  const parsed = parseDailyLadder(text);
+  return parsed.ok ? parsed.ladder : DAILY_BASE;
+}
 
 /**
  * Ступень — сколько недель закрыто; растёт до потолка и не сбрасывается.
@@ -67,9 +115,9 @@ export function levelMul(level: number): number {
  * растут: их тратят на улучшение предметов, и цена улучшения от уровня
  * аккаунта не зависит.
  */
-export function dailyReward(dayNumber: number, level: number): DailyRewardAmount {
+export function dailyReward(dayNumber: number, level: number, ladder: DailyLadder = DAILY_BASE): DailyRewardAmount {
   const { dayOfWeek, closedWeeks } = dayPosition(dayNumber);
-  const base = DAILY_BASE[dayOfWeek] ?? { coins: 0, shards: 0 };
+  const base = ladder[dayOfWeek] ?? { coins: 0, shards: 0 };
   const step = stepMul(closedWeeks);
   return { coins: Math.round(base.coins * step * levelMul(level)), shards: Math.round(base.shards * step) };
 }

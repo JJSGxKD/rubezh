@@ -199,13 +199,9 @@ describe("отказы", () => {
     const cases: [string, string][] = [
       [`vless://${L.UUID}@example.com:443?security=tls&allowInsecure=1`, "allowInsecure"],
       [`vless://${L.UUID}@example.com:443?security=tls&insecure=1`, "insecure"],
-      [`vless://${L.UUID}@example.com:443?security=tls&pcs=abcdef`, "pcs"],
-      [`vless://${L.UUID}@example.com:443?security=tls&vcn=example.com`, "vcn"],
-      [`vless://${L.UUID}@example.com:443?security=tls&ech=abc`, "ech"],
-      [`vless://${L.UUID}@example.com:443?security=tls&pqv=abc`, "pqv"],
-      [`vless://${L.UUID}@example.com:443?encryption=mlkem768x25519plus.native.0rtt.KEY`, "encryption"],
-      [`vless://${L.UUID}@example.com:443?type=tcp&headerType=http`, "headerType"],
+      [`vless://${L.UUID}@example.com:443?type=tcp&headerType=srtp`, "headerType"],
       [`vless://${L.UUID}@example.com:443?flow=xtls-rprx-direct`, "flow"],
+      [`vless://${L.UUID}@example.com:443?flow=xtls-rprx-vision-splice`, "flow"],
       [`ss://${L.b64url("aes-256-gcm:secret")}@example.com:8388?plugin=obfs-local%3Bobfs%3Dhttp`, "plugin"],
     ];
     for (const [link, name] of cases) {
@@ -249,6 +245,201 @@ describe("отказы", () => {
     for (const link of links) {
       const text = JSON.stringify(parseShareLink(link));
       for (const secret of [L.UUID, "topsecret", "secret-host", "secret-path"]) expect(text, `${secret} в ${link}`).not.toContain(secret);
+    }
+  });
+});
+
+describe("способы подключения поставщиков (Р192, T-0387)", () => {
+  const BASE = `vless://${L.UUID}@203.0.113.11:443`;
+  const failure = (link: string): { reason: string; detail: string } => {
+    const result = parseShareLink(link);
+    if (result.ok) throw new Error("ожидался отказ");
+    return { reason: result.reason, detail: result.detail };
+  };
+  const reality = `${BASE}?type=xhttp&security=reality&sni=www.example.com&pbk=PUBLICKEY2&sid=cd34`;
+  const tls = `${BASE}?type=tcp&security=tls&sni=example.com`;
+
+  describe("extra у XHTTP", () => {
+    it("объект из ссылки идёт в transport.extra как есть", () => {
+      expect(node(L.VLESS_XHTTP_EXTRA).transport).toEqual({ network: "xhttp", path: "/x", host: "h.example.com", mode: "auto", extra: L.XHTTP_EXTRA });
+    });
+
+    it("не JSON, массив и не объект — malformed / extra", () => {
+      for (const value of ["not-json", "[1]", "5", '"text"', "null"]) {
+        expect(failure(`${reality}&extra=${encodeURIComponent(value)}`), value).toEqual({ reason: "malformed", detail: "extra" });
+      }
+    });
+
+    it("длиннее 4096 знаков и глубже 8 уровней — malformed / extra", () => {
+      const long = encodeURIComponent(JSON.stringify({ v: "x".repeat(5000) }));
+      expect(failure(`${reality}&extra=${long}`)).toEqual({ reason: "malformed", detail: "extra" });
+
+      let deep: unknown = { leaf: 1 };
+      for (let level = 0; level < 9; level++) deep = { next: deep };
+      expect(failure(`${reality}&extra=${encodeURIComponent(JSON.stringify(deep))}`)).toEqual({ reason: "malformed", detail: "extra" });
+
+      let fine: unknown = { leaf: 1 };
+      for (let level = 0; level < 6; level++) fine = { next: fine };
+      expect(parseShareLink(`${reality}&extra=${encodeURIComponent(JSON.stringify(fine))}`).ok).toBe(true);
+    });
+
+    it("у другого транспорта extra игнорируется, как раньше", () => {
+      const ws = node(`${BASE}?type=ws&security=none&extra=${encodeURIComponent('{"a":1}')}`);
+      expect(ws.transport).toEqual({ network: "ws" });
+    });
+
+    it("без extra поля в транспорте нет; пустой объект — то же самое, и ключ узла тот же", () => {
+      expect(node(L.VLESS_XHTTP).transport).not.toHaveProperty("extra");
+      const empty = node(L.VLESS_XHTTP.replace("#XHTTP", "&extra=%7B%7D#XHTTP"));
+      expect(empty.transport).not.toHaveProperty("extra");
+      expect(empty.key).toBe(node(L.VLESS_XHTTP).key);
+    });
+  });
+
+  describe("ECH, закреплённый сертификат, проверка по имени", () => {
+    it("ech, pcs и vcn попадают в безопасность tls", () => {
+      expect(node(`${tls}&ech=${L.ECH_CONFIG}&pcs=${L.PIN_HEX}&vcn=example.com`).security).toEqual({
+        kind: "tls",
+        serverName: "example.com",
+        alpn: [],
+        fingerprint: null,
+        ech: L.ECH_CONFIG,
+        pinnedPeerCertSha256: L.PIN_HEX,
+        verifyPeerCertByName: "example.com",
+      });
+    });
+
+    it("форма DoH для ECH: домен+адрес — со знаком плюс в процентной кодировке", () => {
+      const value = "cloudflare-ech.com+https://1.1.1.1/dns-query";
+      expect(node(`${tls}&ech=${encodeURIComponent(value)}`).security).toMatchObject({ ech: value });
+    });
+
+    it("ech с пробелом, управляющим знаком или длиннее 4096 — malformed / ech", () => {
+      for (const value of ["a b", "a\u0007b", "а", "x".repeat(4097)]) {
+        expect(failure(`${tls}&ech=${encodeURIComponent(value)}`), value).toEqual({ reason: "malformed", detail: "ech" });
+      }
+    });
+
+    it("pcs не из 64-значных hex-отпечатков и vcn с пробелом — malformed", () => {
+      for (const value of ["abcdef", "zz".repeat(32), `${L.PIN_HEX},`]) {
+        expect(failure(`${tls}&pcs=${value}`), value).toEqual({ reason: "malformed", detail: "pcs" });
+      }
+      expect(failure(`${tls}&vcn=a%20b`)).toEqual({ reason: "malformed", detail: "vcn" });
+    });
+
+    it("несколько отпечатков через запятую проходят", () => {
+      const two = `${L.PIN_HEX},${"ab".repeat(32)}`;
+      expect(node(`${tls}&pcs=${two}`).security).toMatchObject({ pinnedPeerCertSha256: two });
+    });
+
+    it("у reality эти параметры в узел не попадают", () => {
+      const withReality = node(`${reality}&ech=${L.ECH_CONFIG}&pcs=${L.PIN_HEX}&vcn=example.com`);
+      expect(withReality.security).not.toHaveProperty("ech");
+      expect(withReality.security).not.toHaveProperty("pinnedPeerCertSha256");
+    });
+
+    it("allowInsecure по-прежнему пропуск: проверку сертификата отключать нельзя", () => {
+      expect(failure(`${tls}&allowInsecure=1&pcs=${L.PIN_HEX}`)).toEqual({ reason: "unsupported_option", detail: "allowInsecure" });
+    });
+  });
+
+  describe("постквантовая проверка REALITY", () => {
+    it("pqv — в mldsa65Verify", () => {
+      expect(node(L.VLESS_REALITY_PQV).security).toMatchObject({ kind: "reality", mldsa65Verify: L.MLDSA65_VERIFY });
+    });
+
+    it("pqv не base64url или длиннее 4096 — malformed / pqv", () => {
+      for (const value of ["a b", "a+b", "x".repeat(4097)]) {
+        expect(failure(`${BASE}?type=tcp&security=reality&pbk=PUBLICKEY1&pqv=${encodeURIComponent(value)}`), value).toEqual({ reason: "malformed", detail: "pqv" });
+      }
+    });
+
+    it("без pqv поля нет", () => {
+      expect(node(L.VLESS_REALITY).security).not.toHaveProperty("mldsa65Verify");
+    });
+  });
+
+  describe("flow", () => {
+    it("xtls-rprx-vision-udp443 — узел", () => {
+      expect(node(L.VLESS_VISION_UDP443).flow).toBe("xtls-rprx-vision-udp443");
+    });
+
+    it("режимы, убранные из Xray, — unsupported_option / flow", () => {
+      for (const flow of ["xtls-rprx-direct", "xtls-rprx-origin", "xtls-rprx-splice", "xtls-rprx-vision-x", "other"]) {
+        expect(failure(`${BASE}?flow=${flow}`), flow).toEqual({ reason: "unsupported_option", detail: "flow" });
+      }
+    });
+  });
+
+  describe("шифрование VLESS", () => {
+    it("постквантовая строка уходит в cipher как есть", () => {
+      expect(node(L.VLESS_ENCRYPTION).cipher).toBe(L.VLESS_ENCRYPTION_VALUE);
+    });
+
+    it("none и пусто — cipher: null", () => {
+      expect(node(`${BASE}?encryption=none`).cipher).toBeNull();
+      expect(node(`${BASE}?encryption=`).cipher).toBeNull();
+      expect(node(BASE).cipher).toBeNull();
+    });
+
+    it("строка не по формату ядра — malformed / encryption: иначе Xray не примет весь конфиг", () => {
+      for (const value of ["garbage", "mlkem768x25519plus.a b", `mlkem768x25519plus.${"x".repeat(4100)}`]) {
+        expect(failure(`${BASE}?encryption=${encodeURIComponent(value)}`), value).toEqual({ reason: "malformed", detail: "encryption" });
+      }
+    });
+  });
+
+  describe("HTTP-маскировка RAW", () => {
+    it("headerType=http у tcp: путь и хосты списками", () => {
+      expect(node(L.VMESS_RAW_HTTP).transport).toEqual({ network: "tcp", rawHeader: L.RAW_HTTP_HEADER });
+    });
+
+    it("без path — «/», без host — заголовка Host нет", () => {
+      expect(node(`${BASE}?type=tcp&headerType=http&security=tls`).transport).toEqual({
+        network: "tcp",
+        rawHeader: { type: "http", request: { path: ["/"], headers: {} } },
+      });
+    });
+
+    it("vless: то же самое; у других сетей headerType игнорируется", () => {
+      expect(node(`${BASE}?type=tcp&headerType=http&host=a.com&path=%2Fx%2C%2Fy&security=tls`).transport).toEqual({
+        network: "tcp",
+        rawHeader: { type: "http", request: { path: ["/x", "/y"], headers: { Host: ["a.com"] } } },
+      });
+      expect(node(`${BASE}?type=ws&headerType=http&security=none`).transport).toEqual({ network: "ws" });
+    });
+
+    it("none и пусто — как раньше, без заголовка; другое значение — unsupported_option / headerType", () => {
+      expect(node(`${BASE}?type=tcp&headerType=none`).transport).toEqual({ network: "tcp" });
+      for (const value of ["srtp", "utp", "wechat-video", "dtls", "wireguard"]) {
+        expect(failure(`${BASE}?type=tcp&headerType=${value}`), value).toEqual({ reason: "unsupported_option", detail: "headerType" });
+      }
+    });
+
+    it("знаки вне видимого ASCII в host и path — malformed / headerType: заголовок нельзя ломать переводом строки", () => {
+      expect(failure(`${BASE}?type=tcp&headerType=http&host=${encodeURIComponent("a.com\r\nX: y")}`)).toEqual({ reason: "malformed", detail: "headerType" });
+      expect(failure(`${BASE}?type=tcp&headerType=http&path=${encodeURIComponent("/a b")}`)).toEqual({ reason: "malformed", detail: "headerType" });
+    });
+
+    it("vmess JSON-форма: type=http у tcp — тот же заголовок", () => {
+      const body = { v: "2", ps: "x", add: "203.0.113.12", port: "80", id: L.UUID, aid: "0", scy: "auto", net: "tcp", type: "http", host: "a.example.com,b.example.com", path: "/x" };
+      expect(node(`vmess://${L.b64(JSON.stringify(body))}`).transport).toEqual({ network: "tcp", rawHeader: L.RAW_HTTP_HEADER });
+      expect(failure(`vmess://${L.b64(JSON.stringify({ ...body, type: "srtp" }))}`)).toEqual({ reason: "unsupported_option", detail: "type" });
+    });
+  });
+
+  it("в причинах отказа нет значений новых параметров", () => {
+    const links = [
+      `${tls}&ech=${encodeURIComponent("секрет ech")}`,
+      `${tls}&pcs=topsecretpin`,
+      `${BASE}?type=tcp&security=reality&pbk=PUBLICKEY1&pqv=${encodeURIComponent("секрет pqv")}`,
+      `${BASE}?encryption=topsecretenc`,
+      `${reality}&extra=topsecretextra`,
+      `${BASE}?type=tcp&headerType=http&host=${encodeURIComponent("topsecret host")}`,
+    ];
+    for (const link of links) {
+      const text = JSON.stringify(parseShareLink(link));
+      for (const secret of ["секрет", "topsecret", L.UUID, "203.0.113.11"]) expect(text, `${secret} в ${link}`).not.toContain(secret);
     }
   });
 });

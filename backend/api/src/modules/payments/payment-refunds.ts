@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { UnrecoverableError } from "bullmq";
 import { PaymentProviderRejectedError, PaymentProviders } from "../../platforms/ports/payment-provider.js";
 import type { ConfirmedPayment } from "./payment-confirmation.js";
+import { PaymentsHooks } from "./payments-hooks.js";
 import { PurchaseRevocation } from "./purchase-revocation.js";
 import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, type RefundOrder } from "./purchases.repository.js";
 
@@ -36,6 +37,8 @@ export class PaymentRefunds {
     private readonly providers: PaymentProviders,
     // Без отзывателей отзывать нечего; в приложении Nest подставляет общий экземпляр модуля.
     private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
+    // Без слушателей событие уходит в пустоту; в приложении Nest подставляет общий экземпляр модуля.
+    private readonly hooks: PaymentsHooks = new PaymentsHooks(),
   ) {}
 
   /** Что вернуть после подтверждения оплаты. */
@@ -110,6 +113,12 @@ export class PaymentRefunds {
     const revocation =
       record !== null && record.purchase.refundReason === "manual" ? await this.revocation.revoke(record.purchase, record.purchase.refundedAt ?? new Date(nowMs)) : null;
     this.log("log", "refund_done", { ...describe(order), ...(revocation === null ? {} : { revoked: revocation.lines }) });
+    // Игроку — только за первую отметку возврата, и только когда звёзды вернули мы по его делу: повтор задания
+    // (`firstTime: false`) ничего не пишет, а тестовая оплата и неиспользованный второй шанс — не его забота.
+    // Событие после отзыва остатка: «остаток списан» в сообщении должно быть правдой.
+    if (record?.firstTime === true && (record.purchase.refundReason === "manual" || record.purchase.refundReason === "undeliverable")) {
+      await this.hooks.emitRefundDone({ purchase: record.purchase, revoked: (revocation?.lines.length ?? 0) > 0, at: record.purchase.refundedAt ?? new Date(nowMs) });
+    }
   }
 
   private async request(purchaseId: string, reason: "test_mode" | "unused" | "undeliverable" | "manual", nowMs: number): Promise<RefundOrder[]> {

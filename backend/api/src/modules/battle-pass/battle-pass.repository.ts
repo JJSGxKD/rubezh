@@ -35,8 +35,11 @@ export interface BattlePassRepository {
    * прибавки не теряются. Возвращает очки до и после — по ним видно, какие ступени взяты.
    */
   addPoints(accountId: string, monthKey: string, points: number, at: Date): Promise<{ before: number; after: number }>;
-  /** Лента месяца как лежит в базе (непроверенный `jsonb`); `null` — ленту месяца не заводили. */
-  season(monthKey: string): Promise<unknown>;
+  /**
+   * Лента месяца как лежит в базе (непроверенный `jsonb`); `null` — ленты нет или она ещё
+   * не опубликована в панели (черновик игрок не видит, T-0313).
+   */
+  season(monthKey: string, at: Date): Promise<unknown>;
   /** Забранные награды игрока в месяце: ключи `claimKey`. */
   claimed(accountId: string, monthKey: string): Promise<Set<string>>;
   /**
@@ -70,8 +73,8 @@ export class PrismaBattlePassRepository implements BattlePassRepository {
     return { before: Math.max(0, after - points), after };
   }
 
-  async season(monthKey: string): Promise<unknown> {
-    const [row] = await this.prisma.$queryRaw<unknown[]>`SELECT tiers FROM pass_season WHERE month_key = ${monthKey}`;
+  async season(monthKey: string, at: Date): Promise<unknown> {
+    const [row] = await this.prisma.$queryRaw<unknown[]>`SELECT tiers FROM pass_season WHERE month_key = ${monthKey} AND published_at <= ${at}`;
     return row === undefined ? null : seasonSchema.parse(row).tiers;
   }
 

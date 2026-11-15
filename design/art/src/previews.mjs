@@ -106,9 +106,12 @@ function rosterBoard() {
   const items = [];
   const rowH = 128;
   let y = 46;
-  items.push({ text: "Бестиарий: 4 кадра шага · ступени 1–3 · в игровом масштабе", x: 24, y: 30, size: 22, bold: true });
+  // Шесть ступеней (content/stages.ts): крупно — кадр шага 0 и ступени 1…5, справа —
+  // все шесть в игровом масштабе, как их видит игрок.
+  const width = 1830;
+  items.push({ text: "Бестиарий: 4 кадра шага · ступени 1–6 · в игровом масштабе", x: 24, y: 30, size: 22, bold: true });
   for (const art of ENEMY_ART) {
-    items.push({ ground: true, x: 16, y, w: 1350, h: rowH - 6 });
+    items.push({ ground: true, x: 16, y, w: width - 30, h: rowH - 6 });
     items.push({ text: art.id, x: 24, y: y + 20, size: 15, bold: true });
     items.push({ text: `${art.pattern}${art.rank ? ` · ${art.rank}` : ""} · r ${art.radius.toFixed(1)}`, x: 24, y: y + 40, size: 13, color: "#d7dcef" });
     let x = 200;
@@ -123,7 +126,7 @@ function rosterBoard() {
       items.push({ svg: enemySvg(art, s, 0), x, y: y + 3, size });
       x += size + 4;
     }
-    x = 1050;
+    x = 1330;
     const game = gameSize(art.radius) / 2;
     for (let s = 0; s < stages; s++) {
       items.push({ svg: enemySvg(art, s, 0.25), x, y: y + rowH / 2 - game / 2 - 3, size: game });
@@ -131,7 +134,7 @@ function rosterBoard() {
     }
     y += rowH;
   }
-  return { width: 1380, height: y + 16, items };
+  return { width, height: y + 16, items };
 }
 
 /**

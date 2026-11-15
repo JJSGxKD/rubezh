@@ -536,6 +536,45 @@ describe("сообщение команде о действии поддержк
     );
   });
 
+  it("повтор учёта (Р209): заголовок и, если он задан, что именно сделано — после причины", () => {
+    expect(supportActionText(support({ kind: "retry", detail: "повторено заданий: 2" }))).toBe(
+      [
+        "🔁 Учёт оплаты повторён вручную",
+        "Товар: starter_pack, 50 ⭐",
+        "Аккаунт: 22222222-2222-4222-8222-222222222222",
+        "Кто: Анна из поддержки",
+        "Причина: Игрок написал в поддержку",
+        "повторено заданий: 2",
+      ].join("\n"),
+    );
+  });
+
+  it("повтор учёта без detail — без строки про сделанное", () => {
+    expect(supportActionText(support({ kind: "retry" }))).toBe(
+      ["🔁 Учёт оплаты повторён вручную", "Товар: starter_pack, 50 ⭐", "Аккаунт: 22222222-2222-4222-8222-222222222222", "Кто: Анна из поддержки", "Причина: Игрок написал в поддержку"].join("\n"),
+    );
+  });
+
+  it("компенсация (Р209): заголовок и «Начислено самоцветов» после причины", () => {
+    expect(supportActionText(support({ kind: "compensate", gems: 120 }))).toBe(
+      [
+        "🎁 Компенсация за сбой оплаты",
+        "Товар: starter_pack, 50 ⭐",
+        "Аккаунт: 22222222-2222-4222-8222-222222222222",
+        "Кто: Анна из поддержки",
+        "Причина: Игрок написал в поддержку",
+        "Начислено самоцветов: 120",
+      ].join("\n"),
+    );
+  });
+
+  it("detail есть только у повтора учёта, самоцветы — только у компенсации: чужое поле в текст не попадает", () => {
+    expect(supportActionText(support({ kind: "compensate", detail: "повторено заданий: 2", gems: 120 }))).not.toContain("повторено заданий");
+    expect(supportActionText(support({ kind: "retry", detail: "повторено заданий: 2", gems: 120 }))).not.toContain("самоцветов");
+    expect(supportActionText(support({ kind: "refund", detail: "повторено заданий: 2", gems: 120 }))).not.toContain("самоцветов");
+    expect(supportActionText(support({ kind: "fulfill", detail: "повторено заданий: 2", gems: 120 }))).not.toContain("повторено заданий");
+  });
+
   it("нет sku — стоит вид товара", () => {
     expect(supportActionText(support({}, { sku: null, product: "vip" }))).toContain("Товар: vip, 50 ⭐");
   });
@@ -571,6 +610,17 @@ describe("сообщение команде о действии поддержк
     await hooks.emitSupport(support({ kind: "refund" }));
 
     expect(sent.map((message) => message.text.split("\n")[0])).toEqual(["✅ Покупка выдана вручную", "↩️ Возврат звёзд вручную"]);
+  });
+
+  it("повтор учёта и компенсация (Р209) — тоже сообщения в тот же поток, без ключа дедупликации", async () => {
+    const { notifier, sent, hooks, redis } = setup();
+    notifier.onModuleInit();
+
+    await hooks.emitSupport(support({ kind: "retry", detail: "повторено заданий: 1" }));
+    await hooks.emitSupport(support({ kind: "compensate", gems: 120 }));
+
+    expect(sent.map((message) => message.text.split("\n")[0])).toEqual(["🔁 Учёт оплаты повторён вручную", "🎁 Компенсация за сбой оплаты"]);
+    expect(redis.values.size).toBe(0);
   });
 
   it("нет чата — не отправляет и не бросает", async () => {

@@ -7,6 +7,8 @@ import {
   PICKUP_LOOKS,
   stageColor,
   stageCore,
+  HOOD_GEOMETRY,
+  UNKILLABLE_LOOK,
   WORLD_COLORS,
   type ShapeKind,
 } from "@bh/core-game";
@@ -190,6 +192,30 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
           <rect x={-r * 0.8} y={-r * 0.45} width={r * 1.6} height={r * 0.5} rx={r * 0.2} fill={lighten(props.color)} />
           <rect x={-r * 0.8} y={-r * 0.02} width={r * 1.6} height={r * 0.1} fill={edge} />
           <rect x={-r * 0.18} y={-r * 0.18} width={r * 0.36} height={r * 0.4} rx={r * 0.08} fill={light} />
+        </>
+      );
+    }
+    case "hood": {
+      // Те же таблицы, что у текстуры движка (`HOOD_GEOMETRY` в `render/looks.ts`): плащ, тень, складки, подол
+      // тремя ступенями прозрачности, провал лица с глазами и посох. Иней на теле не рисуется.
+      const g = HOOD_GEOMETRY;
+      const poly = (points: readonly (readonly [number, number])[]): string => points.map(([x, y]) => `${x * r},${y * r}`).join(" ");
+      return (
+        <>
+          <polygon points={poly(g.cloak)} fill={fill} />
+          <polygon points={poly(g.shade)} fill={hex(UNKILLABLE_LOOK.shade)} />
+          {g.folds.map(([x1, y1, x2, y2]) => (
+            <line key={`${x1}-${y1}`} x1={x1 * r} y1={y1 * r} x2={x2 * r} y2={y2 * r} stroke={hex(UNKILLABLE_LOOK.light)} strokeOpacity={0.6} strokeWidth={Math.max(1, r * 0.05)} />
+          ))}
+          {g.hem.map((strip, step) => (
+            <polygon key={`hem${String(step)}`} points={poly(strip)} fill={hex(UNKILLABLE_LOOK.shade)} fillOpacity={g.hemAlpha[step] ?? 1} />
+          ))}
+          <polygon points={poly(g.face)} fill={hex(UNKILLABLE_LOOK.deep)} />
+          {g.eyes.map(([x, y, radius]) => (
+            <circle key={`eye${String(x)}`} cx={x * r} cy={y * r} r={Math.max(0.8, radius * r)} fill={hex(UNKILLABLE_LOOK.rim.color)} />
+          ))}
+          <line x1={g.staff[0] * r} y1={g.staff[1] * r} x2={g.staff[2] * r} y2={g.staff[3] * r} stroke={hex(UNKILLABLE_LOOK.light)} strokeWidth={Math.max(1.2, r * 0.1)} />
+          <polygon points={poly(g.staffHead)} fill={hex(UNKILLABLE_LOOK.light)} />
         </>
       );
     }
@@ -435,6 +461,30 @@ export function EnemyScene(props: {
               </At>
             ),
           )}
+        </Stage>
+      );
+    }
+    case "stalker": {
+      // Герой справа, Карачун слева, между ними пунктир толчка назад, у левого края — иней звездой.
+      // Сцена статичная: новой анимации нет.
+      const frost = hex(UNKILLABLE_LOOK.rim.color);
+      const rays = [0, 60, 120].map((deg) => {
+        const rad = (deg * Math.PI) / 180;
+        // Лучи звезды — по таблице направлений, а не тригонометрией движка: сцена рисуется только в оболочке.
+        return { deg, dx: Math.cos(rad) * 11, dy: Math.sin(rad) * 11 };
+      });
+      return (
+        <Stage label={props.label}>
+          <At x={20} y={22}>
+            {rays.map(({ deg, dx, dy }) => (
+              <line key={deg} x1={-dx} y1={-dy} x2={dx} y2={dy} stroke={frost} strokeOpacity={0.55} strokeWidth={1.2} />
+            ))}
+          </At>
+          <Player x={px} y={py} />
+          <path d={`M ${px - 14} ${py} L ${px - 50} ${py}`} stroke={frost} strokeOpacity={0.6} strokeWidth={1.5} strokeDasharray="3 3" />
+          <At x={50} y={py}>
+            <WorldShape shape={look.shape} color={color} r={12} />
+          </At>
         </Stage>
       );
     }

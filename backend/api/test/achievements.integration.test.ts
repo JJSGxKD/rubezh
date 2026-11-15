@@ -25,7 +25,8 @@ import { ProgressService } from "../src/modules/progress/progress.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
-import { ELEMENTS, TASK_KIND_IDS, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { ELEMENTS, TASK_KIND_IDS, isEmblemKind, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
 import { PrismaWalletRepository } from "../src/modules/wallet/wallet.repository.js";
@@ -35,6 +36,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Достижения с престижем на живых Postgres и Redis (tasks/T-0106,
@@ -57,6 +59,9 @@ const live = DATABASE_URL !== "" && REDIS_URL !== "";
 const NOON = new Date(Date.UTC(2026, 9, 21, 9));
 const HOUR = 3_600_000;
 const STAMP = String(Date.now());
+
+/** Строки статусных и сезонных знаков (T-0235): они тоже в витрине, но целей, наград и престижа у них нет. */
+const EMBLEM_ROWS = 8;
 
 /** Девять существующих достижений: цель и награда не меняются миграцией. */
 const OLD: Readonly<Record<string, { target: number; coins: number; gems: number; title: string }>> = {
@@ -86,7 +91,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(980_000_000 + Math.floor(Math.random() * 15_000_000)), displayName: "Достижения", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Достижения", username: null },
       Date.now(),
     );
     return created.accountId;
@@ -168,7 +173,8 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
     tasks = new TasksService(tasksRepository, wallet, new RunsHooks(), unused, unused, unused, unused);
     const friends = new PrismaFriendsRepository(prisma);
     service = new AchievementsService(tasks, repository, { friendCount: (accountId) => friends.count(accountId) }, new ProgressService(new PrismaProgressRepository(prisma)), settings);
-    catalog = (await tasksRepository.catalog()).filter((task) => task.period === "achievement" && task.category !== null && !task.taskId.startsWith("it_"));
+    // Статусные и сезонные знаки (T-0235) — строки того же каталога, но не достижения с целью и престижем: их проверяет emblems.integration.test.ts.
+    catalog = (await tasksRepository.catalog()).filter((task) => task.period === "achievement" && task.category !== null && !isEmblemKind(task.kind) && !task.taskId.startsWith("it_"));
   });
 
   afterAll(async () => {
@@ -186,8 +192,8 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
   });
 
   describe("каталог после миграции", () => {
-    it("ровно 65 достижений (48 и 17 про боссов, элит, сундуки, кристаллы и эволюции), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
-      expect(catalog.length).toBe(65);
+    it("ровно 85 достижений (48, 17 про боссов, элит, сундуки, кристаллы и эволюции, 3 про кодекс врагов, 16 — достижения v2 и «Следопыт» про тайники), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
+      expect(catalog.length).toBe(85);
       expect(new Set(catalog.map((task) => task.taskId)).size).toBe(catalog.length);
       for (const task of catalog) {
         expect(["combat", "collection", "mastery", "friends"], task.taskId).toContain(task.category);
@@ -199,7 +205,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
     });
 
     it("ни одна посеянная строка не потерялась при чтении: вид, фильтр и поля известны серверу", async () => {
-      const [row] = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM task_def WHERE category IS NOT NULL AND task_id NOT LIKE 'it\_%'`;
+      const [row] = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM task_def WHERE category IS NOT NULL AND kind NOT IN ('status', 'season') AND task_id NOT LIKE 'it\_%'`;
       expect(row?.count).toBe(catalog.length);
       for (const task of catalog) expect(TASK_KIND_IDS, task.taskId).toContain(task.kind);
       const weaponIds = new Set(WEAPONS.map((weapon) => weapon.id));
@@ -251,10 +257,13 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
 
     it("новые награждаются монетами, без самоцветов и осколков; вместе со старыми они не упираются в суточный потолок", () => {
       const added = catalog.filter((task) => OLD[task.taskId] === undefined);
-      expect(added.length).toBe(56);
+      expect(added.length).toBe(76); // 56 прежних новых, три достижения кодекса (T-0127), 16 — v2 (T-0322) и «Следопыт» (T-0261)
       for (const task of added) expect(task, task.taskId).toMatchObject({ gems: 0, shards: 0, passPoints: 0 });
       for (const task of added) expect(task.coins, task.taskId).toBeGreaterThan(0);
-      expect(catalog.reduce((sum, task) => sum + task.coins, 0)).toBeLessThanOrEqual(20_000);
+      // Включённые достижения разом, вместе с v2 (T-0322) и кодексом (T-0127), — в пределах суточного
+      // потолка монет за достижения (`wallet-limits.ts`): честный игрок в него не упрётся.
+      const active = catalog.filter((task) => task.active);
+      expect(active.reduce((sum, task) => sum + task.coins, 0)).toBeLessThanOrEqual(WALLET_DAILY_CAPS.achievement_reward.coins ?? 0);
       expect(catalog.reduce((sum, task) => sum + task.gems, 0)).toBeLessThanOrEqual(200);
     });
 
@@ -370,9 +379,12 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
     it("витрина — это достижения: ежедневные, недельные и партнёрские цели в неё не попадают; порядок как в панели", async () => {
       const me = await player();
       const view = await service.view(me, NOON);
-      expect(view.items.length).toBe(catalog.length);
-      expect(idsOf(view).every((id) => catalog.some((task) => task.taskId === id))).toBe(true);
-      const sorts = idsOf(view).map((id) => catalog.find((task) => task.taskId === id)?.sort ?? 0);
+      expect(view.items.length).toBe(catalog.length + EMBLEM_ROWS);
+      // Знаки статуса и сезона (T-0235) идут в конце списка: их `sort` — с 900.
+      const regular = idsOf(view).filter((id) => !id.startsWith("emb_"));
+      expect(idsOf(view).slice(regular.length).every((id) => id.startsWith("emb_"))).toBe(true);
+      expect(regular.every((id) => catalog.some((task) => task.taskId === id))).toBe(true);
+      const sorts = regular.map((id) => catalog.find((task) => task.taskId === id)?.sort ?? 0);
       expect(sorts).toEqual([...sorts].sort((a, b) => a - b));
       expect(view).toMatchObject({ prestige: 0, favorites: [] });
     });
@@ -423,7 +435,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
   });
 
   describe("состояние: друзья и уровень аккаунта", () => {
-    it("пять друзей — выполнены «Не один» и «Свои люди», остальные нет; друзей стало меньше — прогресс не убывает", async () => {
+    it("пять друзей — выполнены «Не один» и «Душа компании», остальные нет; друзей стало меньше — прогресс не убывает", async () => {
       const me = await player();
       const friends = await befriend(me.accountId, 5);
       const view = await service.view(me, NOON);
@@ -472,7 +484,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
         settings,
       );
       const view = await broken.view(me, NOON);
-      expect(view.items.length).toBe(catalog.length);
+      expect(view.items.length).toBe(catalog.length + EMBLEM_ROWS);
     });
   });
 
@@ -503,7 +515,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
         prestige: 15,
         favorites: [
           { id: "ach_friends_1", title: "Не один", category: "friends" },
-          { id: "ach_friends_5", title: "Свои люди", category: "friends" },
+          { id: "ach_friends_5", title: "Душа компании", category: "friends" },
         ],
       });
       expect(Object.keys(summary).sort()).toEqual(["favorites", "prestige"]);
@@ -832,7 +844,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
       expect(Object.keys(body).sort()).toEqual(["favorites", "items", "prestige", "rarity"]);
       expect(Object.keys(body.rarity).sort()).toEqual(["computedAt", "population", "shown"]);
       expect(body.prestige).toBe(10);
-      expect(body.items.length).toBe(catalog.length);
+      expect(body.items.length).toBe(catalog.length + EMBLEM_ROWS);
 
       const empty = await http.inject({ method: "GET", url: "/api/v1/achievements/summary", headers });
       expect(empty.json<{ data: unknown }>().data).toEqual({ prestige: 10, favorites: [] });

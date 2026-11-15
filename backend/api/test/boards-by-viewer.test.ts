@@ -22,6 +22,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
 import { RunPrestige } from "../src/modules/runs/run-prestige.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Доски рейтинга по зрителю (T-0113, Р104): аккаунт со скрытым ограничением
@@ -70,7 +71,7 @@ function build() {
 type World = ReturnType<typeof build>;
 
 async function player(world: World, name: string): Promise<AccountRef> {
-  const account = await world.accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
+  const account = await world.accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
   return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
 }
 
@@ -343,9 +344,9 @@ describe("карточка /start считает место по доске ак
     }
 
     // Обычные: общая доска из двух, отдельная в неё не входит.
-    expect(await progress.progress("102")).toEqual({ best: { survivalSec: 100, rank: 1, total: 2 }, runs: 1 });
-    expect(await progress.progress("101")).toEqual({ best: { survivalSec: 50, rank: 2, total: 2 }, runs: 1 });
+    expect(await progress.progress("102")).toEqual({ best: { points: 100, survivalSec: 100, rank: 1, total: 2 }, runs: 1 });
+    expect(await progress.progress("101")).toEqual({ best: { points: 50, survivalSec: 50, rank: 2, total: 2 }, runs: 1 });
     // Аккаунт с отдельной доской: полная из трёх, он на первом месте.
-    expect(await progress.progress("103")).toEqual({ best: { survivalSec: 300, rank: 1, total: 3 }, runs: 1 });
+    expect(await progress.progress("103")).toEqual({ best: { points: 300, survivalSec: 300, rank: 1, total: 3 }, runs: 1 });
   });
 });

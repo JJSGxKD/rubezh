@@ -1,12 +1,13 @@
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../src/content/snapshot";
 import { SIEGE } from "../../src/content/siege";
+import { withoutStalker } from "./without-stalker";
 
 /**
  * Контент боя до T-0388 (Р194): `hpMul` и `xpMul` ступеней, рост здоровья бесконечной кривой и
  * рост поздних уровней. Нужен калибровке стойки: стоящий бот на этих числах обязан жить не
  * меньше, чем живой игрок (Р196). Подмена в самой калибровке — файлы контента не правятся, и
- * правка нынешних чисел эту точку отсчёта не двигает. Осада стоящего (T-0392) выключена: свойство
- * «бот не слабее человека» относится к калибровке бота без неё.
+ * правка нынешних чисел эту точку отсчёта не двигает. Осада стоящего (T-0392) и Карачун (T-0424)
+ * выключены: свойство «бот не слабее человека» относится к калибровке бота без них.
  */
 const HP_MUL_BEFORE = [1, 1.9, 3.6, 5, 7, 9.5] as const;
 const XP_MUL_BEFORE = [1, 2, 4, 6, 9, 13] as const;
@@ -29,7 +30,7 @@ export function contentBeforeT0388(): ContentSnapshot {
   const late = base.levelCurve.late;
   if (late === undefined) throw new Error("В кривой опыта нет поздних уровней: нечего подменять");
   return {
-    ...withoutSiege(base),
+    ...withoutStalker(withoutSiege(base)),
     stages: base.stages.map((stage, i) => ({ ...stage, hpMul: HP_MUL_BEFORE[i] ?? stage.hpMul, xpMul: XP_MUL_BEFORE[i] ?? stage.xpMul })),
     endlessCurve: { ...base.endlessCurve, hpGrowth: HP_GROWTH_BEFORE },
     levelCurve: { ...base.levelCurve, late: { ...late, growth: LATE_GROWTH_BEFORE } },

@@ -7,6 +7,11 @@ import {
   CHANNEL_PLATFORMS,
   CHANNEL_PLATFORM_TITLES,
   CLIENT_KINDS,
+  COMPUTED_TARGET_KINDS,
+  COMPUTED_TARGET_TITLE,
+  EMBLEM_KINDS,
+  EMBLEM_TIERS,
+  EMBLEM_TIER_TITLES,
   FILTER_KEYS,
   FILTER_LABELS,
   FILTER_OPTIONS,
@@ -16,6 +21,7 @@ import {
   LADDER_MAX,
   NO_ACHIEVEMENT_FIELDS,
   NO_CATEGORY_TITLE,
+  NO_EMBLEM_TITLE,
   NO_TIER_TITLE,
   PARTNER_KINDS,
   PARTNER_PLATFORMS,
@@ -35,6 +41,7 @@ import {
   fetchTasks,
   groupByPeriod,
   isAchievement,
+  isEmblemRow,
   partnerPlatforms,
   reorderTasks,
   rewardLabel,
@@ -46,6 +53,7 @@ import {
   withKind,
   withPeriod,
   withPlatform,
+  type EmblemTier,
   type PoolTier,
   type TaskGroup,
   type TaskParams,
@@ -54,6 +62,8 @@ import {
 import { imageUrl } from "../../api/media";
 import { api } from "../../services";
 import { ImageField } from "../../ui/image-field";
+import { readSource, refillSourceImages, takeSourceImage } from "../../ui/source-image";
+import { toast } from "../../ui/toast";
 import { FormDialog, isDirty } from "../../ui/form-dialog";
 import { PhonePreview } from "../../ui/phone-preview";
 import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
@@ -61,6 +71,7 @@ import { HELP } from "../../ui/help";
 import { applyOrder } from "../../ui/sortable-order";
 import { useApi } from "../../ui/use-api";
 import { NetworkTasksPanel } from "./NetworkTasksPanel";
+import { TaskCustomerFields } from "./task-customer-fields";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
@@ -93,9 +104,13 @@ export function TasksScreen() {
   const [override, setOverride] = useState<{ group: TaskGroup; ids: string[] } | null>(null);
   /** Пока запрос порядка в пути, ручки неактивны: второй порядок поверх первого дал бы гонку. */
   const [reordering, setReordering] = useState(false);
+  /** Идёт «Картинки источников»: задания обходятся по одному, повторный запуск поверх не нужен. */
+  const [refilling, setRefilling] = useState(false);
 
   const catalog = state.status === "ok" ? state.data.tasks : [];
   const kinds = state.status === "ok" ? state.data.kinds : Object.keys(KIND_TITLES);
+  /** Прежние заказчики — подсказка к полю: отчёт группирует по строке, и опечатка разбила бы заказчика надвое. */
+  const customers = [...new Set(catalog.flatMap((task) => (task.customer === null ? [] : [task.customer])))].sort((x, y) => x.localeCompare(y, "ru"));
   const problem = taskProblem(input, original === null, catalog);
 
   const reset = () => {
@@ -134,6 +149,9 @@ export function TasksScreen() {
   const pooled = !partner && !clientKind && input.period !== "achievement";
   const achievement = isAchievement(input);
   const stateKind = STATE_KINDS.has(input.kind);
+  // Знак статуса или сезона: цели и награды нет, правятся название, условие, редкость, порядок и «включено».
+  const emblemRow = isEmblemRow(input);
+  const setEmblemTier = (value: string) => setInput({ ...input, emblemTier: EMBLEM_TIERS.find((tier) => tier === value) ?? null });
   const channel = input.kind === CHANNEL_KIND;
   const setParams = (patch: Partial<TaskParams>) => setInput({ ...input, params: { ...(input.params ?? { url: "" }), ...patch } });
 
@@ -150,6 +168,20 @@ export function TasksScreen() {
     // При ошибке (в том числе 400: список мог измениться у другого администратора) порядок возвращается к серверному.
     if (!result.ok) setOverride(null);
     setOutcome(result.ok ? { tone: "success", text: "Порядок сохранён" } : { tone: "danger", error: result.error });
+    reload();
+  };
+
+  // Заведённым заданиям без картинки — аватарки источников (Р158): сохранение то же, что у формы.
+  const refill = async (tasks: readonly TaskDef[]) => {
+    setRefilling(true);
+    setOutcome(null);
+    const summary = await refillSourceImages(tasks, {
+      take: (request) => takeSourceImage(api, request),
+      save: async (task) => (await saveTask(api, task)).ok,
+    });
+    setRefilling(false);
+    if (summary.updated > 0) toast.success(summary.text);
+    else toast(summary.text);
     reload();
   };
 
@@ -210,11 +242,13 @@ export function TasksScreen() {
             )}
             <Field label="Вид цели" help={HELP.tasks.kind}>
               <Select value={input.kind} disabled={original !== null} onChange={(event) => setInput(withKind(input, event.target.value))}>
-                {kinds.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {KIND_TITLES[kind] ?? kind}
-                  </option>
-                ))}
+                {kinds
+                  .filter((kind) => !EMBLEM_KINDS.has(kind) || kind === input.kind)
+                  .map((kind) => (
+                    <option key={kind} value={kind}>
+                      {KIND_TITLES[kind] ?? kind}
+                    </option>
+                  ))}
               </Select>
             </Field>
             {filterKey === undefined ? null : (
@@ -244,15 +278,25 @@ export function TasksScreen() {
                 </Select>
               </Field>
             ) : null}
-            {partner || clientKind ? null : (
-              <Field label="Цель" hint={TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}>
-                <Input {...number("target")} min={1} />
+            {partner || clientKind || emblemRow ? null : (
+              <Field
+                label="Цель"
+                hint={COMPUTED_TARGET_KINDS.has(input.kind) ? "число включённых «Мастеров оружия»: новое оружие поднимает цель" : TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}
+              >
+                {COMPUTED_TARGET_KINDS.has(input.kind) ? <Input value={COMPUTED_TARGET_TITLE} readOnly /> : <Input {...number("target")} min={1} />}
               </Field>
             )}
           </FieldRow>
           {clientKind ? <Notice tone="info">{HELP.tasks.clientSignal}</Notice> : null}
           {partner ? (
-            <ImageField label="Картинка" help={HELP.tasks.image} profile="task" value={input.image} onChange={(image) => setInput({ ...input, image })} />
+            <ImageField
+              label="Картинка"
+              help={HELP.tasks.image}
+              profile="task"
+              value={input.image}
+              onChange={(image) => setInput((current) => ({ ...current, image }))}
+              source={readSource(input)}
+            />
           ) : null}
           {partner ? (
             <FieldRow>
@@ -315,6 +359,7 @@ export function TasksScreen() {
               </Field>
             </FieldRow>
           ) : null}
+          {partner ? <TaskCustomerFields input={input} onChange={setInput} customers={customers} channel={channel} /> : null}
           {channel ? (
             <Notice tone="info">
               Бот проверяет подписку, когда игрок нажимает «Проверить», — сделайте его администратором канала: без этого площадка подписчиков не покажет.
@@ -324,7 +369,8 @@ export function TasksScreen() {
           {partner && !channel ? (
             <Notice tone="info">Засчитывается переход по ссылке из игры: проверить, что игрок открыл сайт или запустил бота, без постбэка партнёра нечем.</Notice>
           ) : null}
-          {achievement ? (
+          {emblemRow ? <Notice tone="info">{HELP.tasks.emblemRow}</Notice> : null}
+          {achievement && !emblemRow ? (
             <FieldRow>
               <Field label="Категория" help={HELP.tasks.category}>
                 <Select value={input.category ?? ""} onChange={(event) => setInput({ ...input, category: ACHIEVEMENT_CATEGORIES.find((category) => category === event.target.value) ?? null })}>
@@ -379,19 +425,42 @@ export function TasksScreen() {
               </Field>
             </FieldRow>
           ) : null}
+          {emblemRow ? null : (
+            <FieldRow>
+              <Field label="Монеты">
+                <Input {...number("coins")} />
+              </Field>
+              <Field label="Самоцветы" hint="по умолчанию — только достижения">
+                <Input {...number("gems")} />
+              </Field>
+              <Field label="Осколки">
+                <Input {...number("shards")} />
+              </Field>
+              <Field label="Очки заданий" help={HELP.tasks.passPoints}>
+                <Input {...number("passPoints")} />
+              </Field>
+            </FieldRow>
+          )}
+          {achievement ? (
+            <FieldRow>
+              <Field label="Знак у имени" help={HELP.tasks.emblem}>
+                <Select value={input.emblemTier ?? ""} onChange={(event) => setEmblemTier(event.target.value)}>
+                  {emblemRow ? null : <option value="">{NO_EMBLEM_TITLE}</option>}
+                  {EMBLEM_TIERS.map((tier) => (
+                    <option key={tier} value={tier}>
+                      {EMBLEM_TIER_TITLES[tier]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              {emblemRow ? (
+                <Field label={`Условие — ${String(input.hint?.trim().length ?? 0)} из ${String(HINT_MAX)}`} hint="его игрок видит у закрытого знака">
+                  <Input value={input.hint ?? ""} onChange={(event) => setInput({ ...input, hint: event.target.value === "" ? null : event.target.value })} maxLength={HINT_MAX + 20} className="w-80" />
+                </Field>
+              ) : null}
+            </FieldRow>
+          ) : null}
           <FieldRow>
-            <Field label="Монеты">
-              <Input {...number("coins")} />
-            </Field>
-            <Field label="Самоцветы" hint="по умолчанию — только достижения">
-              <Input {...number("gems")} />
-            </Field>
-            <Field label="Осколки">
-              <Input {...number("shards")} />
-            </Field>
-            <Field label="Очки заданий" help={HELP.tasks.passPoints}>
-              <Input {...number("passPoints")} />
-            </Field>
             <RowItem>
               <label className="flex items-center gap-1.5 text-sm">
                 <input type="checkbox" checked={input.active} onChange={(event) => setInput({ ...input, active: event.target.checked })} />
@@ -399,15 +468,20 @@ export function TasksScreen() {
               </label>
             </RowItem>
           </FieldRow>
-          <Field label={`Заголовок — ${String(input.title?.trim().length ?? 0)} из ${String(TITLE_MAX)}`} hint="пусто — игрок увидит текст по виду цели со склонением числа («Сыграй 3 забега»)">
+          <Field
+            label={`${emblemRow ? "Название" : "Заголовок"} — ${String(input.title?.trim().length ?? 0)} из ${String(TITLE_MAX)}`}
+            hint={emblemRow ? "его игрок видит рядом с именем" : "пусто — игрок увидит текст по виду цели со склонением числа («Сыграй 3 забега»); у достижения со знаком название обязательно"}
+          >
             <Input value={input.title ?? ""} onChange={(event) => setInput({ ...input, title: event.target.value === "" ? null : event.target.value })} maxLength={TITLE_MAX + 20} className="w-full max-w-xl" />
           </Field>
           {original === null ? null : <Notice tone="info">{channel ? "Повтор" : "Срок"} и вид не меняются: прогресс игроков записан по ним. Нужно другое — заведите новое задание и выключите это.</Notice>}
         </form>
           {/* Строка так, как её увидит игрок в «Заданиях», — до выполнения и готовой к забору (Р83). */}
-          <div className="min-w-0 md:sticky md:top-0 md:self-start">
-            <PhonePreview kind="task" draft={taskPreview(input)} height={320} caption="Так увидит игрок — вкладка заданий" />
-          </div>
+          {emblemRow ? null : (
+            <div className="min-w-0 md:sticky md:top-0 md:self-start">
+              <PhonePreview kind="task" draft={taskPreview(input)} height={320} caption="Так увидит игрок — вкладка заданий" />
+            </div>
+          )}
         </div>
       </FormDialog>
 
@@ -420,12 +494,21 @@ export function TasksScreen() {
               key={group.group}
               title={GROUP_TITLES[group.group]}
               help={HELP.tasks.order}
-              {...(index === 0
+              {...(index === 0 || group.group === "partner"
                 ? {
                     actions: (
-                      <Button tone="primary" onClick={() => openForm(null)}>
-                        Новое задание
-                      </Button>
+                      <>
+                        {group.group === "partner" ? (
+                          <Button disabled={refilling || group.tasks.every((task) => !task.active || task.image !== null || readSource(task).state !== "ready")} onClick={() => void refill(group.tasks)}>
+                            {refilling ? "Берём картинки…" : "Картинки источников"}
+                          </Button>
+                        ) : null}
+                        {index === 0 ? (
+                          <Button tone="primary" onClick={() => openForm(null)}>
+                            Новое задание
+                          </Button>
+                        ) : null}
+                      </>
                     ),
                   }
                 : {})}
@@ -468,9 +551,14 @@ export function TasksScreen() {
                             task.ladder === null ? <span className="text-text-muted">нет</span> : <span className="whitespace-nowrap font-mono text-xs">{`${task.ladder} · ${String(task.rung ?? "?")}`}</span>,
                         },
                         { title: "Престиж", help: HELP.tasks.prestige, align: "right" as const, render: (task: TaskDef) => String(task.prestige) },
+                        {
+                          title: "Знак",
+                          help: HELP.tasks.emblem,
+                          render: (task: TaskDef) => (task.emblemTier === null ? <span className="text-text-muted">нет</span> : <EmblemTierBadge tier={task.emblemTier} />),
+                        },
                       ]
                     : []),
-                  { title: "Награда", render: (task) => rewardLabel(task) },
+                  { title: "Награда", render: (task) => (isEmblemRow(task) ? <span className="text-text-muted">нет</span> : rewardLabel(task)) },
                   // Счёт выполнивших ведётся у партнёрских целей: у них есть лимит.
                   ...(group.group === "partner"
                     ? [
@@ -508,6 +596,11 @@ export function TasksScreen() {
       {state.status === "ok" ? <NetworkTasksPanel rows={state.data.networks} onSaved={reload} /> : null}
     </div>
   );
+}
+
+/** Редкость знака словом: цвета знаков игра берёт из своей палитры, панель их не рисует. */
+function EmblemTierBadge({ tier }: { tier: EmblemTier }) {
+  return <Badge tone={tier === "team" ? "info" : tier === "partner" ? "warning" : "neutral"}>{EMBLEM_TIER_TITLES[tier]}</Badge>;
 }
 
 /**

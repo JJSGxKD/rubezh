@@ -9,6 +9,7 @@ import { ShopController } from "./shop.controller.js";
 import { PrismaShopPromoRepository, SHOP_PROMO_REPOSITORY } from "./shop-promo.repository.js";
 import { ShopPromoService } from "./shop-promo.service.js";
 import { ShopChoice } from "./shop-choice.js";
+import { PrismaShopOverrideRepository, SHOP_OVERRIDE_REPOSITORY, ShopOverrides } from "./shop-overrides.js";
 import { ShopService } from "./shop.service.js";
 import { PrismaShowcaseRepository, SHOWCASE_REPOSITORY } from "./showcase.repository.js";
 import { SHOWCASE_SEEDS, ShowcaseService } from "./showcase.service.js";
@@ -17,7 +18,8 @@ import { SHOWCASE_SEEDS, ShowcaseService } from "./showcase.service.js";
  * Магазин (docs/35-stage4-plan.md §3.6, WP10): каталог с фиксированным
  * составом (Р11), счёт через модуль оплаты и выдача журналом кошелька;
  * витрина снаряжения — покупка за самоцветы через модуль предметов; акции —
- * скидка от цены каталога на срок, заводятся в панели.
+ * скидка от цены каталога на срок, заводятся в панели; правки цен и состава
+ * поверх каталога кладёт только подтверждённая заявка (T-0309, `change-requests/`).
  */
 @Module({
   imports: [AuthModule, PaymentsModule, WalletModule, ItemsModule, RestrictionsModule],
@@ -25,12 +27,14 @@ import { SHOWCASE_SEEDS, ShowcaseService } from "./showcase.service.js";
   providers: [
     ShopService,
     ShopChoice,
+    ShopOverrides,
+    { provide: SHOP_OVERRIDE_REPOSITORY, useClass: PrismaShopOverrideRepository },
     ShopPromoService,
     { provide: SHOP_PROMO_REPOSITORY, useClass: PrismaShopPromoRepository },
     ShowcaseService,
     { provide: SHOWCASE_REPOSITORY, useClass: PrismaShowcaseRepository },
     { provide: SHOWCASE_SEEDS, useValue: cryptoSeeds },
   ],
-  exports: [ShopService, ShopPromoService],
+  exports: [ShopService, ShopPromoService, ShopOverrides],
 })
 export class ShopModule {}

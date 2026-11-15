@@ -7,11 +7,12 @@ import { createServer } from "node:http";
  * только очередь и исход: никаких номеров проверок и черновиков
  * (низкая кардинальность).
  *
- * - `sim_jobs_total{queue,outcome}` — задания по исходу;
+ * - `sim_jobs_total{queue,outcome}` — задания по исходу; у очереди повтора забега (`replay`) исход —
+ *   вердикт повтора: `match`, `mismatch`, `content_mismatch`, `not_replayable`, `broken`, `timeout`, `error`;
  * - `sim_job_seconds{queue}` — время задания, гистограмма.
  */
 
-export const OUTCOMES = ["ok", "invalid", "timeout", "error"] as const;
+export const OUTCOMES = ["ok", "invalid", "timeout", "error", "match", "mismatch", "content_mismatch", "not_replayable", "broken"] as const;
 export type Outcome = (typeof OUTCOMES)[number];
 
 /** Границы корзин, с: предел задания — 120 с, последняя корзина — он. */

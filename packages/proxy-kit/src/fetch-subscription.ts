@@ -46,8 +46,8 @@ export class SubscriptionFetchError extends Error {
   }
 }
 
-/** Устройство, под которым мы представляемся подписке рядом с `x-hwid`. */
-const DEVICE_OS = "Linux";
+/** Устройство, под которым мы представляемся подписке рядом с `x-hwid`; панель показывает его же. */
+export const DEVICE_OS = "Linux";
 /** Видимые знаки ASCII (от `!` до `~`), 1–128. */
 const HWID_FORMAT = /^[!-~]{1,128}$/;
 
@@ -57,6 +57,8 @@ export interface FetchedSubscription {
   body: string;
   userInfo: UserInfo | null;
   updateIntervalHours: number | null;
+  /** заголовок `routing` как есть (маршрутизация поставщика, `parseRoutingHeader`); нет заголовка — `null` */
+  routingHeader: string | null;
 }
 
 /**
@@ -144,6 +146,7 @@ export async function fetchSubscription(url: string, options: FetchSubscriptionO
         body,
         userInfo: parseUserInfo(response.headers.get("subscription-userinfo")),
         updateIntervalHours: parseUpdateIntervalHours(response.headers.get("profile-update-interval")),
+        routingHeader: response.headers.get("routing"),
       };
     }
   } finally {

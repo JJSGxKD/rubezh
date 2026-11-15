@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../packages/core-game/src/content/snapshot";
+import { CONTENT_SNAPSHOT, hashSnapshot, type ContentSnapshot } from "../../packages/core-game/src/content/snapshot";
 import { contentSnapshotJsonSchema } from "../../packages/core-game/src/content/snapshot-schema";
 
 /**
@@ -14,7 +14,11 @@ import { contentSnapshotJsonSchema } from "../../packages/core-game/src/content/
  *  - `content-snapshot.schema.json` — JSON-схема снимка: ею сервер проверяет
  *    форму правки;
  *  - `content-names.json` — тексты всех `nameKey` и `descriptionKey` снимка из
- *    словаря игры: по ним панель показывает имена, а не id.
+ *    словаря игры: по ним панель показывает имена, а не id;
+ *  - `content-hash.json` — `hashSnapshot` снимка, тот же `content_hash`, что игра
+ *    пишет в итог забега (Р16). Сервер сам его не посчитает: в хэш входят
+ *    рубеж и пролог, которых в снимке нет, а собранный бэкенд движок не
+ *    импортирует.
  *
  * Словарь читается файлами `app-shell/src/i18n/*.json`: пакет `core-game`
  * оболочку не импортирует, и скрипт тоже не тянет её код ради текстов.
@@ -27,6 +31,7 @@ const DEFAULT_OUT_DIR = join(ROOT, "dist");
 export const SNAPSHOT_FILE = "content-snapshot.json";
 export const SCHEMA_FILE = "content-snapshot.schema.json";
 export const NAMES_FILE = "content-names.json";
+export const HASH_FILE = "content-hash.json";
 
 /** Ключ имени врага по соглашению оболочки: у врага в контенте поля ключа нет. */
 const enemyNameKey = (id: string): string => `enemy.${id}.name`;
@@ -84,6 +89,7 @@ export function buildExport(snapshot: ContentSnapshot, dictionary: Readonly<Reco
       [SNAPSHOT_FILE]: `${JSON.stringify(snapshot, null, 2)}\n`,
       [SCHEMA_FILE]: `${JSON.stringify(contentSnapshotJsonSchema(), null, 2)}\n`,
       [NAMES_FILE]: `${JSON.stringify(names, null, 2)}\n`,
+      [HASH_FILE]: `${JSON.stringify({ hash: hashSnapshot(snapshot) })}\n`,
     },
     missingNames,
   };

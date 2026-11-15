@@ -1,15 +1,16 @@
 import Phaser from "phaser";
 import type { RunOutcome } from "@bh/shared-types";
-import type { RunDiagnostics, RunRecordingEventKind } from "../run-api";
+import type { RunDiagnostics, RunProofDraft, RunRecordingEventKind } from "../run-api";
 import { FrameClock } from "../game/diagnostics/frame-clock";
 import { RunPerfTracker } from "../game/diagnostics/run-perf";
-import { RunRecorder, type RunRecordingHeader } from "../game/diagnostics/run-recorder";
+import { openRunRecorder, type OpenRecorderOptions, type RunRecorder } from "../game/diagnostics/run-recorder";
 import type { World } from "../game/sim/world";
 import { watchVisibility } from "./visibility";
 
 /**
  * Замеры забега на стороне браузера (docs/28-diagnostics.md §3): часы кадров,
- * сводка производительности у всех и полная запись — у тех, кто её включил.
+ * сводка производительности и запись для проверки — у всех, полная запись —
+ * у тех, кто её включил.
  *
  * Всё, что читает браузер — сворачивание, видеоадаптер, объём кучи, — живёт
  * здесь, а подсчёт — в `game/diagnostics/*`, который проверяется headless.
@@ -20,25 +21,29 @@ export interface RunProbeOptions {
   game: Phaser.Game;
   unitScale: number;
   renderCapFps: number | null;
-  /** заголовок полной записи; `null` — записи нет, только сводка */
-  recording: RunRecordingHeader | null;
+  /**
+   * Как открыть рекордер: запись для проверки есть у каждого забега, а полная запись
+   * (`full`) — только по переключателю. Объём кучи подставляет сам зонд — он знает браузер.
+   */
+  recorder: OpenRecorderOptions;
 }
 
 export class RunProbe {
   private readonly clock = new FrameClock();
   private readonly perf = new RunPerfTracker();
-  private readonly recorder: RunRecorder | null;
+  private readonly recorder: RunRecorder;
   private readonly stopWatching: () => void;
   private frameMs: number | null = null;
 
   constructor(private readonly options: RunProbeOptions) {
-    this.recorder = options.recording === null ? null : new RunRecorder(options.recording, { heapMb: usedHeapMb });
+    const { full } = options.recorder;
+    this.recorder = openRunRecorder({ ...options.recorder, ...(full === undefined ? {} : { full: { ...full, heapMb: usedHeapMb } }) });
     this.stopWatching = watchVisibility(this.clock);
   }
 
-  /** Запись идёт: сцене стоит засекать время симуляции и рендера. */
+  /** Идёт полная запись: сцене стоит засекать время симуляции и рендера. Для записи для проверки замеры не нужны. */
   get recording(): boolean {
-    return this.recorder !== null;
+    return this.recorder.full;
   }
 
   /** Начало кадра. Часы идут и на паузе: иначе первый кадр после неё принёс бы всю паузу. */
@@ -53,7 +58,8 @@ export class RunProbe {
     const enemies = world.enemies.aliveCount;
     const projectiles = world.projectiles.aliveCount;
     this.perf.frame(frameMs, enemies + projectiles);
-    this.recorder?.frame({
+    if (!this.recorder.full) return;
+    this.recorder.frame({
       frameMs,
       simMs,
       steps,
@@ -66,20 +72,20 @@ export class RunProbe {
   }
 
   stepped(code: number, world: World): void {
-    this.recorder?.stepped(code, world);
+    this.recorder.stepped(code, world);
   }
 
   /** второй шанс применён на этом тике — повтор применит его там же */
   continued(world: World): void {
-    this.recorder?.continued(world.stats.tick);
+    this.recorder.continued(world.stats.tick);
   }
 
   choice(world: World, optionId: string): void {
-    this.recorder?.choice(world.stats.tick, optionId);
+    this.recorder.choice(world.stats.tick, optionId);
   }
 
   event(world: World, kind: RunRecordingEventKind, value: string | number | null = null): void {
-    this.recorder?.event(world.stats.tick, kind, value);
+    this.recorder.event(world.stats.tick, kind, value);
   }
 
   finish(world: World, outcome: RunOutcome, deathCause: string | null, canvasWidth: number, canvasHeight: number): RunDiagnostics {
@@ -92,10 +98,18 @@ export class RunProbe {
       canvasHeight,
       interruptions: this.clock.interruptions,
     });
+    const proof = this.recorder.proof(world, deathCause);
     return {
       perf,
-      recording: this.recorder?.finish(world, outcome, deathCause, perf, gpuOf(renderer)) ?? null,
+      recording: this.recorder.full ? this.recorder.finish(world, outcome, deathCause, perf, gpuOf(renderer)) : null,
+      proof,
+      proofBlocker: proof === null ? this.recorder.blocker : null,
     };
+  }
+
+  /** Запись для проверки на момент снимка прерванного забега; `null` — забег не повторить. */
+  proofDraft(world: World): RunProofDraft | null {
+    return this.recorder.draft(world);
   }
 
   destroy(): void {

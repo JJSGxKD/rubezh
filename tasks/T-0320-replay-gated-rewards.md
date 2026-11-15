@@ -38,7 +38,7 @@ batch: 8
 
 # T-0320. Что даёт проверка повтором — эпическая добыча и награда Стража после совпадения, сезон награждает проверенных, метка «проверяется» и «проверен»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0320.json)](README.md#значки-статуса) [![T-0319](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0319.json&label=T-0319)](T-0319-run-replay-verdict.md) [![T-0297](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0297.json&label=T-0297)](T-0297-rating-run-card.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0320.json)](README.md#значки-статуса) [![T-0319](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0319.json&label=T-0319)](T-0319-run-replay-verdict.md) [![T-0297](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0297.json&label=T-0297)](archive/T-0297-rating-run-card.md)
 
 ## Зачем
 

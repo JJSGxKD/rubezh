@@ -22,6 +22,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Окна перепроверки подписки на живом Postgres (docs/17-testing-strategy.md
@@ -86,7 +87,7 @@ describe.skipIf(DATABASE_URL === "")("окна перепроверки подп
   }
 
   async function player(): Promise<AccountRef> {
-    const platformUserId = String(940_000_000 + Math.floor(Math.random() * 50_000_000));
+    const platformUserId = uniquePlatformUserId();
     const created = await accounts.upsert({ platform: "telegram", platformUserId, displayName: "Подписчик", username: null }, Date.now());
     return { accountId: created.accountId, platform: "telegram", platformUserId };
   }
@@ -312,4 +313,51 @@ describe.skipIf(DATABASE_URL === "")("окна перепроверки подп
     expect(await first).toEqual({ locked: true, value: "первый" });
     expect(await watch.withPairLock(account.accountId, TASK, async () => "после")).toEqual({ locked: true, value: "после" });
   });
+
+  const marksRow = (accountId: string) =>
+    prisma.$queryRaw<{ held_d1: boolean | null; held_d3: boolean | null; held_d7: boolean | null; state: string }[]>`
+      SELECT held_d1, held_d3, held_d7, state FROM task_channel_watch WHERE account_id = ${accountId}::uuid ORDER BY period_start`;
+
+  it("отметки удержания: новое окно без отметок; `markRetention` заполняет пустые и никогда не переписывает поставленные", async () => {
+    const account = await player();
+    const k = key(account.accountId, TASK, "2026-10-05");
+    await watch.start({ ...k, startedAt: MON, watchUntil: watchUntil(MON), nextCheckAt: at(MON, 6 * HOUR) });
+    expect(await marksRow(account.accountId)).toEqual([{ held_d1: null, held_d3: null, held_d7: null, state: "watching" }]);
+
+    await watch.markRetention([{ key: k, marks: { heldD1: true } }]);
+    // повтор задания очереди с другим ответом: `true` на `false` не меняется, пустая заполняется
+    await watch.markRetention([{ key: k, marks: { heldD1: false, heldD3: false, heldD7: false } }]);
+    await watch.markRetention([{ key: k, marks: {} }]);
+
+    expect(await marksRow(account.accountId)).toEqual([{ held_d1: true, held_d3: false, held_d7: false, state: "watching" }]);
+    expect((await watch.openOf(account.accountId, TASK))[0]).toMatchObject({ heldD1: true, heldD3: false, heldD7: false });
+  });
+
+  it("отметки удержания: повтор задания очереди не переписывает `true` на `false`, а закрытое окно отметки сохраняет", async () => {
+    const account = await player();
+    await reward(account, TASK, "2026-10-05", MON);
+
+    await service.tick(at(MON, 26 * HOUR));
+    expect(await marksRow(account.accountId)).toEqual([{ held_d1: true, held_d3: null, held_d7: null, state: "watching" }]);
+
+    // тот же проход, повторённый очередью с запозданием: отметка уже стоит
+    await service.tick(at(MON, 26 * HOUR));
+    // игрок ушёл на 2-е сутки: пустые закрываются `false`, поставленная остаётся
+    membership.left.add(account.platformUserId);
+    await service.tick(at(MON, 2 * DAY));
+    await service.tick(at(MON, 2 * DAY));
+
+    expect(await marksRow(account.accountId)).toEqual([{ held_d1: true, held_d3: false, held_d7: false, state: "penalized" }]);
+  }, RACE_TIMEOUT_MS);
+
+  it("отметки удержания: неделя в канале — три `true` и окно `kept`", async () => {
+    const account = await player();
+    await reward(account, TASK, "2026-10-05", MON);
+
+    await service.tick(at(MON, 80 * HOUR));
+    expect(await marksRow(account.accountId)).toEqual([{ held_d1: true, held_d3: true, held_d7: null, state: "watching" }]);
+    await service.tick(at(MON, 7 * DAY));
+
+    expect(await marksRow(account.accountId)).toEqual([{ held_d1: true, held_d3: true, held_d7: true, state: "kept" }]);
+  }, RACE_TIMEOUT_MS);
 });

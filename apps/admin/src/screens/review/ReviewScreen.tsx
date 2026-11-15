@@ -5,15 +5,27 @@ import { formatDateTime, formatDuration, formatNumber } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Loading, Panel } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { BoardMarkBadge } from "./review-parts";
-import { navigate } from "../../ui/router";
+import { navigate, useHashRoute } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
+import { RunReport } from "./RunReport";
+import { reviewView } from "./run-report-view";
+
+/**
+ * Раздел «Разбор забегов»: адрес `#/review` — очередь, `#/review/<забег>` —
+ * отчёт этого забега (Р203, tasks/T-0420).
+ */
+export function ReviewScreen() {
+  const runId = useHashRoute()?.id ?? null;
+  return reviewView(runId) === "report" && runId !== null ? <RunReport key={runId} runId={runId} /> : <ReviewQueue />;
+}
 
 /**
  * Очередь разбора: забеги, которые проверка сервера сочла подозрительными
- * или отклонила. Строка ведёт в карточку игрока — разбирают человека, а не
- * один забег; поэтому рядом с именем — сколько ещё его забегов в очереди.
+ * или отклонила. Строка открывает отчёт забега, а в карточку игрока ведёт
+ * ссылка на отчёте; рядом с именем — сколько ещё забегов этого игрока в
+ * очереди: повтор — сильнее повод разобраться, чем один забег.
  */
-export function ReviewScreen() {
+function ReviewQueue() {
   const { state, reload } = useApi(() => fetchReviewQueue(api), []);
   const [filter, setFilter] = useState<VerdictFilter>("all");
 
@@ -43,7 +55,7 @@ export function ReviewScreen() {
       <DataTable
         rows={rows}
         rowKey={(run) => run.runId}
-        onRowClick={(run) => navigate({ section: "players", id: run.accountId })}
+        onRowClick={(run) => navigate({ section: "review", id: run.runId })}
         empty={all.length === 0 ? "Очередь пуста — проверка сервера ни к одному забегу вопросов не имеет" : "В этом отборе пусто"}
         columns={[
           { title: "Закончен", render: (run) => <span className="whitespace-nowrap">{formatDateTime(run.finishedAt)}</span> },
