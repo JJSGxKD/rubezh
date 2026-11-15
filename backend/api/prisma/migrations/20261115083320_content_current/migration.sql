@@ -1,6 +1,13 @@
 -- Публикация контента (tasks/T-0306, docs/19-content-admin.md §4.4–§4.5): указатель «какая
--- версия сейчас в игре» для команды и для всех. Только новая таблица: код прошлого релиза на
--- такой схеме работает, а пока строк нет, клиент играет встроенным контентом.
+-- версия сейчас в игре» для команды и для всех и отметка версии «бывала у всех». Только новая
+-- таблица и новая пустая колонка: код прошлого релиза на такой схеме работает, а пока строк нет,
+-- клиент играет встроенным контентом.
+
+-- AlterTable
+ALTER TABLE "content_version" ADD COLUMN     "released_all_at" TIMESTAMPTZ(3);
+
+-- Версия, что бывала у всех, обязана быть и опубликованной: отметка без `published_at` — ошибка записи.
+ALTER TABLE "content_version" ADD CONSTRAINT "content_version_released_all_check" CHECK ("released_all_at" IS NULL OR "published_at" IS NOT NULL);
 
 -- CreateTable
 CREATE TABLE "content_current" (

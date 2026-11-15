@@ -2911,8 +2911,12 @@ model ContentVersion {
   /// без внешнего ключа — запись переживает аккаунт; `null` — завёл выкат
   createdBy     String?   @map("created_by") @db.Uuid
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  /// `null` — версия ещё не публиковалась
+  /// когда версия впервые вышла в игру у кого-либо — у команды или у всех; `null` — ещё не публиковалась
   publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
+  /// когда версия впервые стала текущей у всех (`CHECK` в миграции: только вместе с `published_at`);
+  /// `null` — у всех не бывала, её видела разве что команда. Откат «Всем» и запасная выдача игроку
+  /// со старой схемой берут только такие версии
+  releasedAllAt DateTime? @map("released_all_at") @db.Timestamptz(3)
 
   drafts  ContentDraft[]
   current ContentCurrent[]
