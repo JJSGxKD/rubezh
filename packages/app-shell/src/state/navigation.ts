@@ -22,6 +22,7 @@ export const SCREEN_IDS = [
   "level",
   "history",
   "emblems",
+  "appearance",
   "notifications",
   "changelog",
   "tasks",
