@@ -3,8 +3,8 @@ id: T-0395
 title: Живые карточки бота — ядро — порт, таблица bot_card, отправка, прореженные правки, финал, ответы на запросы
 epic: E5
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0393, T-0394]
