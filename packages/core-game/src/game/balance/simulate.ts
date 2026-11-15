@@ -18,6 +18,7 @@ import { settleStalkerDeath } from "../sim/stalker";
 import { createWorld, TICK_SEC, type World } from "../sim/world";
 import { createBot, type BotSkill, type DodgingBotOptions } from "./bot";
 import { isBuildComplete } from "./build-complete";
+import { createMovementTally, MOVEMENT_FROM_SEC, recordMovement, type MovementTally } from "./movement";
 import { createStrongBot, type StrongStance } from "./strong-bot";
 
 /**
@@ -127,6 +128,11 @@ export interface BalanceRunResult {
   /** сколько раз рубеж брал бота в осаду за стояние (Р197); необязательное: фикстуры воркера о ней не знают */
   sieges?: number;
   /**
+   * Мера движения (`movement.ts`, Р223): сколько тиков с `MOVEMENT_FROM_SEC` игрок стоял на месте.
+   * Необязательное: фикстуры воркера о мере не знают.
+   */
+  movement?: MovementTally;
+  /**
    * Карачун за забег (Р205, T-0424): сколько появлений закончилось, касаний дошло до игрока и ударов
    * оружия его сдвинуло. Необязательное: фикстуры воркера о нём не знают.
    */
@@ -211,6 +217,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
   let buildCompleteSec = 0;
   let picks = 0;
   let buildPicks = 0;
+  const movement = createMovementTally();
   let tick = 0;
   while (tick < maxTicks && world.player.alive) {
     // Выбор делается до шага: пока он не сделан, мир стоит, и цикл крутился бы
@@ -235,6 +242,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
 
     director.update(world, TICK_SEC);
     stepWorld(world, bot.input(world));
+    if (world.stats.elapsedSec >= MOVEMENT_FROM_SEC) recordMovement(movement, world);
     tick++;
 
     // Раз в тик, пока набор не собран: слотов немного, а секунда сборки нужна
@@ -279,6 +287,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     buildPicks: buildCompleteSec === 0 ? picks : buildPicks,
     rubezh: describeRubezh(world),
     sieges: world.siege.count,
+    movement,
     stalker: summarizeStalker(world),
     timedOut: world.player.alive && !(options.stopOnBuild === true && buildCompleteSec > 0),
     damageTakenByMinute,

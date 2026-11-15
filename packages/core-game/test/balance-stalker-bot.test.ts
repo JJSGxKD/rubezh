@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { STALKER } from "../src/content/stalker";
 import { createBot } from "../src/game/balance/bot";
 import type { Bot } from "../src/game/balance/bot";
-import { createMovementTally, recordMovement, STILL_SPEED_SHARE, stillShareOf } from "../src/game/balance/movement";
+import { createMovementTally, MOVEMENT_FROM_SEC, recordMovement, STILL_SPEED_SHARE, stillShareOf } from "../src/game/balance/movement";
 import { STALKER_FLEE_UNITS, stalkerFleeDirection } from "../src/game/balance/stalker-flee";
 import { createStrongBot, STAND_FROM_SEC } from "../src/game/balance/strong-bot";
 import { despawnStalker, spawnStalker } from "../src/game/sim/stalker-body";
@@ -166,21 +166,37 @@ describe("мера движения: доля времени на месте", (
 });
 
 describe("мера движения в прогоне калибровки", () => {
-  it("пассивный бот стоит весь забег — доля 1", { timeout: 60_000 }, () => {
-    const run = simulateBalanceRun({ seed: 1, skill: "passive", godMode: true, maxSec: 20 });
-    expect(run.stillShare).toBe(1);
+  /** Доля на месте в окне меры; прогон короче окна пуст — это ошибка теста, а не мера. */
+  function windowShare(run: { movement?: { still: number; total: number } }): number {
+    expect(run.movement, "прогон несёт меру движения").toBeDefined();
+    expect(run.movement?.total ?? 0, "прогон дошёл до окна меры").toBeGreaterThan(0);
+    return stillShareOf(run.movement ?? { still: 0, total: 0 });
+  }
+
+  it("окно меры начинается там же, где Карачун получает право прийти", () => {
+    expect(MOVEMENT_FROM_SEC).toBe(STALKER.appear.fromSec);
   });
 
-  it("сильный «бегает» до 180-й секунды в основном движется", { timeout: 60_000 }, () => {
-    const run = simulateBalanceRun({ seed: 1, skill: "strong", stance: "kite", godMode: true, maxSec: 60, startingWeaponId: "spark" });
-    expect(run.stillShare).toBeDefined();
-    expect(run.stillShare ?? 1).toBeLessThan(0.5);
+  it("считаются только тики окна: прогон короче окна даёт пустую меру", { timeout: 60_000 }, () => {
+    const run = simulateBalanceRun({ seed: 1, skill: "passive", godMode: true, maxSec: 30 });
+    expect(run.movement).toEqual({ still: 0, total: 0 });
   });
 
-  it("сильный «стоит» после 180-й секунды стоит заметно дольше, чем «бегает»", { timeout: 120_000 }, () => {
-    const options = { seed: 1, skill: "strong", godMode: true, maxSec: 330, startingWeaponId: "spark" } as const;
-    const stand = simulateBalanceRun({ ...options, stance: "stand" });
-    const kite = simulateBalanceRun({ ...options, stance: "kite" });
-    expect(stand.stillShare ?? 0).toBeGreaterThan((kite.stillShare ?? 1) + 0.2);
+  it("пассивный бот стоит весь забег — доля 1, тиков от окна до конца (граница включена)", { timeout: 60_000 }, () => {
+    const run = simulateBalanceRun({ seed: 1, skill: "passive", godMode: true, maxSec: MOVEMENT_FROM_SEC + 20 });
+    expect(windowShare(run)).toBe(1);
+    expect(run.movement?.total).toBe(20 * TICK_HZ + 1);
+  });
+
+  it("сильный «бегает» в окне в основном движется", { timeout: 120_000 }, () => {
+    const run = simulateBalanceRun({ seed: 1, skill: "strong", stance: "kite", godMode: true, maxSec: MOVEMENT_FROM_SEC + 60, startingWeaponId: "spark" });
+    expect(windowShare(run)).toBeLessThan(0.5);
+  });
+
+  it("сильный «стоит» в окне стоит заметно дольше, чем «бегает»", { timeout: 120_000 }, () => {
+    const options = { seed: 1, skill: "strong", godMode: true, maxSec: MOVEMENT_FROM_SEC + 90, startingWeaponId: "spark" } as const;
+    const stand = windowShare(simulateBalanceRun({ ...options, stance: "stand" }));
+    const kite = windowShare(simulateBalanceRun({ ...options, stance: "kite" }));
+    expect(stand).toBeGreaterThan(kite + 0.2);
   });
 });
