@@ -32,7 +32,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/identity-v2.html
-batch: 4
+batch: 5
 ---
 
 # T-0248. Карточка игрока — клиент: лист по тапу в рейтинге, сезоне и у друзей, «Как меня видят» в профиле

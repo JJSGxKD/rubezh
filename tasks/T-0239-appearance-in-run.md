@@ -22,7 +22,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/characters.md
-batch: 4
+batch: 5
 ---
 
 # T-0239. Облик в забеге — герой кадрами выбранного облика из его атласа в режиме арта

@@ -16,6 +16,16 @@ const headersSchema = z.object({ headers: z.object({ "if-none-match": z.string()
  * тем же ETag — 304 без тела.
  */
 export function sendImage(reply: ImageReply, image: StoredImage, request: unknown): void {
+  // Закрытая картинка (снимок чека): право проверено до этого места, но общий кеш и CDN его не знают — «private».
+  if (image.viewPermission !== undefined && image.viewPermission !== null) {
+    reply
+      .header("cache-control", "private, no-store")
+      .header("x-content-type-options", "nosniff")
+      .status(200)
+      .header("content-type", image.contentType)
+      .send(Buffer.from(image.data.buffer, image.data.byteOffset, image.data.byteLength));
+    return;
+  }
   const etag = `"${image.imageId}"`;
   reply
     .header("cache-control", "public, max-age=31536000, immutable")

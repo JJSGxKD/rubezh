@@ -22,6 +22,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Окна перепроверки подписки на живом Postgres (docs/17-testing-strategy.md
@@ -86,7 +87,7 @@ describe.skipIf(DATABASE_URL === "")("окна перепроверки подп
   }
 
   async function player(): Promise<AccountRef> {
-    const platformUserId = String(940_000_000 + Math.floor(Math.random() * 50_000_000));
+    const platformUserId = uniquePlatformUserId();
     const created = await accounts.upsert({ platform: "telegram", platformUserId, displayName: "Подписчик", username: null }, Date.now());
     return { accountId: created.accountId, platform: "telegram", platformUserId };
   }

@@ -7,6 +7,7 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { PrismaBroadcastsRepository } from "../src/modules/broadcasts/broadcasts.repository.js";
 import { segmentSchema } from "../src/modules/broadcasts/segment.js";
 import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Рассылки на живом Postgres (docs/29-admin-panel.md §7): условие сегмента,
@@ -34,7 +35,7 @@ describe.skipIf(DATABASE_URL === "")("рассылки на живом Postgres"
   }
 
   async function player(options: Player = {}): Promise<{ accountId: string; platformUserId: string }> {
-    const platformUserId = String(950_000_000 + Math.floor(Math.random() * 40_000_000));
+    const platformUserId = uniquePlatformUserId();
     const account = await accounts.upsert({ platform: options.platform ?? "telegram", platformUserId, displayName: `Игрок ${campaign}`, username: null, photoUrl: null }, Date.now());
     const now = new Date();
     const clickId = newClickId();

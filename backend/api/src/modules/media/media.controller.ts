@@ -6,6 +6,7 @@ import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { IMAGE_FILE } from "./image-rules.js";
 import { ImageNotFoundError } from "./media-errors.js";
 import { sendImage, type ImageReply } from "./media-reply.js";
+import type { StoredImage } from "./media.repository.js";
 import { MediaService } from "./media.service.js";
 
 /**
@@ -34,10 +35,16 @@ export class MediaController {
     const imageId = IMAGE_FILE.exec(file)?.[1];
     if (imageId === undefined) throw new ImageNotFoundError();
     const cached = this.media.peek(imageId);
-    if (cached !== undefined) return sendImage(reply, cached, request);
+    if (cached !== undefined) return this.send(reply, cached, request);
     if (!(await this.limiter.consume(LOOKUPS, ipSchema.parse(request).ip ?? "unknown"))) throw new RateLimitedError("Слишком много запросов — попробуй позже");
     const image = await this.media.read(imageId);
     if (image === null) throw new ImageNotFoundError();
+    this.send(reply, image, request);
+  }
+
+  /** Закрытая картинка (снимок чека) игроку не отдаётся: для него её просто нет. */
+  private send(reply: ImageReply, image: StoredImage, request: unknown): void {
+    if (image.viewPermission !== undefined && image.viewPermission !== null) throw new ImageNotFoundError();
     sendImage(reply, image, request);
   }
 }

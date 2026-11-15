@@ -1,4 +1,5 @@
 import { Module, type OnModuleInit } from "@nestjs/common";
+import { PublicIdentity, PublicIdentityModule } from "../../common/public-identity.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { FriendsModule } from "../friends/friends.module.js";
 import { ProgressModule } from "../progress/progress.module.js";
@@ -24,10 +25,11 @@ import { EmblemsService } from "./emblems.service.js";
  * `RunPrestige` (T-0107) `prestigeOf` — престиж пачки аккаунтов одним запросом.
  *
  * Знаки у имени (T-0235, Р149) — `EmblemsService`: достижение со знаком, статусы и места
- * сезона носят у имени. Знак для строк списков готовит `of(accountIds)`, экспортируется для T-0240.
+ * сезона носят у имени. Знак для строк списков готовит `of(accountIds)`; рейтинг, сезон и друзья
+ * получают его через общий порт `PublicIdentity` (T-0240), который модуль подключает при старте.
  */
 @Module({
-  imports: [AuthModule, TasksModule, FriendsModule, ProgressModule, RunsModule],
+  imports: [AuthModule, TasksModule, FriendsModule, ProgressModule, RunsModule, PublicIdentityModule],
   controllers: [AchievementsController, EmblemsController],
   providers: [
     AchievementsService,
@@ -42,9 +44,12 @@ export class AchievementsModule implements OnModuleInit {
   constructor(
     private readonly achievements: AchievementsService,
     private readonly runPrestige: RunPrestige,
+    private readonly emblems: EmblemsService,
+    private readonly identity: PublicIdentity,
   ) {}
 
   onModuleInit(): void {
     this.runPrestige.provide({ of: async (accountIds) => await this.achievements.prestigeOf(accountIds) });
+    this.identity.provide({ of: async (accountIds) => await this.emblems.of(accountIds) });
   }
 }

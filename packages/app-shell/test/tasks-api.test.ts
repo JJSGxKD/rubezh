@@ -1,8 +1,9 @@
 import ru from "../src/i18n/ru.json";
-import { t } from "../src/i18n";
+import { formatNumber, t } from "../src/i18n";
 import ruTasks from "../src/i18n/ru-tasks.json";
 import "../src/i18n/tasks";
 import { describe, expect, it } from "vitest";
+import { formatCountdown } from "../src/screens/meta/schedule";
 import { goalText, taskHint, taskTitle } from "../src/screens/meta/task-row";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import {
@@ -437,5 +438,30 @@ describe("правило отписки на карточке (T-0183)", () => {
 
   it("словарь: подстановка {days} даёт «в течение 7 суток»", () => {
     expect(t("tasks.recheck", { days: 7 })).toBe("Отпишетесь в течение 7 суток — награду спишут");
+  });
+});
+
+describe("достижения v2: испытания, стихии, «Коллекционер» (T-0322)", () => {
+  it("испытания: время подряд, цель в секундах читается минутами", () => {
+    expect(goalText({ kind: "no_hit_sec", target: 600 })).toBe(`Продержись ${formatCountdown(600_000)} подряд без единого попадания`);
+    expect(goalText({ kind: "no_kill_sec", target: 60 })).toBe(`Продержись ${formatCountdown(60_000)} подряд, никого не убив`);
+  });
+
+  it("убийства стихией склоняются для 1, 2 и 5 и берут имя стихии из фильтра", () => {
+    const filter = { element: "fire" as const };
+    expect(goalFilterParams({ kind: "element_kills", filter })).toEqual({ element: "Огонь" });
+    expect(goalText({ kind: "element_kills", target: 1, filter })).toBe("Победи 1 врага стихией «Огонь»");
+    expect(goalText({ kind: "element_kills", target: 2, filter })).toBe("Победи 2 врага стихией «Огонь»");
+    expect(goalText({ kind: "element_kills", target: 500, filter })).toBe("Победи 500 врагов стихией «Огонь»");
+    expect(goalText({ kind: "element_kills", target: 10_000, filter: { element: "cold" } })).toBe(`Победи ${formatNumber(10_000)} врагов стихией «Холод»`);
+  });
+
+  it("«Коллекционер»: «{value} из {count}», а без значения — с нуля", () => {
+    expect(goalText({ kind: "weapon_masters", target: 7, value: 6 })).toBe("Стань мастером каждого оружия — 6 из 7");
+    expect(goalText({ kind: "weapon_masters", target: 7 })).toBe("Стань мастером каждого оружия — 0 из 7");
+  });
+
+  it("ключи всех четырёх видов есть в словаре", () => {
+    for (const kind of ["no_hit_sec", "no_kill_sec", "element_kills", "weapon_masters"]) expect(ruTasks[`task.kind.${kind}` as keyof typeof ruTasks], kind).toBeTypeOf("string");
   });
 });

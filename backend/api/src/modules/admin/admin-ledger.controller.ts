@@ -1,19 +1,23 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Logger, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { isCurrencyCode } from "@bh/fx";
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
+import { FxService } from "../fx/fx.service.js";
 import { accountOf } from "../auth/auth.guard.js";
 import type { AccessTokenClaims } from "../auth/access-token.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { FEE_PERCENT_BP_MAX, NAME_MAX, type ArticleView, type CreateArticleInput, type CreatePlaceInput, type PlaceView, type UpdatePlaceInput } from "../ledger/ledger-chart.js";
 import { LedgerChartService } from "../ledger/ledger-chart.service.js";
+import { totalAssets, valueOf, type Valuation, type ValuationSnapshot } from "../ledger/ledger-valuation.js";
 import { DEFAULT_JOURNAL_LIMIT, LedgerService, MAX_JOURNAL_LIMIT } from "../ledger/ledger.service.js";
 import type { AccountBalanceView, JournalFilterInput, JournalPage } from "../ledger/ledger-view.js";
-import { OPERATION_KINDS, OPERATION_STATUSES, operationInputSchema, type OperationInput } from "../ledger/operations/operation-input.js";
+import { NOTE_MAX, NOTE_MIN, OPERATION_KINDS, OPERATION_STATUSES, operationInputSchema, type OperationInput } from "../ledger/operations/operation-input.js";
 import type { OperationPage, OperationView } from "../ledger/operations/operation-view.js";
 import type { OperationFilter } from "../ledger/operations/operations.repository.js";
 import { OperationsService } from "../ledger/operations/operations.service.js";
+import type { PeriodListItem, PeriodReportView } from "../ledger/periods/period-view.js";
+import { PeriodsService } from "../ledger/periods/periods.service.js";
 import { createTemplateSchema, draftPeriodSchema, updateTemplateSchema, type CreateTemplateInput, type UpdateTemplateInput } from "../ledger/templates/template-input.js";
 import { TemplatesService, type DraftPeriodResult, type TemplateView } from "../ledger/templates/templates.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
@@ -47,6 +51,16 @@ const journalQuerySchema = z
 /** Остатки читаются без параметров: лишний параметр — опечатка клиента, а не «молчаливо проигнорировать». */
 const noQuerySchema = z.object({}).strict();
 
+/** Остатки с оценкой в долларах и рублях (Р219, tasks/T-0459): `value` — `null`, если для валюты нет курса. */
+export interface BalancesResponse {
+  accounts: (AccountBalanceView & { value: Valuation | null })[];
+  /** когда сняты курсы; `null` — курсов нет, суммы только в родной валюте */
+  rates: { at: string } | null;
+  /** итог активов; `null` — у какого-то актива нет оценки */
+  totalUsd: string | null;
+  totalRub: string | null;
+}
+
 const nameSchema = z.string().trim().min(1).max(NAME_MAX);
 /** Валюта — только из справочника ядра курсов: «ABC» и «rub» отсекаются здесь, а не в базе. */
 const currencySchema = z.string().refine(isCurrencyCode);
@@ -75,6 +89,12 @@ const TEMPLATE_PROBLEM = "Некорректный шаблон: названи�
 const PERIOD_PROBLEM = "Некорректный период: нужен период в виде ГГГГ-ММ";
 
 const operationIdSchema = z.string().uuid();
+
+/** Месяц учёта в адресе: «ГГГГ-ММ» с месяцем от 01 до 12. */
+const periodSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u);
+/** Причина снятия закрытия: длину проверяет сервис (3…500 знаков), здесь — что это строка и больше ничего. */
+const reopenSchema = z.strictObject({ reason: z.string() });
+const REOPEN_PROBLEM = "Для снятия закрытия нужна причина — строка reason";
 const OPERATION_ID_PROBLEM = "Некорректный идентификатор операции";
 
 /** Список операций: статус и вид необязательны, страница — по курсору, как у журнала. */
@@ -86,6 +106,12 @@ const operationsQuerySchema = z
     limit: z.preprocess(blankIsAbsent, z.coerce.number().int().min(1).max(MAX_JOURNAL_LIMIT).default(DEFAULT_JOURNAL_LIMIT)),
   })
   .strict();
+
+/** Решение владельца: комментарий к подтверждению необязателен, причина отказа — обязательна, в тех же пределах, что причина операции. */
+const decisionNote = z.string().trim().min(NOTE_MIN).max(NOTE_MAX);
+const approveSchema = z.strictObject({ note: decisionNote.optional() });
+const rejectSchema = z.strictObject({ note: decisionNote });
+const DECISION_PROBLEM = `Некорректное решение: причина отказа обязательна, комментарий и причина — от ${String(NOTE_MIN)} до ${String(NOTE_MAX)} знаков`;
 
 /** Тело операции: ошибка схемы называет поле, а не просто «некорректно» — форма операции длинная. */
 function parseOperation(body: unknown): OperationInput {
@@ -107,6 +133,12 @@ function parseOperation(body: unknown): OperationInput {
  * описывает событие, сервер собирает проводку; черновик правится, проведённая операция — нет. Список и показ —
  * `ledger.view`, внесение, правка, проведение и удаление черновика — `finance.entry.create`.
  *
+ * Второй ключ (Р220, tasks/T-0462): крупная операция финансов и любое исправление после `submit` ждут владельца;
+ * подтвердить и отклонить — `finance.operation.approve`, только у владельца.
+ *
+ * Месяцы учёта (Р222, tasks/T-0468): список и отчёт месяца — `ledger.view`; поставить на сверку, закрыть и снять
+ * закрытие — `finance.period.close`, право только у владельца. Правила состояний, расчёт и аудит — `PeriodsService`.
+ *
  * Шаблоны повторяющихся расходов (Р220, tasks/T-0463): список — `ledger.view`, заведение, правка, архив и «Расходы
  * месяца» — `finance.entry.create`. «Расходы месяца» создаёт черновики операций, а не проводки.
  */
@@ -117,15 +149,29 @@ export class AdminLedgerController {
     private readonly ledger: LedgerService,
     private readonly chart: LedgerChartService,
     private readonly operations: OperationsService,
+    private readonly periods: PeriodsService,
     private readonly templates: TemplatesService,
     private readonly limiter: RateLimiter,
+    private readonly fx: FxService,
   ) {}
+
+  private readonly log = new Logger(AdminLedgerController.name);
 
   @Get("balances")
   @RequirePermission("ledger.view")
-  async balances(@Query() query: unknown): Promise<{ data: { accounts: AccountBalanceView[] } }> {
+  async balances(@Query() query: unknown): Promise<{ data: BalancesResponse }> {
     parse(() => noQuerySchema.parse(query ?? {}), "Остатки не принимают параметров");
-    return { data: { accounts: await this.ledger.balances() } };
+    const accounts = await this.ledger.balances();
+    const rates = await this.currentRates();
+    const total = totalAssets(accounts, rates?.snapshot ?? null);
+    return {
+      data: {
+        accounts: accounts.map((account) => ({ ...account, value: rates === null ? null : valueOf(account.balance, account.currency, rates.snapshot) })),
+        rates: rates === null ? null : { at: rates.at },
+        totalUsd: total?.usd ?? null,
+        totalRub: total?.rub ?? null,
+      },
+    };
   }
 
   @Get("journal")
@@ -251,6 +297,28 @@ export class AdminLedgerController {
     return { data: { operation: await this.operations.submit(actor, operationId) } };
   }
 
+  /** Подтвердить операцию, ждущую владельца (Р220, T-0462): проводка и решение в одной записи; комментарий необязателен. */
+  @Post("operations/:id/approve")
+  @HttpCode(200)
+  @RequirePermission("finance.operation.approve")
+  async approveOperation(@Req() request: unknown, @Param("id") id: string, @Body() body: unknown): Promise<{ data: { operation: OperationView } }> {
+    const actor = await this.mutator(request);
+    const operationId = parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM);
+    const input = parse(() => approveSchema.parse(body ?? {}), DECISION_PROBLEM);
+    return { data: { operation: await this.operations.approve(actor, operationId, input.note) } };
+  }
+
+  /** Отклонить операцию, ждущую владельца: причина обязательна, проводки не будет. */
+  @Post("operations/:id/reject")
+  @HttpCode(200)
+  @RequirePermission("finance.operation.approve")
+  async rejectOperation(@Req() request: unknown, @Param("id") id: string, @Body() body: unknown): Promise<{ data: { operation: OperationView } }> {
+    const actor = await this.mutator(request);
+    const operationId = parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM);
+    const input = parse(() => rejectSchema.parse(body), DECISION_PROBLEM);
+    return { data: { operation: await this.operations.reject(actor, operationId, input.note) } };
+  }
+
   @Post("operations/:id/discard")
   @HttpCode(200)
   @RequirePermission("finance.entry.create")
@@ -258,6 +326,61 @@ export class AdminLedgerController {
     const actor = await this.mutator(request);
     await this.operations.discard(actor, parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM));
     return { data: { ok: true } };
+  }
+
+  @Get("periods")
+  @RequirePermission("ledger.view")
+  async listPeriods(): Promise<{ data: { periods: PeriodListItem[] } }> {
+    return { data: { periods: await this.periods.list() } };
+  }
+
+  @Get("periods/:period")
+  @RequirePermission("ledger.view")
+  async period(@Param("period") period: string): Promise<{ data: { period: PeriodReportView } }> {
+    return { data: { period: await this.periods.report(parse(() => periodSchema.parse(period), PERIOD_PROBLEM)) } };
+  }
+
+  @Post("periods/:period/review")
+  @HttpCode(200)
+  @RequirePermission("finance.period.close")
+  async reviewPeriod(@Req() request: unknown, @Param("period") period: string): Promise<{ data: { ok: true } }> {
+    const actor = await this.mutator(request);
+    await this.periods.startReview(actor, parse(() => periodSchema.parse(period), PERIOD_PROBLEM));
+    return { data: { ok: true } };
+  }
+
+  @Post("periods/:period/close")
+  @HttpCode(200)
+  @RequirePermission("finance.period.close")
+  async closePeriod(@Req() request: unknown, @Param("period") period: string): Promise<{ data: { ok: true } }> {
+    const actor = await this.mutator(request);
+    await this.periods.close(actor, parse(() => periodSchema.parse(period), PERIOD_PROBLEM));
+    return { data: { ok: true } };
+  }
+
+  @Post("periods/:period/reopen")
+  @HttpCode(200)
+  @RequirePermission("finance.period.close")
+  async reopenPeriod(@Req() request: unknown, @Param("period") period: string, @Body() body: unknown): Promise<{ data: { ok: true } }> {
+    const actor = await this.mutator(request);
+    const input = parse(() => reopenSchema.parse(body), REOPEN_PROBLEM);
+    await this.periods.reopen(actor, parse(() => periodSchema.parse(period), PERIOD_PROBLEM), input.reason);
+    return { data: { ok: true } };
+  }
+
+  /**
+   * Текущие курсы без записи снимка. Сбой чтения курсов остатки не роняет: деньги видны и без оценки, а причину
+   * разбирают по журналу. Пустой снимок (ни рубля, ни выплаты звезды) — тоже «курсов нет».
+   */
+  private async currentRates(): Promise<{ snapshot: ValuationSnapshot; at: string } | null> {
+    try {
+      const snapshot = await this.fx.peek();
+      if (snapshot.rates.size === 0 && snapshot.payout.size === 0) return null;
+      return { snapshot, at: snapshot.takenAt.toISOString() };
+    } catch (error) {
+      this.log.warn(`Курсы для оценки остатков не прочитаны: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
   }
 
   @Get("templates")

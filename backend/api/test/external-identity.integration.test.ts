@@ -15,6 +15,7 @@ import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { WIPE_PLAN } from "../src/modules/wipe/wipe-plan.js";
 import { ExternalLinkStarters } from "../src/platforms/ports/external-link.js";
 import { redisDatabase } from "./helpers/redis-database.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Связь аккаунта MAX и VK с игровым на настоящих Postgres и Redis
@@ -53,7 +54,7 @@ describe.skipIf(!live)("связь аккаунта MAX и VK с игровым 
 
   async function player(): Promise<AccountRef> {
     const accounts = new PrismaAccountRepository(prisma);
-    const account = await accounts.upsert({ platform: "telegram", platformUserId: `${900_000_000 + Math.floor(Math.random() * 99_999_999)}`, displayName: "Игрок", username: null, photoUrl: null }, Date.now());
+    const account = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Игрок", username: null, photoUrl: null }, Date.now());
     created.push(account.accountId);
     return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
   }

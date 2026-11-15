@@ -19,6 +19,8 @@ export interface StoredOperation {
   input: unknown;
   note: string;
   link: string | null;
+  /** id картинки снимка чека в хранилище картинок панели */
+  receiptImage: string | null;
   /** «1234.50» — десятичной строкой; пусто — курса не было */
   amountUsd: string | null;
   sourceKey: string | null;
@@ -37,6 +39,7 @@ export interface NewOperation {
   input: StoredFields;
   note: string;
   link: string | null;
+  receiptImage: string | null;
   amountUsd: string | null;
   createdBy: string;
   templateId: string | null;
@@ -49,7 +52,14 @@ export interface DraftPatch {
   input: StoredFields;
   note: string;
   link: string | null;
+  receiptImage: string | null;
   amountUsd: string | null;
+}
+
+/** Решение владельца по операции на подтверждении: кто решил и что написал (при отказе причина обязательна). */
+export interface DecisionRecord {
+  by: string;
+  note: string | null;
 }
 
 export interface OperationFilter {
@@ -112,8 +122,16 @@ export interface OperationsRepository {
   list(filter: OperationFilter, cursor: JournalCursor | null, limit: number): Promise<StoredOperation[]>;
   /** Проводка с этим ключом уже есть в журнале. */
   entryExists(sourceKey: string): Promise<boolean>;
-  /** «Проведена» и, для займа, строка условий — одной транзакцией. Строка займа создаётся только вместе с отметкой. */
-  markPosted(operationId: string, sourceKey: string, loan: NewLoan | null): Promise<PostedOutcome>;
+  /** Черновик → «на подтверждении» (второй ключ, Р220). `false` — черновика с таким id нет: уже ждёт, проведён или удалён. */
+  markPending(operationId: string): Promise<boolean>;
+  /**
+   * «Проведена» и, для займа, строка условий — одной транзакцией. Строка займа создаётся только вместе с отметкой.
+   * Без `decision` — черновик проводит его автор; с ним — владелец подтверждает операцию на подтверждении, и в той же
+   * записи остаются решивший, время и комментарий. Условие по статусу держит гонку: из двух решений отметку ставит одно.
+   */
+  markPosted(operationId: string, sourceKey: string, loan: NewLoan | null, decision?: DecisionRecord): Promise<PostedOutcome>;
+  /** «На подтверждении» → «отклонена» с решением. `false` — такой операции в этом статусе нет: уже решена или не найдена. */
+  reject(operationId: string, decision: DecisionRecord & { note: string }): Promise<boolean>;
   /** `INSERT … ON CONFLICT DO NOTHING`: параллельные вызовы создают счёт один раз. `true` — создан этим вызовом. */
   ensureAccount(account: ServiceAccount): Promise<boolean>;
   /** Проводки по ключам источника; ключа без проводки в карте нет. */
@@ -135,6 +153,7 @@ function toStored(row: Prisma.LedgerOperationGetPayload<Record<string, never>>):
     input: row.input,
     note: row.note,
     link: row.link,
+    receiptImage: row.receiptImage,
     amountUsd: row.amountUsd === null ? null : row.amountUsd.toFixed(2),
     sourceKey: row.sourceKey,
     createdBy: row.createdBy,
@@ -160,6 +179,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
           input: toJson(operation.input),
           note: operation.note,
           link: operation.link,
+          receiptImage: operation.receiptImage,
           amountUsd: operation.amountUsd,
           createdBy: operation.createdBy,
           templateId: operation.templateId,
@@ -182,7 +202,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
   async updateDraft(operationId: string, patch: DraftPatch): Promise<boolean> {
     const result = await this.prisma.ledgerOperation.updateMany({
       where: { operationId, status: "draft" },
-      data: { kind: patch.kind, input: toJson(patch.input), note: patch.note, link: patch.link, amountUsd: patch.amountUsd },
+      data: { kind: patch.kind, input: toJson(patch.input), note: patch.note, link: patch.link, receiptImage: patch.receiptImage, amountUsd: patch.amountUsd },
     });
     return result.count > 0;
   }
@@ -209,10 +229,27 @@ export class PrismaOperationsRepository implements OperationsRepository {
     return (await this.prisma.ledgerEntry.count({ where: { sourceKey } })) > 0;
   }
 
-  async markPosted(operationId: string, sourceKey: string, loan: NewLoan | null): Promise<PostedOutcome> {
+  async markPending(operationId: string): Promise<boolean> {
+    const moved = await this.prisma.ledgerOperation.updateMany({ where: { operationId, status: "draft" }, data: { status: "pending" } });
+    return moved.count > 0;
+  }
+
+  async reject(operationId: string, decision: DecisionRecord & { note: string }): Promise<boolean> {
+    const moved = await this.prisma.ledgerOperation.updateMany({
+      where: { operationId, status: "pending" },
+      data: { status: "rejected", decidedBy: decision.by, decidedAt: new Date(), decisionNote: decision.note },
+    });
+    return moved.count > 0;
+  }
+
+  async markPosted(operationId: string, sourceKey: string, loan: NewLoan | null, decision?: DecisionRecord): Promise<PostedOutcome> {
     return await this.prisma.$transaction(async (tx) => {
-      // Условие «черновик» держит гонку: из двух одновременных проведений отметку ставит одно, второе видит ноль строк.
-      const moved = await tx.ledgerOperation.updateMany({ where: { operationId, status: "draft" }, data: { status: "posted", sourceKey } });
+      // Условие по статусу держит гонку: из двух одновременных проведений отметку ставит одно, второе видит ноль строк.
+      // Черновик проводит автор, операцию на подтверждении — только решение владельца.
+      const moved = await tx.ledgerOperation.updateMany({
+        where: { operationId, status: decision === undefined ? "draft" : "pending" },
+        data: { status: "posted", sourceKey, ...(decision === undefined ? {} : { decidedBy: decision.by, decidedAt: new Date(), decisionNote: decision.note }) },
+      });
       if (moved.count === 0) {
         const row = await tx.ledgerOperation.findUnique({ where: { operationId }, select: { operationId: true } });
         return row === null ? "missing" : "already";

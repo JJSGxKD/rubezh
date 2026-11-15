@@ -30,6 +30,13 @@ export class LedgerOperationNotDraftError extends DomainError {
   }
 }
 
+/** Подтвердить и отклонить можно только операцию, которая ждёт подтверждения: решение по ней одно и окончательное (Р220, T-0462). */
+export class LedgerOperationNotPendingError extends DomainError {
+  constructor(operationId: string, status: OperationStatus) {
+    super("ledger_operation_not_pending", `Операция «${operationId}»: ${STATUS_NAME[status]} — решение принимается только по операции, которая ждёт подтверждения`, 409);
+  }
+}
+
 /** На период шаблона уже есть черновик: повторное действие не плодит дублей (T-0463). */
 export class LedgerOperationTemplateTakenError extends DomainError {
   constructor(templateId: string, period: string) {

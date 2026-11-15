@@ -56,7 +56,12 @@ const metaSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boole
  */
 export function inputOf(row: StoredOperation): OperationInput {
   const fields = typeof row.input === "object" && row.input !== null && !Array.isArray(row.input) ? row.input : null;
-  const parsed = operationInputSchema.safeParse({ ...fields, note: row.note, ...(row.link === null ? {} : { link: row.link }) });
+  const parsed = operationInputSchema.safeParse({
+    ...fields,
+    note: row.note,
+    ...(row.link === null ? {} : { link: row.link }),
+    ...(row.receiptImage === null ? {} : { receiptImage: row.receiptImage }),
+  });
   if (!parsed.success) throw new Error(`Операция «${row.operationId}»: сохранённый ввод не разбирается`);
   return parsed.data;
 }

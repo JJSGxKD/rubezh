@@ -58,7 +58,7 @@ import { findContinueProblems } from "./continue";
 import { findDropsContentProblems } from "./gems";
 import { MAX_PICKUPS } from "./pickups";
 import { createEnemyPool, createGemPool, createPickupPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
-import { MAX_CONTINUES_PER_RUN, NO_CHEATS, type PlayerConfig, type SimConfig, type World } from "./world";
+import { createSeenEnemies, MAX_CONTINUES_PER_RUN, NO_CHEATS, type PlayerConfig, type SimConfig, type World } from "./world";
 
 /**
  * Создание мира вынесено из world.ts: там состояние забега и операции над
@@ -392,6 +392,7 @@ export function createWorld(options: CreateWorldOptions): World {
     drops,
     chestRules,
     hunt: createHuntState(maxEnemies),
+    seen: createSeenEnemies(enemyTypes.length),
     chests: {
       rng: createRng(deriveSeed(options.seed, STREAM_SALT.chest)),
       dropped: 0,
@@ -450,6 +451,7 @@ export function createWorld(options: CreateWorldOptions): World {
       tools: { ...toolsTotal },
       toolsTotal,
       banished: [],
+      adRerolls: 0,
       limitStacks: limitTypes.map(() => 0),
     },
     // До первого отрезка таймлайна сложность нейтральна: в мире без директора

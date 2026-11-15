@@ -8,10 +8,12 @@ import { PrismaLedgerChartRepository } from "../src/modules/ledger/ledger-chart.
 import { LedgerChartService } from "../src/modules/ledger/ledger-chart.service.js";
 import { PrismaLedgerRepository } from "../src/modules/ledger/ledger.repository.js";
 import { LedgerService } from "../src/modules/ledger/ledger.service.js";
+import type { OperationApprovals } from "../src/modules/ledger/operations/approval.js";
 import { PrismaOperationsRepository } from "../src/modules/ledger/operations/operations.repository.js";
 import { OperationsService, type OperationActor } from "../src/modules/ledger/operations/operations.service.js";
 import { PrismaTemplatesRepository } from "../src/modules/ledger/templates/templates.repository.js";
 import { TemplatesService } from "../src/modules/ledger/templates/templates.service.js";
+import type { MediaService } from "../src/modules/media/media.service.js";
 import type { AuditEntry } from "../src/modules/roles/roles.repository.js";
 import type { RolesService } from "../src/modules/roles/roles.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
@@ -83,7 +85,9 @@ describe.skipIf(DATABASE_URL === "")("шаблоны расходов на жи�
     } as unknown as RolesService;
     chart = new LedgerChartService(new PrismaLedgerChartRepository(prisma), ledger, roles);
     const fx = { peek: async () => ({ takenAt: new Date(), rates: rates({ RUB: "0.0125" }), payout: rates({ XTR: "0.013" }) }) } as unknown as FxService;
-    operations = new OperationsService(new PrismaOperationsRepository(prisma), ledger, chart, fx, roles);
+    // Второй ключ (T-0462) здесь не нужен: черновики шаблонов не проводятся, его проверяет `ledger-approval.integration.test.ts`.
+    const approvals = { required: async () => false } as unknown as OperationApprovals;
+    operations = new OperationsService(new PrismaOperationsRepository(prisma), ledger, chart, fx, roles, approvals, { require: async () => undefined } as unknown as MediaService);
     templates = new TemplatesService(new PrismaTemplatesRepository(prisma), operations, chart, roles);
 
     const place = await chart.createPlace(actor, { name: `Карта ${run}`, currency: "RUB" });

@@ -1850,6 +1850,12 @@ export interface RunResult {
   prologue?: RunPrologue;
   /** убийства по id врага; враги без убийств не попадают */
   killsByEnemy: Record<string, number>;
+  /**
+   * Типы врагов, вышедшие в мир, — id в порядке первого появления, без повторов (tasks/T-0479).
+   * Не «убил», а «встретил»: босс и элита здесь есть, даже если их не убили. Необязательное:
+   * итог прошлой сборки поля не знает.
+   */
+  enemiesSeen?: string[];
   damageDealt: number;
   damageTaken: number;
   /**
@@ -1897,6 +1903,11 @@ export interface RunResult {
    * итог прошлой сборки.
    */
   boosts?: string[];
+  /**
+   * Сколько раз за забег переброс карточек взят за рекламу (tasks/T-0199, Р133): не больше одного.
+   * Сервер сверяет число с книгой показов. Нет поля — не брали, в том числе итог прошлой сборки.
+   */
+  adRerolls?: number;
   /** Сила игрока и давление. Нет поля — подстройки не было: забег без уровня аккаунта или итог прошлой сборки. */
   pressure?: RunPressureResult;
   /**
@@ -1963,6 +1974,8 @@ export interface RunFinishSubmission {
   loadout?: SignedLoadout;
   /** бусты, применённые движком; нет поля — забег без бустов */
   boosts?: string[];
+  /** переброс карточек за рекламу, 0..1; нет поля — не брали (tasks/T-0199) */
+  adRerolls?: number;
   /**
    * Подробности для листа забега в профиле (docs/35-stage4-plan.md, WP4): на
    * вердикт не влияют. Нет полей — забег из очереди прошлой сборки.
@@ -1995,6 +2008,10 @@ export interface RunFinishStats {
   noHitSec?: number;
   noKillSec?: number;
   killsByElement?: Partial<Record<ElementId, number>>;
+  /** типы врагов, вышедшие в мир (tasks/T-0479): по ним сервер открывает записи кодекса; записи прошлых сборок поля не знают */
+  enemiesSeen?: string[];
+  /** найденные виды тайников (tasks/T-0261): по ним сервер открывает кодекс тайников; записи прошлых сборок поля не знают */
+  secretsFound?: string[];
   /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
   huntLog?: RunHuntEntry[];
   buildScore?: number;
@@ -2063,6 +2080,26 @@ export interface RunScoreView {
   expectedPoints: number;
 }
 
+/** Знак у имени в строке списка (T-0235, Р149): выбранный игроком или знак по умолчанию. */
+export interface PublicEmblem {
+  id: string;
+  title: string;
+  /** редкость: шкала предметов и отдельный тон `team` у знака «Команда» */
+  tier: string;
+  category: "status" | "season" | "merit";
+  /** порядковый номер сезона — только у сезонного знака */
+  season?: number | undefined;
+}
+
+/** То, что список показывает рядом с именем игрока: знак, облик героя и выбор аватара. */
+export interface PublicMark {
+  emblem?: PublicEmblem | undefined;
+  /** действующий облик (T-0237, Р150): выбранный, а если игрок им больше не владеет, — `keeper`; нет поля — сервер до обликов или источник недоступен */
+  appearance?: string | undefined;
+  /** в кружке аватара фото площадки, а не голова облика (T-0237, Р47); нет поля — голова облика */
+  avatarPhoto?: true | undefined;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   name: string;
@@ -2076,6 +2113,12 @@ export interface LeaderboardEntry {
   tester?: true | undefined;
   /** поддержал проект (Р109); нет поля — не поддержал */
   supporter?: true | undefined;
+  /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен, клиент рисует по `tester` и `supporter` */
+  emblem?: PublicEmblem | undefined;
+  /** действующий облик героя (T-0237); нет поля — сервер до обликов или источник недоступен, клиент рисует Хранителя */
+  appearance?: string | undefined;
+  /** в кружке аватара фото площадки, а не голова облика (T-0237) */
+  avatarPhoto?: true | undefined;
   /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
   prestige?: number | undefined;
   /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */

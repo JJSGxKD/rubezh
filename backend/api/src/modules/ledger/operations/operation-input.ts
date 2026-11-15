@@ -46,10 +46,14 @@ function isHttpsLink(value: string): boolean {
 
 const link = z.string().max(LINK_MAX).refine(isHttpsLink);
 
-/** Поля, общие для всех видов: причина или описание, ссылка на подтверждение, дата события. */
+/** Снимок чека — id картинки в хранилище картинок панели (SHA-256 в hex); есть ли она и того ли профиля, проверяет сервис. */
+const receiptImage = z.string().regex(/^[0-9a-f]{64}$/u);
+
+/** Поля, общие для всех видов: причина или описание, ссылка на подтверждение, снимок чека, дата события. */
 const common = {
   note: z.string().trim().min(NOTE_MIN).max(NOTE_MAX),
   link: link.optional(),
+  receiptImage: receiptImage.optional(),
   at: eventAt,
 };
 
@@ -105,12 +109,12 @@ export type ReceiptInput = z.infer<typeof receipt>;
 export type BuildableInput = Exclude<OperationInput, { kind: "reversal" }>;
 
 /**
- * Что лежит в `ledger_operation.input`: всё, кроме причины и ссылки, — у них свои колонки. Вместе с ними из
- * этого снова собирается ввод человека, поэтому читается строка той же схемой, что и тело запроса.
+ * Что лежит в `ledger_operation.input`: всё, кроме причины, ссылки и снимка чека, — у них свои колонки. Вместе с
+ * ними из этого снова собирается ввод человека, поэтому читается строка той же схемой, что и тело запроса.
  */
 export type StoredFields = Record<string, unknown>;
 
-export function splitInput(input: OperationInput): { fields: StoredFields; note: string; link: string | null } {
-  const { note, link: attached, ...fields } = input;
-  return { fields, note, link: attached ?? null };
+export function splitInput(input: OperationInput): { fields: StoredFields; note: string; link: string | null; receiptImage: string | null } {
+  const { note, link: attached, receiptImage: image, ...fields } = input;
+  return { fields, note, link: attached ?? null, receiptImage: image ?? null };
 }

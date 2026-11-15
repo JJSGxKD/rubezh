@@ -3,11 +3,13 @@ import { Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
 import { afterEach, describe, expect, it } from "vitest";
+import { Decimal, type CurrencyCode, type Rate } from "@bh/fx";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { ADMIN_CSRF_HEADER, ADMIN_CSRF_VALUE, ADMIN_SESSION_COOKIE } from "../src/modules/admin/admin-cookie.js";
 import { AdminLedgerController } from "../src/modules/admin/admin-ledger.controller.js";
+import { AdminMediaController } from "../src/modules/admin/admin-media.controller.js";
 import { AdminSessionController } from "../src/modules/admin/admin-session.controller.js";
 import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
 import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
@@ -16,17 +18,25 @@ import { PanelLoginService } from "../src/modules/admin/panel-login.service.js";
 import { PANEL_LOGIN_STORE } from "../src/modules/admin/panel-login.store.js";
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
+import { FxService } from "../src/modules/fx/fx.service.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import type { ArticleView, CreateArticleInput, CreatePlaceInput, PlaceView, UpdatePlaceInput } from "../src/modules/ledger/ledger-chart.js";
 import { LedgerChartService } from "../src/modules/ledger/ledger-chart.service.js";
 import { LedgerCursorInvalidError } from "../src/modules/ledger/ledger-errors.js";
 import type { AccountBalanceView, JournalFilterInput, JournalPage } from "../src/modules/ledger/ledger-view.js";
 import { LedgerService } from "../src/modules/ledger/ledger.service.js";
-import { LedgerOperationInvalidError, LedgerOperationNotDraftError } from "../src/modules/ledger/operations/operation-errors.js";
+import { LedgerOperationInvalidError, LedgerOperationNotDraftError, LedgerOperationNotPendingError } from "../src/modules/ledger/operations/operation-errors.js";
 import type { OperationInput } from "../src/modules/ledger/operations/operation-input.js";
 import type { OperationPage, OperationView } from "../src/modules/ledger/operations/operation-view.js";
 import type { OperationFilter } from "../src/modules/ledger/operations/operations.repository.js";
 import { OperationsService } from "../src/modules/ledger/operations/operations.service.js";
+import { LedgerPeriodBlockedError } from "../src/modules/ledger/periods/period-errors.js";
+import type { PeriodListItem, PeriodReportView } from "../src/modules/ledger/periods/period-view.js";
+import { PeriodsService } from "../src/modules/ledger/periods/periods.service.js";
+import { IMAGE_FILE, imageIdOf, imagePath } from "../src/modules/media/image-rules.js";
+import { MediaController } from "../src/modules/media/media.controller.js";
+import { MEDIA_REPOSITORY } from "../src/modules/media/media.repository.js";
+import { MediaService } from "../src/modules/media/media.service.js";
 import { LedgerTemplateInvalidError } from "../src/modules/ledger/templates/template-errors.js";
 import type { CreateTemplateInput, UpdateTemplateInput } from "../src/modules/ledger/templates/template-input.js";
 import { TemplatesService, type DraftPeriodResult, type TemplateView } from "../src/modules/ledger/templates/templates.service.js";
@@ -39,6 +49,7 @@ import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.j
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryMedia } from "./helpers/memory-media.js";
 import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
@@ -46,6 +57,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
  * Журнал учёта в панели по HTTP (Р219, tasks/T-0457): `GET /admin/ledger/balances` и `GET /admin/ledger/journal`;
  * места хранения и статьи (Р220, tasks/T-0460): `/admin/ledger/places` и `/admin/ledger/articles`;
  * ручные операции (Р220, tasks/T-0461): `/admin/ledger/operations`;
+ * месяцы учёта (Р222, tasks/T-0468): `/admin/ledger/periods`;
  * шаблоны повторяющихся расходов (Р220, tasks/T-0463): `/admin/ledger/templates`.
  * Настоящие охранники панели и права, сервис учёта подменён: что он считает и как пишет в базу, проверяют
  * `ledger-journal.test.ts` и интеграционный тест; здесь — кто и с какими параметрами пускается к журналу.
@@ -58,6 +70,29 @@ const BALANCES: AccountBalanceView[] = [
   { accountId: "stars.bot.hold", name: "Звёзды бота — в холде", type: "asset", currency: "XTR", balance: "50" },
   { accountId: "revenue.shop.telegram", name: "Выручка: магазин, Telegram", type: "revenue", currency: "XTR", balance: "50" },
 ];
+
+const RATES_AT = new Date("2026-11-13T09:00:00.000Z");
+
+function rate(currency: CurrencyCode, usdPerUnit: string): Rate {
+  return { currency, usdPerUnit: new Decimal(usdPerUnit), sources: ["test"], observedAt: RATES_AT };
+}
+
+/** Подменный сервис курсов: снимок без записи; `empty` — курсов нет совсем. */
+class FakeFx {
+  empty = false;
+  failing = false;
+
+  async peek() {
+    if (this.failing) throw new Error("хранилище курсов недоступно");
+    const rates = this.empty ? [] : [rate("RUB", "0.01")];
+    const payout = this.empty ? [] : [rate("XTR", "0.013")];
+    return {
+      takenAt: RATES_AT,
+      rates: new Map(rates.map((item) => [item.currency, item])),
+      payout: new Map(payout.map((item) => [item.currency, item])),
+    };
+  }
+}
 
 const PAGE: JournalPage = {
   entries: [
@@ -216,7 +251,43 @@ class FakeOperations {
   async discard(actor: { accountId: string }, operationId: string): Promise<void> {
     this.record("discard", actor, operationId);
   }
+
+  async approve(actor: { accountId: string }, operationId: string, note?: string): Promise<OperationView> {
+    this.record("approve", actor, operationId, note);
+    return { ...OPERATION, status: "posted" };
+  }
+
+  async reject(actor: { accountId: string }, operationId: string, note: string): Promise<OperationView> {
+    this.record("reject", actor, operationId, note);
+    return { ...OPERATION, status: "rejected", decisionNote: note };
+  }
 }
+
+/** WebP без потерь (`VP8L`) нужных сторон: заголовок настоящий, содержимое — заполнитель. */
+function receiptWebp(width: number, height: number): Buffer {
+  const bits = ((width - 1) & 0x3fff) | (((height - 1) & 0x3fff) << 14);
+  const body = Buffer.from([0x2f, bits & 0xff, (bits >>> 8) & 0xff, (bits >>> 16) & 0xff, (bits >>> 24) & 0xff, ...new Array<number>(16).fill(7)]);
+  const header = Buffer.alloc(20);
+  header.write("RIFF", 0, "latin1");
+  header.writeUInt32LE(12 + body.length, 4);
+  header.write("WEBPVP8L", 8, "latin1");
+  header.writeUInt32LE(body.length, 16);
+  return Buffer.concat([header, body]);
+}
+
+const PERIOD_LIST: PeriodListItem[] = [{ period: "2026-11", status: "review", reopenedCount: 0, reviewAt: "2026-12-01T09:00:00.000Z", closedAt: null }];
+
+const PERIOD_REPORT: PeriodReportView = {
+  period: "2026-11",
+  status: "review",
+  reopenedCount: 0,
+  reviewAt: "2026-12-01T09:00:00.000Z",
+  closedAt: null,
+  checklist: [],
+  canClose: true,
+  reportIsDraft: true,
+  report: null,
+};
 
 const TEMPLATE: TemplateView = {
   templateId: "vps",
@@ -234,6 +305,39 @@ const TEMPLATE: TemplateView = {
 };
 
 const DRAFT_RESULT: DraftPeriodResult = { period: "2026-11", created: 1, existing: 0, failed: [] };
+
+/** Подменный сервис месяцев: помнит вызовы с автором и отдаёт готовые ответы; может отказать, как настоящий. */
+class FakePeriods {
+  readonly calls: { method: string; actor: string | null; args: unknown[] }[] = [];
+  failWith: Error | null = null;
+
+  private record(method: string, actor: { accountId: string } | null, ...args: unknown[]): void {
+    this.calls.push({ method, actor: actor?.accountId ?? null, args });
+    if (this.failWith !== null) throw this.failWith;
+  }
+
+  async list(): Promise<PeriodListItem[]> {
+    this.record("list", null);
+    return PERIOD_LIST;
+  }
+
+  async report(period: string): Promise<PeriodReportView> {
+    this.record("report", null, period);
+    return PERIOD_REPORT;
+  }
+
+  async startReview(actor: { accountId: string }, period: string): Promise<void> {
+    this.record("startReview", actor, period);
+  }
+
+  async close(actor: { accountId: string }, period: string): Promise<void> {
+    this.record("close", actor, period);
+  }
+
+  async reopen(actor: { accountId: string }, period: string, reason: string): Promise<void> {
+    this.record("reopen", actor, period, reason);
+  }
+}
 
 /** Подменный сервис шаблонов: помнит вызовы с автором и отдаёт готовые ответы; может отказать, как настоящий. */
 class FakeTemplates {
@@ -283,12 +387,15 @@ describe("журнал учёта в панели по HTTP", () => {
     const accounts = new MemoryAccountRepository();
     const roles = new MemoryRolesRepository();
     const ledger = new FakeLedger();
+    const fx = new FakeFx();
     const chart = new FakeChart();
     const operations = new FakeOperations();
+    const periods = new FakePeriods();
     const templates = new FakeTemplates();
     const limiter = { consume: async () => true } as unknown as RateLimiter;
+    const images = new MemoryMedia();
     @Module({
-      controllers: [AdminSessionController, AdminLedgerController],
+      controllers: [AdminSessionController, AdminLedgerController, AdminMediaController, MediaController],
       providers: [
         { provide: APP_CONFIG, useValue: cfg },
         { provide: REDIS, useValue: { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis },
@@ -297,8 +404,12 @@ describe("журнал учёта в панели по HTTP", () => {
         { provide: ADMIN_SESSION_STORE, useValue: new MemoryAdminSessionStore() },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
         { provide: LedgerService, useValue: ledger },
+        { provide: FxService, useValue: fx },
         { provide: LedgerChartService, useValue: chart },
         { provide: OperationsService, useValue: operations },
+        { provide: PeriodsService, useValue: periods },
+        { provide: MEDIA_REPOSITORY, useValue: images },
+        MediaService,
         { provide: TemplatesService, useValue: templates },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: RateLimiter, useValue: limiter },
@@ -327,7 +438,7 @@ describe("журнал учёта в панели по HTTP", () => {
       return await login(`dev-player-${id}:${name}`);
     };
 
-    return { ledger, chart, operations, templates, login, staff };
+    return { ledger, fx, chart, operations, periods, templates, images, login, staff };
   }
 
   const headers = (cookie: string) => ({ cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
@@ -356,7 +467,7 @@ describe("журнал учёта в панели по HTTP", () => {
     expect(ctx.ledger.journalCalls).toHaveLength(0);
   });
 
-  it("финансы и владелец видят остатки: { data: { accounts } }", async () => {
+  it("финансы и владелец видят остатки с оценкой: у счёта value, у ответа rates и итоги активов", async () => {
     const ctx = await start();
     const finance = await ctx.staff("954", "Финансы", "finance");
     const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
@@ -364,8 +475,48 @@ describe("журнал учёта в панели по HTTP", () => {
     for (const cookie of [finance, owner]) {
       const response = await get("/balances", cookie);
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ data: { accounts: BALANCES } });
+      expect(response.json()).toEqual({
+        data: {
+          accounts: [
+            { ...BALANCES[0], value: { usd: "0.65", rub: "65.00" } },
+            { ...BALANCES[1], value: { usd: "0.65", rub: "65.00" } },
+          ],
+          rates: { at: "2026-11-13T09:00:00.000Z" },
+          totalUsd: "0.65",
+          totalRub: "65.00",
+        },
+      });
     }
+  });
+
+  it("курсов нет: value, итоги и rates — null, суммы в родной валюте остаются", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("956", "Финансы", "finance");
+    ctx.fx.empty = true;
+
+    const response = await get("/balances", finance);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      data: {
+        accounts: [
+          { ...BALANCES[0], value: null },
+          { ...BALANCES[1], value: null },
+        ],
+        rates: null,
+        totalUsd: null,
+        totalRub: null,
+      },
+    });
+  });
+
+  it("сбой чтения курсов не роняет остатки: ответ без оценки", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("957", "Финансы", "finance");
+    ctx.fx.failing = true;
+
+    const response = await get("/balances", finance);
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ data: { rates: unknown } }>().data.rates).toBeNull();
   });
 
   it("финансы и владелец видят журнал: { data: { entries, next } }, без параметров — лимит 50 и пустой фильтр", async () => {
@@ -791,6 +942,235 @@ describe("журнал учёта в панели по HTTP", () => {
     const conflict = await send("PATCH", `/operations/${OPERATION_ID}`, finance, EXPENSE_BODY);
     expect(conflict.statusCode).toBe(409);
     expect(conflict.json<{ error: { code: string } }>().error.code).toBe("ledger_operation_not_draft");
+  });
+
+  // ----- месяцы учёта (Р222, tasks/T-0468) -----
+
+  it("месяцы: финансы и владелец читают список и отчёт месяца, сервис получает месяц как есть", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1001", "Финансы", "finance");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    for (const cookie of [finance, owner]) {
+      const list = await get("/periods", cookie);
+      expect(list.statusCode).toBe(200);
+      expect(list.json()).toEqual({ data: { periods: PERIOD_LIST } });
+      const report = await get("/periods/2026-11", cookie);
+      expect(report.statusCode).toBe(200);
+      expect(report.json()).toEqual({ data: { period: PERIOD_REPORT } });
+    }
+    expect(ctx.periods.calls.map((call) => [call.method, call.args[0]])).toEqual([
+      ["list", undefined],
+      ["report", "2026-11"],
+      ["list", undefined],
+      ["report", "2026-11"],
+    ]);
+  });
+
+  it("участник проекта, маркетолог и администратор месяцев не видят и не меняют: 403, сервис не вызывается", async () => {
+    const ctx = await start();
+    const staffCookies = [await ctx.staff("1002", "Участник", "stakeholder"), await ctx.staff("1003", "Маркетолог", "marketer"), await ctx.staff("1004", "Администратор", "admin")];
+
+    for (const cookie of staffCookies) {
+      expect((await get("/periods", cookie)).statusCode).toBe(403);
+      expect((await get("/periods/2026-11", cookie)).statusCode).toBe(403);
+      expect((await send("POST", "/periods/2026-11/review", cookie, {})).statusCode).toBe(403);
+      expect((await send("POST", "/periods/2026-11/close", cookie, {})).statusCode).toBe(403);
+      expect((await send("POST", "/periods/2026-11/reopen", cookie, { reason: "ошибка в расходах" })).statusCode).toBe(403);
+    }
+    expect(ctx.periods.calls).toHaveLength(0);
+  });
+
+  it("финансы месяц не ставят на сверку, не закрывают и не открывают заново: 403 на review, close и reopen", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1005", "Финансы", "finance");
+
+    expect((await send("POST", "/periods/2026-11/review", finance, {})).statusCode).toBe(403);
+    expect((await send("POST", "/periods/2026-11/close", finance, {})).statusCode).toBe(403);
+    expect((await send("POST", "/periods/2026-11/reopen", finance, { reason: "ошибка в расходах" })).statusCode).toBe(403);
+    expect(ctx.periods.calls).toHaveLength(0);
+  });
+
+  it("без сессии — 401 на списке, отчёте и закрытии", async () => {
+    const ctx = await start();
+
+    expect((await app!.inject({ method: "GET", url: `${BASE}/periods` })).statusCode).toBe(401);
+    expect((await app!.inject({ method: "GET", url: `${BASE}/periods/2026-11` })).statusCode).toBe(401);
+    expect((await app!.inject({ method: "POST", url: `${BASE}/periods/2026-11/close`, payload: {} })).statusCode).toBe(401);
+    expect(ctx.periods.calls).toHaveLength(0);
+  });
+
+  it("владелец ставит на сверку, закрывает и снимает закрытие: 200 { data: { ok } }, автор и месяц доходят до сервиса", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    const review = await send("POST", "/periods/2026-11/review", owner, {});
+    const close = await send("POST", "/periods/2026-11/close", owner, {});
+    const reopen = await send("POST", "/periods/2026-11/reopen", owner, { reason: "Участник оспорил отчёт" });
+
+    for (const response of [review, close, reopen]) {
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ data: { ok: true } });
+    }
+    expect(ctx.periods.calls.map((call) => [call.method, call.args])).toEqual([
+      ["startReview", ["2026-11"]],
+      ["close", ["2026-11"]],
+      ["reopen", ["2026-11", "Участник оспорил отчёт"]],
+    ]);
+    expect(ctx.periods.calls.every((call) => call.actor !== null)).toBe(true);
+  });
+
+  it.each(["2026-13", "2026-1", "abc", "2026-11-01", "2026-00"])("месяц %s не вида «ГГГГ-ММ»: 400, сервис не вызывается", async (period) => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    expect((await get(`/periods/${period}`, owner)).statusCode).toBe(400);
+    expect((await send("POST", `/periods/${period}/close`, owner, {})).statusCode).toBe(400);
+    expect(ctx.periods.calls).toHaveLength(0);
+  });
+
+  it.each([
+    ["без причины", {}],
+    ["причина не строкой", { reason: 5 }],
+    ["лишнее поле", { reason: "ошибка в расходах", force: true }],
+  ])("снятие закрытия: %s — 400 validation_failed, сервис не вызывается", async (_title, body) => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    const response = await send("POST", "/periods/2026-11/reopen", owner, body);
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe("validation_failed");
+    expect(ctx.periods.calls).toHaveLength(0);
+  });
+
+  it("отказ закрытия доходит как есть: 409 ledger_period_blocked с текстом о том, что мешает", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    ctx.periods.failWith = new LedgerPeriodBlockedError("2026-11", [{ code: "operations_pending", severity: "blocker", count: 1, message: "1 операция ждёт подтверждения", refs: [], moreRefs: 0 }]);
+
+    const response = await send("POST", "/periods/2026-11/close", owner, {});
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ error: { code: string; message: string } }>().error).toMatchObject({ code: "ledger_period_blocked", message: expect.stringContaining("1 операция ждёт подтверждения") });
+  });
+
+  // ---- Второй ключ и снимок чека (Р220, tasks/T-0462) ----
+
+  it("подтверждает и отклоняет только владелец: финансы, администратор и маркетолог — 403, сервис не вызывается; без сессии — 401", async () => {
+    const ctx = await start();
+    const others = [await ctx.staff("1001", "Финансы", "finance"), await ctx.staff("1002", "Администратор", "admin"), await ctx.staff("1003", "Маркетолог", "marketer")];
+
+    for (const cookie of others) {
+      expect((await send("POST", `/operations/${OPERATION_ID}/approve`, cookie, {})).statusCode).toBe(403);
+      expect((await send("POST", `/operations/${OPERATION_ID}/reject`, cookie, { note: "Не согласовано" })).statusCode).toBe(403);
+    }
+    expect((await app!.inject({ method: "POST", url: `${BASE}/operations/${OPERATION_ID}/approve`, payload: {} })).statusCode).toBe(401);
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it("владелец: approve с комментарием и без, reject с причиной — сервису уходят id, автор и текст; ответ — операция", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    const approved = await send("POST", `/operations/${OPERATION_ID}/approve`, owner, { note: "Согласовано" });
+    const quiet = await send("POST", `/operations/${OPERATION_ID}/approve`, owner, {});
+    const rejected = await send("POST", `/operations/${OPERATION_ID}/reject`, owner, { note: "Сумма не сходится" });
+
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json()).toEqual({ data: { operation: { ...OPERATION, status: "posted" } } });
+    expect(quiet.statusCode).toBe(200);
+    expect(rejected.json()).toEqual({ data: { operation: { ...OPERATION, status: "rejected", decisionNote: "Сумма не сходится" } } });
+    expect(ctx.operations.calls.map((call) => [call.method, call.args])).toEqual([
+      ["approve", [OPERATION_ID, "Согласовано"]],
+      ["approve", [OPERATION_ID, undefined]],
+      ["reject", [OPERATION_ID, "Сумма не сходится"]],
+    ]);
+    expect(ctx.operations.calls.every((call) => call.actor !== null)).toBe(true);
+  });
+
+  it("решение с неверным телом — 400 и сервис не вызывается: reject без причины, короткая причина, лишнее поле, плохой id", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    expect((await send("POST", `/operations/${OPERATION_ID}/reject`, owner, {})).statusCode).toBe(400);
+    expect((await send("POST", `/operations/${OPERATION_ID}/reject`, owner, { note: "  " })).statusCode).toBe(400);
+    expect((await send("POST", `/operations/${OPERATION_ID}/reject`, owner, { note: "ab" })).statusCode).toBe(400);
+    expect((await send("POST", `/operations/${OPERATION_ID}/approve`, owner, { note: "Согласовано", extra: 1 })).statusCode).toBe(400);
+    expect((await send("POST", `/operations/${OPERATION_ID}/approve`, owner, { note: "x".repeat(501) })).statusCode).toBe(400);
+    expect((await send("POST", "/operations/abc/approve", owner, {})).statusCode).toBe(400);
+    expect((await send("POST", "/operations/abc/reject", owner, { note: "Нет такой" })).statusCode).toBe(400);
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it("повторное решение доходит как 409 ledger_operation_not_pending", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    ctx.operations.failWith = new LedgerOperationNotPendingError(OPERATION_ID, "posted");
+
+    const response = await send("POST", `/operations/${OPERATION_ID}/approve`, owner, {});
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe("ledger_operation_not_pending");
+  });
+
+  const uploadReceipt = (cookie: string, bytes: Buffer, profile = "finance_receipt") =>
+    app!.inject({ method: "POST", url: "/api/v1/admin/media/images", headers: headers(cookie), payload: { profile, data: bytes.toString("base64") } });
+
+  it("снимок чека: финансам и владельцу загрузка — 201, маркетологу — 403; 640×480 принимается, сторона меньше 300 или больше 1600 — нет", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1010", "Финансы", "finance");
+    const marketer = await ctx.staff("1011", "Маркетолог", "marketer");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    const receipt = receiptWebp(640, 480);
+
+    expect((await uploadReceipt(marketer, receipt)).statusCode).toBe(403);
+    expect(ctx.images.rows.size).toBe(0);
+    const uploaded = await uploadReceipt(finance, receipt);
+    expect(uploaded.statusCode).toBe(201);
+    expect(uploaded.json()).toMatchObject({ data: { imageId: imageIdOf(receipt), width: 640, height: 480 } });
+    expect((await uploadReceipt(owner, receiptWebp(1_600, 300))).statusCode).toBe(201);
+    expect((await uploadReceipt(finance, receiptWebp(640, 299))).statusCode).toBe(400);
+    expect((await uploadReceipt(finance, receiptWebp(1_601, 400))).statusCode).toBe(400);
+  });
+
+  it("снимок чека показывают только тем, кто видит учёт: финансы и владелец — 200, маркетолог и администратор — 403, без сессии — 401; игроку — 404", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1012", "Финансы", "finance");
+    const marketer = await ctx.staff("1013", "Маркетолог", "marketer");
+    const admin = await ctx.staff("1014", "Администратор", "admin");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    const receipt = receiptWebp(640, 480);
+    const { imageId } = (await uploadReceipt(finance, receipt)).json<{ data: { imageId: string } }>().data;
+    const adminPath = `/api/v1/admin/media/${imageId}.webp`;
+    expect(IMAGE_FILE.test(`${imageId}.webp`)).toBe(true);
+
+    for (const cookie of [finance, owner]) {
+      const shown = await app!.inject({ method: "GET", url: adminPath, headers: headers(cookie) });
+      expect(shown.statusCode).toBe(200);
+      expect(shown.rawPayload.equals(receipt)).toBe(true);
+      // Чек — не публичная картинка: ни CDN, ни общий кеш его хранить не должны.
+      expect(String(shown.headers["cache-control"])).toMatch(/private/);
+      expect(String(shown.headers["cache-control"])).not.toMatch(/public/);
+    }
+    for (const cookie of [marketer, admin]) expect((await app!.inject({ method: "GET", url: adminPath, headers: headers(cookie) })).statusCode).toBe(403);
+    expect((await app!.inject({ method: "GET", url: adminPath })).statusCode).toBe(401);
+
+    // Адреса игрока для чека нет, даже когда картинка уже в памяти реплики после показа в панели.
+    expect((await app!.inject({ method: "GET", url: imagePath(imageId) })).statusCode).toBe(404);
+  });
+
+  it("картинки других профилей закрытие не задевает: слайд главной видит любой вошедший в панель и игрок", async () => {
+    const ctx = await start();
+    const marketer = await ctx.staff("1015", "Маркетолог", "marketer");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    const square = receiptWebp(512, 512);
+
+    expect((await uploadReceipt(owner, square, "home_slide")).statusCode).toBe(201);
+    const imageId = imageIdOf(square);
+
+    expect((await app!.inject({ method: "GET", url: `/api/v1/admin/media/${imageId}.webp`, headers: headers(marketer) })).statusCode).toBe(200);
+    expect((await app!.inject({ method: "GET", url: imagePath(imageId) })).statusCode).toBe(200);
   });
 
   const TEMPLATE_BODY = { name: "VPS", articleId: "vps", placeAccountId: "bank.karta-t-banka", amount: "1500.00", schedule: "monthly" };

@@ -3,14 +3,15 @@ id: T-0241
 title: Дневной кап роликов на все места — реклама не становится работой
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0199]
 zones:
   - backend/api/test/ads-daily-cap.test.ts
   - backend/api/test/ads-daily-cap.integration.test.ts
+  - backend/api/test/ads.test.ts
 shared:
   - backend/api/src/modules/ads/ads-rules.ts
   - backend/api/src/modules/ads/ads.service.ts
@@ -23,17 +24,21 @@ shared:
   - apps/admin/src/ui/help.ts
   - docs/07-monetization-and-ads.md
   - docs/30-configuration-map.md
+  - backend/api/test/helpers/memory-ads.ts
+  - backend/api/test/home.test.ts
+  - backend/api/test/run-double.test.ts
+  - backend/api/test/wheel.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0241. Дневной кап роликов на все места — реклама не становится работой
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0241.json)](README.md#значки-статуса) [![T-0199](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0199.json&label=T-0199)](T-0199-reroll-for-ad.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0241.json)](README.md#значки-статуса) [![T-0199](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0199.json&label=T-0199)](archive/T-0199-reroll-for-ad.md)
 
 ## Зачем
 

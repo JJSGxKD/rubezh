@@ -33,6 +33,7 @@ import {
 import {
   OPEN_KINDS,
   RUN_KINDS,
+  STATE_KINDS,
   TASK_KIND_IDS,
   TASK_LIMIT_GRACE_MIN,
   TASK_PERIODS,
@@ -43,10 +44,12 @@ import {
   isCheckedKind,
   isEmblemKind,
   isRunKind,
+  masterIdsOf,
   rewardReason,
   slotsFor,
   taskGroup,
   visibleOn,
+  withDynamicTargets,
   type AchievementCategory,
   type ChannelLinkMode,
   type PoolTier,
@@ -535,7 +538,36 @@ export class TasksService implements OnModuleInit {
       return [{ taskId: def.taskId, period: def.period, target: def.target, op: kind.op, amount: measure(run, def.filter) }];
     });
     if (deltas.every((delta) => delta.amount <= 0)) return;
-    await this.db(this.repository.applyRun({ runId: run.runId, accountId: run.accountId, at: run.finishedAt, deltas }));
+    const fresh = await this.db(this.repository.applyRun({ runId: run.runId, accountId: run.accountId, at: run.finishedAt, deltas }));
+    if (!fresh) return;
+    // «Коллекционер» (T-0322): только забег, сдвинувший «Мастера оружия», мог выполнить нового «Мастера».
+    const masters = new Set(masterIdsOf(await this.active()));
+    if (deltas.some((delta) => delta.amount > 0 && masters.has(delta.taskId))) {
+      try {
+        await this.syncMasters(run.accountId, run.finishedAt);
+      } catch (error: unknown) {
+        // Забег уже засчитан и повторно не придёт: следующее открытие витрины допишет «Коллекционера».
+        this.logger.warn(JSON.stringify({ module: "tasks", event: "masters_sync_failed", accountId: run.accountId, reason: error instanceof Error ? error.message : "unknown" }));
+      }
+    }
+  }
+
+  /**
+   * «Коллекционер» (T-0322): прогресс — сколько «Мастеров оружия» игрок выполнил, «максимум»,
+   * поэтому новый «Мастер» цель поднимает, а выполненное выполненным и остаётся. Зовут витрина
+   * достижений и записанный забег; одним запросом с `count`.
+   */
+  async syncMasters(accountId: string, at = new Date()): Promise<void> {
+    const defs = await this.active();
+    const collectors = defs.filter((def) => def.kind === "weapon_masters");
+    const masters = masterIdsOf(defs);
+    if (collectors.length === 0 || masters.length === 0) return;
+    const done = await this.db(this.repository.completedCount(accountId, masters));
+    await this.applyState(
+      accountId,
+      collectors.map((def) => ({ taskId: def.taskId, period: def.period, target: def.target, op: STATE_KINDS.weapon_masters.op, amount: done })),
+      at,
+    );
   }
 
   /** Правка каталога из панели видна сразу на этой реплике, на остальных — через полминуты. */
@@ -558,7 +590,8 @@ export class TasksService implements OnModuleInit {
     const now = Date.now();
     if (this.cache === null || this.cache.until <= now) {
       const defs = await this.db(this.repository.catalog());
-      this.cache = { defs: defs.filter((def) => def.active), until: now + CATALOG_TTL_MS };
+      // Цель «Коллекционера» считается по включённым «Мастерам», а не читается из строки (T-0322).
+      this.cache = { defs: withDynamicTargets(defs.filter((def) => def.active)), until: now + CATALOG_TTL_MS };
     }
     return this.cache.defs;
   }

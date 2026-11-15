@@ -17,6 +17,11 @@ export interface ImageMeta {
 export interface StoredImage extends ImageMeta {
   contentType: string;
   data: Uint8Array;
+  /**
+   * Право на показ (`ledger.view` у снимка чека); `null` или нет поля — картинка открытая. Один и тот же файл,
+   * загруженный под закрытым профилем, закрывается навсегда: открыть его обратно нельзя.
+   */
+  viewPermission?: string | null;
 }
 
 export interface NewImage extends StoredImage {
@@ -40,11 +45,15 @@ export class PrismaMediaRepository implements MediaRepository {
 
   async insert(image: NewImage): Promise<ImageMeta> {
     await this.prisma.mediaImage.createMany({ data: [{ ...image, data: Uint8Array.from(image.data) }], skipDuplicates: true });
+    // Файл уже был: строку из `skipDuplicates` не меняем, но закрытый профиль закрывает её — только в эту сторону.
+    if (image.viewPermission !== undefined && image.viewPermission !== null) {
+      await this.prisma.mediaImage.updateMany({ where: { imageId: image.imageId, viewPermission: null }, data: { viewPermission: image.viewPermission } });
+    }
     return await this.prisma.mediaImage.findUniqueOrThrow({ where: { imageId: image.imageId }, select: META });
   }
 
   async byId(imageId: string): Promise<StoredImage | null> {
-    return await this.prisma.mediaImage.findUnique({ where: { imageId }, select: { ...META, contentType: true, data: true } });
+    return await this.prisma.mediaImage.findUnique({ where: { imageId }, select: { ...META, contentType: true, data: true, viewPermission: true } });
   }
 
   async meta(imageId: string): Promise<ImageMeta | null> {
