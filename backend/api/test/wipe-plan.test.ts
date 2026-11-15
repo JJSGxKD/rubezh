@@ -70,6 +70,13 @@ describe("план вайпа: полнота", () => {
     expect(order.indexOf("RunAdReroll")).toBeLessThan(order.indexOf("Run"));
   });
 
+  it("второй сундук клада за рекламу (T-0327) — часть забега: стирается своим шагом до забега, а не только каскадом", () => {
+    expect(plan.RunAdChest?.action).toBe("wipe");
+    expect(plan.RunAdChest?.why).toContain("часть забега");
+    expect(order.indexOf("RunAdChest")).toBe(order.indexOf("RunAdReroll") + 1);
+    expect(order.indexOf("RunAdChest")).toBeLessThan(order.indexOf("Run"));
+  });
+
   it("запись забега для проверки стирается своим шагом до забега (T-0317), а не только каскадом", () => {
     expect(plan.RunProof?.action).toBe("wipe");
     expect(plan.RunProof?.why).toContain("часть забега");
@@ -102,6 +109,7 @@ describe("план вайпа: порядок стирания", () => {
       "RunAdContinue",
       "RunGemContinue",
       "RunAdReroll",
+      "RunAdChest",
       "RunProof",
       "RunReward",
       "RunBoost",
