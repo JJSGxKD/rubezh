@@ -6,6 +6,7 @@ import { AppLinks } from "./ports/app-links.js";
 import { BotMentions } from "./ports/bot-mention.js";
 import { ChannelMemberships } from "./ports/channel-membership.js";
 import { LaunchVerifiers } from "./ports/launch-verifier.js";
+import { LiveCards } from "./ports/live-card.js";
 import { Messengers } from "./ports/messenger.js";
 import { PaymentProviders } from "./ports/payment-provider.js";
 import { PaymentStatements } from "./ports/payment-statement.js";
@@ -88,6 +89,14 @@ export function messengersFor(config: AppConfig, telegramApi: TelegramBotApi): M
   return new Messengers([new TelegramMessenger(telegramApi, config.telegram.botToken !== "")]);
 }
 
+/**
+ * Живые карточки бота (Р199): портов пока нет — адаптер Telegram добавит T-0396, у MAX и VK карточек нет.
+ * Пустой реестр — «карточек нет»: сценарии идут запасным сообщением, а не тишиной (Р225).
+ */
+export function liveCardsFor(): LiveCards {
+  return new LiveCards([]);
+}
+
 @Global()
 @Module({
   providers: [
@@ -101,7 +110,8 @@ export function messengersFor(config: AppConfig, telegramApi: TelegramBotApi): M
     { provide: SourceAvatars, inject: [APP_CONFIG, TELEGRAM_BOT_API, TELEGRAM_LINK_ORIGIN, Outbound], useFactory: sourceAvatarsFor },
     { provide: BotMentions, inject: [APP_CONFIG, TELEGRAM_BOT_API, BotIdentity], useFactory: botMentionsFor },
     { provide: MessagePreparers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messagePreparersFor },
+    { provide: LiveCards, useFactory: liveCardsFor },
   ],
-  exports: [LaunchVerifiers, PaymentProviders, PaymentStatements, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, SourceAvatars, BotMentions, MessagePreparers],
+  exports: [LaunchVerifiers, PaymentProviders, PaymentStatements, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, SourceAvatars, BotMentions, MessagePreparers, LiveCards],
 })
 export class PlatformsModule {}

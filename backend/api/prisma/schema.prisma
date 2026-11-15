@@ -231,6 +231,8 @@ model Account {
   passProgress  PassProgress[]
   passClaims    PassClaim[]
   boostCredits  BoostCredit[]
+  // Живые карточки бота (T-0395)
+  botCards      BotCard[]
 
   // Друзья (WP14)
   friendLink       FriendLink?
@@ -3514,4 +3516,34 @@ model SecretFound {
 
   @@id([accountId, kind])
   @@map("secret_found")
+}
+
+// Живые карточки бота (docs/35-stage4-plan.md Р199, tasks/T-0395). Ядро помнит,
+// какие карточки отправлены и в каком состоянии, чтобы править их не чаще лимита,
+// закрывать по концу периода и отвечать на запросы из них.
+
+/// Живая карточка бота (Р199, WP52): сообщение с состоянием, которое бот правит.
+/// Живая (`closed_at IS NULL`) на вид у игрока одна — частичный уникальный индекс в миграции
+model BotCard {
+  id        String    @id @default(uuid()) @db.Uuid
+  accountId String    @map("account_id") @db.Uuid
+  platform  String    @db.VarChar(16)
+  kind      String    @db.VarChar(16)
+  chatId    String    @map("chat_id") @db.VarChar(32)
+  messageId Int       @map("message_id")
+  /// версия облика у площадки: у Telegram — первые 8 hex sha256 HTML
+  version   String    @db.VarChar(16)
+  periodKey String?   @map("period_key") @db.VarChar(16)
+  /// последнее отправленное состояние (JSON ≤ 1024 байт): из него «перенесена» и финал
+  state     String
+  stateHash String    @map("state_hash") @db.VarChar(64)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @map("updated_at") @db.Timestamptz(3)
+  closedAt  DateTime? @map("closed_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([platform, chatId, messageId])
+  @@index([kind, periodKey])
+  @@map("bot_card")
 }
