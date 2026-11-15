@@ -4,7 +4,7 @@ title: Перепроверка забегов — кому повтор обя�
 epic: E11
 priority: P1
 status: done
-owner: claude-62 / sonnet-5.5 / extra
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0317, T-0318, T-0294, T-0295]
