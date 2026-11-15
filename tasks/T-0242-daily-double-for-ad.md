@@ -39,7 +39,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0242. Награда дня ×2 за ролик — новое место рекламы daily_double, сервер

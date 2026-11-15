@@ -27,7 +27,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0250. VIP в подарок — клиент: «Подарить VIP» в карточке друга, уведомление получателю

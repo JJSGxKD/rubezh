@@ -26,6 +26,7 @@ import { PROMO_CODES_REPOSITORY, type PromoCodesRepository } from "../promo-code
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { SETTINGS, type SettingDefinition } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
+import { CABINET_FUNNEL, buildCabinetFunnel, checkFunnelPeriod, type CabinetFunnel, type CabinetFunnelSource } from "./partner-cabinet-funnel.js";
 import { PartnerNotFoundError } from "./partner-errors.js";
 import { withTerms, type PartnerStatus } from "./partner-rules.js";
 import { PARTNERS_REPOSITORY, type PartnersRepository } from "./partners.repository.js";
@@ -42,7 +43,8 @@ import { PARTNERS_REPOSITORY, type PartnersRepository } from "./partners.reposit
  * - ссылки и промокоды кабинета (T-0218): партнёр заводит свои ссылки и копии своих общих кодов с новым
  *   словом, в пределах лимитов из настроек, без прав `links.manage` и `promo.edit`: право кабинета проверено
  *   в `partnerOf`, а владелец записи — всегда партнёр кабинета. Награду копии партнёр не выбирает — она
- *   берётся у исходной кампании; игроков, их имён и ID в ответах нет (docs/23 §4.4).
+ *   берётся у исходной кампании; игроков, их имён и ID в ответах нет (docs/23 §4.4);
+ * - воронка (T-0219): вехи игроков партнёра по ссылкам, кодам и дням — в `partner-cabinet-funnel.ts`, где и порог группы.
  */
 
 /** Состояние кабинета в карточке партнёра: с каким аккаунтом связан и есть ли у аккаунта роль. */
@@ -85,6 +87,8 @@ export class PartnerAccountTakenError extends DomainError {
 }
 
 const DB_TIMEOUT_MS = 3_000;
+/** отчёт воронки считает вехи по всем привязкам окна: дольше обычного чтения, но не бесконечно */
+const FUNNEL_TIMEOUT_MS = 15_000;
 
 @Injectable()
 export class PrismaPartnerAccounts implements PartnerAccounts {
@@ -293,6 +297,7 @@ export class PartnerCabinet {
     @Optional() @Inject(PROMO_CODES_REPOSITORY) private readonly promoStore: PromoCodesRepository | null = null,
     @Optional() @Inject(PARTNER_PROMOS) private readonly partnerPromos: PartnerPromos | null = null,
     @Optional() @Inject(SETTINGS_READER) private readonly settings: SettingsReader | null = null,
+    @Optional() @Inject(CABINET_FUNNEL) private readonly funnelSource: CabinetFunnelSource | null = null,
   ) {}
 
   /**
@@ -320,6 +325,18 @@ export class PartnerCabinet {
     if (row === null) throw new PartnerNotFoundError();
     const { partnerId, name, status, sharePercent, payoutCurrency } = withTerms(row);
     return { partner: { partnerId, name, status, sharePercent, payoutCurrency } };
+  }
+
+  /**
+   * Воронка игроков партнёра за период по дате привязки, порог группы — из настроек. Партнёр — только из
+   * `partnerOf`: запрос не называет его сам. Партнёра нет — 404 до обращения к отчёту.
+   */
+  async funnel(actor: AccountRef, query: CabinetQuery, period: { from: Date; to: Date }, at = new Date()): Promise<CabinetFunnel> {
+    const scope = await this.partnerOf(actor, query);
+    checkFunnelPeriod(period);
+    if ((await this.db(this.partners.byId(scope.partnerId, at))) === null) throw new PartnerNotFoundError();
+    const raw = await withTimeout(this.need(this.funnelSource, "воронка").report(scope.partnerId, period.from, period.to), FUNNEL_TIMEOUT_MS, "воронка кабинета партнёра");
+    return buildCabinetFunnel(raw, period, this.setting(SETTINGS.partnersCabinetMinGroup));
   }
 
   /** Ссылки партнёра с переходами и запусками — те же числа, что в разделе «Ссылки» команды. */

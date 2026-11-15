@@ -29,7 +29,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/meta-v2.md
-batch: 4
+batch: 5
 ---
 
 # T-0246. «Набор хранителя» — клиент: предложение после первой победы и карточка в магазине с отсчётом

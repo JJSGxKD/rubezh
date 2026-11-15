@@ -10,6 +10,7 @@ import { PrismaSessionsRepository } from "../src/modules/attribution/sessions.re
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
 import { PrismaLinksRepository, type RegistrationOn } from "../src/modules/links/links.repository.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Конверсии закупленной рекламы на живом Postgres (WP43, Р86): регистрация
@@ -135,7 +136,7 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
       networkParams: params,
     });
     const account = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 99_000_000)), displayName: "Из рекламы", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Из рекламы", username: null, photoUrl: null },
       Date.now(),
     );
     await sessions.record({
@@ -572,7 +573,7 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
 
   async function newAccount() {
     return await accounts.upsert(
-      { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 99_000_000)), displayName: "По прямой", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "По прямой", username: null, photoUrl: null },
       Date.now(),
     );
   }

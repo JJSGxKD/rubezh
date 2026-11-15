@@ -28,7 +28,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/mockups/bot-images-v2.html
-batch: 4
+batch: 5
 ---
 
 # T-0256. Итог сезона в боте картинкой — место и награды тем, кто играл

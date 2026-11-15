@@ -6,6 +6,7 @@ import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaRunAdRerollsRepository } from "../src/modules/runs/run-ad-rerolls.repository.js";
 import { PrismaRunsRepository } from "../src/modules/runs/runs.repository.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Рекламный переброс карточек на настоящем Postgres (tasks/T-0199). Память
@@ -27,7 +28,7 @@ describe.skipIf(DATABASE_URL === "")("рекламный переброс кар
       accountId ??
       (
         await accounts.upsert(
-          { platform: "telegram", platformUserId: String(710_000_000 + Math.floor(Math.random() * 80_000_000)), displayName: "Стрелок", username: null, photoUrl: null },
+          { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Стрелок", username: null, photoUrl: null },
           Date.now(),
         )
       ).accountId;

@@ -9,8 +9,7 @@ import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { rewardFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { friendsLayout, giftAllCount } from "./friends-rules";
-import { GiftAll, Gifts, Invite, PeerAction, PeerRow } from "./friends-parts";
-import { TesterBadge } from "./tester-badge";
+import { GiftAll, Gifts, Invite, PeerAction, PeerRow, peerMarks } from "./friends-parts";
 import { RestrictedPlaque } from "./restricted-plaque";
 
 /**
@@ -92,7 +91,7 @@ export function FriendsScreen(): ReactNode {
         <SectionTitle>{t("friends.incoming")}</SectionTitle>
         <div className="grid gap-2">
           {view.incoming.map((request) => (
-            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} badge={request.tester === true ? <TesterBadge /> : undefined}>
+            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} {...peerMarks(request)}>
               <PeerAction kind="accept" pair variant="secondary" loading={busy === `accept:${request.accountId}`} onClick={() => void act(`accept:${request.accountId}`, () => api.accept(request.accountId))} />
               <PeerAction kind="decline" pair variant="ghost" loading={busy === `decline:${request.accountId}`} onClick={() => void act(`decline:${request.accountId}`, () => api.decline(request.accountId))} />
             </PeerRow>
@@ -107,7 +106,7 @@ export function FriendsScreen(): ReactNode {
         <SectionTitle>{t("friends.outgoing")}</SectionTitle>
         <div className="grid gap-2">
           {view.outgoing.map((request) => (
-            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} badge={request.tester === true ? <TesterBadge /> : undefined}>
+            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} {...peerMarks(request)}>
               <Button track="cancel_request" variant="ghost" loading={busy === `cancel:${request.accountId}`} onClick={() => void act(`cancel:${request.accountId}`, () => api.cancel(request.accountId))}>
                 {t("friends.cancel")}
               </Button>
@@ -180,7 +179,7 @@ export function FriendsScreen(): ReactNode {
                     key={friend.accountId}
                     name={friend.displayName}
                     photoUrl={friend.photoUrl}
-                    badge={friend.tester === true ? <TesterBadge /> : undefined}
+                    {...peerMarks(friend)}
                     onPress={() => setRemoving(friend)}
                   >
                     <PeerAction

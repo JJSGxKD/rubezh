@@ -6,6 +6,7 @@ import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaRolesRepository } from "../src/modules/roles/roles.repository.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Роли и журнал на настоящем Postgres (docs/17-testing-strategy.md §4.2).
@@ -24,7 +25,7 @@ describe.skipIf(DATABASE_URL === "")("роли и журнал на живом P
   let roles: PrismaRolesRepository;
   let accounts: PrismaAccountRepository;
 
-  const telegramId = (): string => String(900_000_000 + Math.floor(Math.random() * 90_000_000));
+  const telegramId = (): string => uniquePlatformUserId();
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
