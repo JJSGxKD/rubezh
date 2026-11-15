@@ -135,5 +135,14 @@
   "run.tools.banish.hint": "Выбери карточку — она не появится до конца забега",
   "run.tools.banish.cancel": "Отмена",
   "run.tools.caption": "Переброс меняет карточки, пропуск даёт опыт, изгнание убирает предмет из забега",
-  "run.tools.left": "Осталось: {count}"
+  "run.tools.left": "Осталось: {count}",
+  "run.tools.rerollAd": "Перебросить за рекламу",
+  "run.tools.rerollAd.short": "За рекламу",
+  "run.tools.rerollAd.pass": "Перебросить — VIP, без рекламы",
+  "run.tools.rerollAd.pass.short": "VIP, без рекламы",
+  "run.tools.rerollAd.once": "Один раз за забег",
+  "run.tools.rerollAd.notice.closed": "Ролик закрыт раньше конца — переброса нет",
+  "run.tools.rerollAd.notice.failed": "Реклама не загрузилась — попробуй ещё раз",
+  "run.tools.rerollAd.notice.claim_failed": "Ролик засчитан, но сервер не ответил — нажми ещё раз, смотреть заново не придётся",
+  "run.tools.rerollAd.notice.restricted": "Награды за рекламу закрыты — подробности в профиле"
 }

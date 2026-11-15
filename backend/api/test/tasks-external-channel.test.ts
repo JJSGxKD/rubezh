@@ -83,6 +83,10 @@ class MiniTasks implements TasksRepository {
     return row;
   }
 
+  async completedCount(): Promise<number> {
+    return 0;
+  }
+
   async markClaimed(_accountId: string, taskId: string): Promise<boolean> {
     if (this.claimed.has(taskId)) return false;
     this.claimed.add(taskId);

@@ -4,6 +4,7 @@ import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaPurchasesRepository, type ShopInvoiceRecord } from "../src/modules/payments/purchases.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Покупки магазина на живом Postgres (docs/17-testing-strategy.md §4.2;
@@ -21,7 +22,7 @@ describe.skipIf(DATABASE_URL === "")("покупки магазина на жи�
   let purchases: PrismaPurchasesRepository;
 
   async function account(): Promise<{ accountId: string; platformUserId: string }> {
-    const platformUserId = String(940_000_000 + Math.floor(Math.random() * 30_000_000));
+    const platformUserId = uniquePlatformUserId();
     const created = await accounts.upsert({ platform: "telegram", platformUserId, displayName: "Магазин", username: null }, Date.now());
     return { accountId: created.accountId, platformUserId };
   }

@@ -38,6 +38,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { ratingRestrictions } from "./helpers/memory-runs.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Доски рейтинга по очкам на настоящих Postgres и Redis (tasks/T-0294). Адреса —
@@ -130,12 +131,12 @@ describe.skipIf(!live)("доски рейтинга по очкам на жив�
   });
 
   async function player(name = "Игрок"): Promise<AccountRef> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(500_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: name, username: null, photoUrl: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
     return { accountId: created.accountId, platform: "telegram", platformUserId: created.platformUserId };
   }
 
   async function moderator(): Promise<AccountRef> {
-    const created = await memoryAccounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: "Модератор", username: null, photoUrl: null }, Date.now());
+    const created = await memoryAccounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Модератор", username: null, photoUrl: null }, Date.now());
     await rolesRepository.grant(created.accountId, "owner", null);
     return { accountId: created.accountId, platform: "telegram", platformUserId: created.platformUserId };
   }

@@ -6,6 +6,7 @@ import { batchCode, codeKey, type PromoCampaignRow } from "../src/modules/promo-
 import { PrismaPartnersRepository } from "../src/modules/partners/partners.repository.js";
 import { PrismaPromoCodesRepository, type NewPromoCampaign, type PromoCodeDraft } from "../src/modules/promo-codes/promo-codes.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Промокоды на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -48,7 +49,7 @@ describe.skipIf(DATABASE_URL === "")("промокоды на живом Postgre
     ...patch,
   });
   const shared = (display: string): PromoCodeDraft[] => [{ code: codeKey(display), display }];
-  const player = async () => (await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e12)), displayName: "Игрок", username: null, photoUrl: null }, NOW.getTime())).accountId;
+  const player = async () => (await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Игрок", username: null, photoUrl: null }, NOW.getTime())).accountId;
 
   async function created(row: NewPromoCampaign, codes: PromoCodeDraft[], refill: ((count: number) => PromoCodeDraft[]) | null = null): Promise<PromoCampaignRow> {
     const outcome = await repository.create(row, codes, refill);

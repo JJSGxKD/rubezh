@@ -34,7 +34,7 @@ batch: 8
 
 # T-0314. Батл-пасс — экран: две ленты по 30 ступеням, текущая ступень и очки до следующей, забор, что даёт VIP; вкладка в «Заданиях» и виджет на главной
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0314.json)](README.md#значки-статуса) [![T-0312](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0312.json&label=T-0312)](T-0312-battle-pass-close.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0314.json)](README.md#значки-статуса) [![T-0312](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0312.json&label=T-0312)](archive/T-0312-battle-pass-close.md)
 
 ## Зачем
 

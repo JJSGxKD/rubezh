@@ -15,6 +15,7 @@ import { Prisma } from "../src/generated/prisma/client.js";
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 import { webp } from "./helpers/webp-samples.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Задания на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -37,7 +38,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(960_000_000 + Math.floor(Math.random() * 30_000_000)), displayName: "Задания", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Задания", username: null },
       Date.now(),
     );
     return created.accountId;

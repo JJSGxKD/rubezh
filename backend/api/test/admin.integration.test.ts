@@ -15,6 +15,7 @@ import { PrismaRolesRepository } from "../src/modules/roles/roles.repository.js"
 import { PrismaRunsRepository } from "../src/modules/runs/runs.repository.js";
 import { DEVICE } from "./helpers/bench-report.js";
 import { redisDatabase } from "./helpers/redis-database.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Методы соседних модулей, добавленные для панели, и сессии панели — на живых
@@ -36,7 +37,7 @@ describe.skipIf(!live)("панель на живых Postgres и Redis", () => {
   let accounts: PrismaAccountRepository;
   const marker = `adm${Date.now().toString(36)}`;
 
-  const telegramId = (): string => String(910_000_000 + Math.floor(Math.random() * 80_000_000));
+  const telegramId = (): string => uniquePlatformUserId();
 
   async function account(patch: { displayName?: string; username?: string | null } = {}) {
     return await accounts.upsert(

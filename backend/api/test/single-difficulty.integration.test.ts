@@ -34,6 +34,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, ratingRestrictions, secondsScore, survivalScorer } from "./helpers/memory-runs.js";
 import { testPrisma } from "./helpers/test-prisma.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Единая сложность на живом Postgres (tasks/T-0191, Р126;
@@ -83,7 +84,7 @@ describe.skipIf(DATABASE_URL === "")("единая сложность на жи�
   let app: NestFastifyApplication | null = null;
 
   async function account(name = "Рейтинг"): Promise<string> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: name, username: null, photoUrl: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
     return created.accountId;
   }
 

@@ -58,6 +58,42 @@ export function toolButtons(input: ToolButtonsInput): ToolButton[] {
   return buttons;
 }
 
+/**
+ * Стадия кнопки переброса за рекламу — `AdRerollStage` из `state/ad-reroll.ts`: типом, а не
+ * импортом, чтобы правила остались чистыми функциями без хранилища.
+ */
+export type AdRerollStageView =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "ready"; pass: boolean }
+  | { kind: "watching"; pass: boolean }
+  | { kind: "gone" };
+
+export interface AdRerollButtonInput {
+  left: CardTools;
+  /** сработает ли переброс за рекламу — по движку */
+  canAdReroll: boolean;
+  stage: AdRerollStageView;
+  /** режим изгнания включён: в нём кнопок переброса нет */
+  banishing: boolean;
+}
+
+/** `hidden` — кнопки нет; `ready` — можно нажать (`pass` — VIP, без ролика); `busy` — идёт ролик. */
+export type AdRerollButtonState = { kind: "hidden" } | { kind: "ready"; pass: boolean } | { kind: "busy" };
+
+/**
+ * Кнопка «Перебросить за рекламу» (tasks/T-0199). Видна, только пока зарядов
+ * переброса нет, движок обещает переброс, сервер сказал «можно» (стадия `ready`)
+ * или ролик идёт (`watching`), и вне режима изгнания. Пока сервер отвечает
+ * (`checking`), кнопки нет — она не мигает.
+ */
+export function adRerollButton(input: AdRerollButtonInput): AdRerollButtonState {
+  if (input.left.reroll > 0 || !input.canAdReroll || input.banishing) return { kind: "hidden" };
+  if (input.stage.kind === "ready") return { kind: "ready", pass: input.stage.pass };
+  if (input.stage.kind === "watching") return { kind: "busy" };
+  return { kind: "hidden" };
+}
+
 export type CardTapAction = "choose" | "banish" | "ignore";
 
 /** Что делает тап по карточке: выбор, изгнание в режиме изгнания или ничего. */

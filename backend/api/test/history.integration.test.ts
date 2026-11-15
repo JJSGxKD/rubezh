@@ -19,6 +19,7 @@ import { WALLET_RESOURCES } from "../src/modules/wallet/wallet-types.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * История имущества на живом Postgres (docs/17-testing-strategy.md §4.2;
@@ -40,7 +41,7 @@ describe.skipIf(DATABASE_URL === "")("история имущества на ж�
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(780_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "История", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "История", username: null },
       Date.now(),
     );
     return created.accountId;
