@@ -3,7 +3,7 @@ id: T-0472
 title: Коридоры калибровки под игру с Карачуном — мера движения для стоящего, лесенка и набор
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
@@ -15,6 +15,8 @@ zones:
   - packages/core-game/test/balance-stalker-bot.test.ts
 shared:
   - packages/core-game/src/balance/**
+  - packages/core-game/src/game/balance/**
+  - scripts/balance/balance-sim.ts
   - docs/32-balance.md
   - CLAUDE.md
 runner: any
