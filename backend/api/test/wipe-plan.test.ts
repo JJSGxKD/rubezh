@@ -70,6 +70,12 @@ describe("план вайпа: полнота", () => {
     expect(order.indexOf("RunAdReroll")).toBeLessThan(order.indexOf("Run"));
   });
 
+  it("удвоение награды дня (T-0242) начинается заново вместе с самой наградой дня и стоит рядом с ней", () => {
+    expect(plan.DailyDouble?.action).toBe("wipe");
+    expect(plan.DailyDouble?.why).toContain("наград");
+    expect(order.indexOf("DailyDouble")).toBe(order.indexOf("DailyReward") + 1);
+  });
+
   it("запись забега для проверки стирается своим шагом до забега (T-0317), а не только каскадом", () => {
     expect(plan.RunProof?.action).toBe("wipe");
     expect(plan.RunProof?.why).toContain("часть забега");
@@ -120,6 +126,7 @@ describe("план вайпа: порядок стирания", () => {
       "AccountProgress",
       "FriendGift",
       "DailyReward",
+      "DailyDouble",
       "WheelSpin",
       "VipDaily",
       "Notification",
