@@ -3,8 +3,8 @@ id: T-0242
 title: Награда дня ×2 за ролик — новое место рекламы daily_double, сервер
 epic: E1
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0241]
