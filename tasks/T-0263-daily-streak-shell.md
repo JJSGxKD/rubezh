@@ -26,7 +26,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/meta-v2.md
-batch: 4
+batch: 5
 ---
 
 # T-0263. Серия дней — клиент: огонёк у аватара в шапке и строка серии в награде дня

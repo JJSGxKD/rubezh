@@ -27,7 +27,7 @@ effort: medium
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0381. Рейтинг в панели — раздел: доски, архив сезонов, места игрока в карточке

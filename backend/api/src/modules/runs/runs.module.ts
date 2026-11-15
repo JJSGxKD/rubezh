@@ -13,6 +13,9 @@ import { RunsController } from "./runs.controller.js";
 import { PrismaRunsRepository, RUNS_REPOSITORY } from "./runs.repository.js";
 import { RunsService } from "./runs.service.js";
 import { RunAdContinueController } from "./run-ad-continue.controller.js";
+import { RunAdRerollController } from "./run-ad-reroll.controller.js";
+import { RunAdRerollService } from "./run-ad-reroll.service.js";
+import { PrismaRunAdRerollsRepository, RUN_AD_REROLLS_REPOSITORY } from "./run-ad-rerolls.repository.js";
 import { RunAdContinueService } from "./run-ad-continue.service.js";
 import { PrismaRunAdContinuesRepository, RUN_AD_CONTINUES_REPOSITORY } from "./run-ad-continues.repository.js";
 import { RunContinues } from "./run-continues.js";
@@ -34,8 +37,9 @@ import { RunsViewService } from "./runs-view.service.js";
  * Забеги под аккаунтом и рейтинг на них (docs/34-stage3-plan.md, WP4).
  *
  * Единственный приём забегов: плейтестовое хранилище снято вместе с
- * переездом клиента. Забег — хозяин места рекламы «второй шанс» (WP11):
- * продолжение за рекламу выдаётся здесь, по сессии модуля рекламы. Второй
+ * переездом клиента. Забег — хозяин мест рекламы «второй шанс» (WP11) и
+ * «переброс карточек» (Р133, T-0199): продолжение и переброс за рекламу
+ * выдаются здесь, по сессии модуля рекламы. Второй
  * шанс за самоцветы (Р162) — тоже здесь: покупка списывает самоцветы
  * кошелька и записывает продолжение одной транзакцией. Пролог первого забега
  * (Р151, T-0279) — тоже здесь: признак «пролог пройден» и награда за победу;
@@ -45,7 +49,7 @@ import { RunsViewService } from "./runs-view.service.js";
  */
 @Module({
   imports: [AuthModule, AdsModule, RestrictionsModule, WalletModule, RatingModule, PublicIdentityModule],
-  controllers: [RunsController, RunAdContinueController, RunGemContinueController],
+  controllers: [RunsController, RunAdContinueController, RunAdRerollController, RunGemContinueController],
   providers: [
     RunsService,
     RunsViewService,
@@ -55,6 +59,7 @@ import { RunsViewService } from "./runs-view.service.js";
     { provide: PROLOGUE_STORE, useClass: PrismaPrologueStore },
     RunContinues,
     RunAdContinueService,
+    RunAdRerollService,
     RunGemContinueService,
     RunLoadouts,
     RunPrestige,
@@ -67,6 +72,7 @@ import { RunsViewService } from "./runs-view.service.js";
     { provide: RUNS_REPOSITORY, useClass: PrismaRunsRepository },
     { provide: RUN_REVIEW_REPOSITORY, useClass: PrismaRunReviewRepository },
     { provide: RUN_AD_CONTINUES_REPOSITORY, useClass: PrismaRunAdContinuesRepository },
+    { provide: RUN_AD_REROLLS_REPOSITORY, useClass: PrismaRunAdRerollsRepository },
     { provide: RUN_GEM_CONTINUES_REPOSITORY, useClass: PrismaRunGemContinuesRepository },
     { provide: LEADERBOARD_STORE, useClass: RedisLeaderboardStore },
   ],

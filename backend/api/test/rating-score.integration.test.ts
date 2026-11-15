@@ -19,6 +19,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, ratingRestrictions } from "./helpers/memory-runs.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Очки эффективности на настоящем Postgres (tasks/T-0293). Адрес — TEST_DATABASE_URL;
@@ -37,7 +38,7 @@ describe.skipIf(!live)("очки эффективности на живом Post
   let table: ExpectedTable;
 
   async function account(): Promise<AccountRef> {
-    const platformUserId = String(900_000_000 + Math.floor(Math.random() * 90_000_000));
+    const platformUserId = uniquePlatformUserId();
     const created = await accounts.upsert({ platform: "telegram", platformUserId, displayName: "Дым", username: null, photoUrl: null }, Date.now());
     return { accountId: created.accountId, platform: "telegram", platformUserId };
   }
