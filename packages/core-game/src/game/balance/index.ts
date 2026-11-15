@@ -1,6 +1,7 @@
 export * from "./bot";
 export * from "./build-complete";
 export * from "./expected";
+export * from "./movement";
 export * from "./power-profiles";
 export * from "./simulate";
 export * from "./stalker-flee";
