@@ -36,15 +36,19 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 93 модели, стирается 30", () => {
+  it("остаётся 93 модели, стирается 31", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
     expect(actions.filter((action) => action === "keep")).toHaveLength(93);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(30);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(31);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
     for (const model of ["PassProgress", "PassClaim", "BoostCredit"]) expect(plan[model]?.action, model).toBe("wipe");
     expect(plan.PassSeason?.action).toBe("keep");
+  });
+
+  it("живые карточки бота (T-0395, Р199) стираются: после вайпа состояние другое, карточки в чатах отвечают «устарела»", () => {
+    expect(plan.BotCard?.action).toBe("wipe");
   });
 
   it("контент игры на сервере (T-0303) остаётся: это правила игры, а не данные игроков", () => {
