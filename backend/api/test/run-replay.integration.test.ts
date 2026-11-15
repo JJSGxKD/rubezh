@@ -270,10 +270,12 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     await service.sweep();
 
     const row = await rowOf(run.runId);
-    expect(row).toMatchObject({ replay_verdict: "mismatch", replay_diverged_tick: 1800, verdict: "suspicious", verdict_reasons: ["replay_mismatch"], ranked: false });
+    expect(row).toMatchObject({ replay_verdict: "mismatch", replay_diverged_tick: 1800, verdict: "ok", verdict_reasons: [], ranked: true });
     expect(row?.replayed_at).not.toBeNull();
-    expect(await board.best("hard", account.accountId, "common")).toBeNull();
-    // Забег виден в очереди разбора, и исход читается пачкой.
+    expect(await board.best("hard", account.accountId, "common")).toBe(POINTS);
+    const proof = await keepUntil(run.runId);
+    expect((proof?.keep_until.getTime() ?? 0) - Date.now()).toBeGreaterThan((REPLAY_KEEP_DAYS - 1) * DAY_MS);
+    expect(events.some((event) => event.eventType === "run_replayed" && event.payload.runId === run.runId && event.payload.verdict === "mismatch" && event.payload.divergedTick === 1800)).toBe(true);
     expect((await service.outcomes([run.runId])).get(run.runId)).toEqual({ verdict: "mismatch", divergedTick: 1800 });
   }, TIMEOUT_MS);
 
@@ -318,6 +320,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
       answers.set(run.runId, { ...matchOf(run.runId), verdict: "mismatch", divergedTick: 600 });
       await service.onRecorded(run);
       await proofs.receive(account.accountId, run.runId, packed(run.runId));
+      await proofs.idle();
       await untilFinished(run.runId);
 
       await service.sweep();
@@ -334,6 +337,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     answers.set(run.runId, { runId: run.runId, verdict: "timeout", reason: "повтор не уложился в 60 с", divergedTick: null, replayed: null, durationMs: 60_000 });
     await service.onRecorded(run);
     await proofs.receive(account.accountId, run.runId, packed(run.runId));
+    await proofs.idle();
     await untilFinished(run.runId);
 
     await service.sweep();
@@ -352,7 +356,6 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     await service.sweep();
 
     expect(await rowOf(old.runId)).toMatchObject({ replay_verdict: "no_proof", verdict: "ok", ranked: true });
-      await proofs.idle();
     expect((await rowOf(fresh.runId))?.replay_verdict).toBe("pending");
     expect(events.some((event) => event.payload.runId === old.runId && event.payload.verdict === "no_proof")).toBe(true);
   }, TIMEOUT_MS);
@@ -369,7 +372,6 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
 
     expect(view.verdict).toBe("pending");
     expect(await rowOf(run.runId)).toMatchObject({ replay_verdict: "pending", replay_attempt: 1, replay_diverged_tick: null });
-    await proofs.idle();
     expect(await queue.has(jobIdOf(run.runId, 1))).toBe(true);
     // Журнал общий на файл: свою строку ищем по забегу, а не берём первую попавшуюся.
     const entry = roles.entries.find((candidate) => candidate.action === "players.run.replay" && (candidate.after as { runId?: string } | undefined)?.runId === run.runId);
@@ -385,11 +387,51 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     await expect(service.repeat(admin, run.runId)).rejects.toMatchObject({ status: 409 });
   }, TIMEOUT_MS);
 
-  it("потерянное задание (очередь очищена) ставится заново через полчаса", async () => {
+  it("воркер молчит 72 часа — timeout: проверки срок не сдвигают, отметка постановки прежняя, задание снято с очереди", async () => {
+    // Очередь, которую никто не слушает, — «молчащий воркер»; остальное — настоящие база и сервис.
+    const silent = new BullReplayQueue(config, `${queueName}-silent`);
+    const silentProofs = new RunProofsService(new PrismaRunProofsRepository(prisma));
+    const silentService = new RunReplayService(
+      new PrismaRunReplayRepository(prisma),
+      new PrismaRunProofsRepository(prisma),
+      silent,
+      { syncBoardsAfterReplay: () => Promise.resolve() },
+      { of: () => Promise.resolve(facts.value) },
+      settings,
+      new RolesService(config, roles, new MemoryAccountRepository()),
+    );
+    silentProofs.onStored("replay", (runId) => silentService.onProofStored(runId));
+    try {
+      const account = await player();
+      const run = await finishedRun(account);
+      await silentService.onRecorded(run);
+      await silentProofs.receive(account.accountId, run.runId, packed(run.runId));
+      await silentProofs.idle();
+      expect(await silent.has(jobIdOf(run.runId, 0))).toBe(true);
+      await prisma.$executeRaw`UPDATE run SET replay_queued_at = now() - interval '40 minutes' WHERE run_id = ${run.runId}`;
+      const queuedAt = (await rowOf(run.runId))?.replay_queued_at;
+
+      // Проверки идут, задание стоит в очереди — ничего не ставится заново и срок не уезжает.
+      await silentService.sweep();
+      await silentService.sweep();
+      expect(await rowOf(run.runId)).toMatchObject({ replay_verdict: "pending", replay_queued_at: queuedAt });
+
+      await prisma.$executeRaw`UPDATE run SET replay_queued_at = now() - interval '73 hours' WHERE run_id = ${run.runId}`;
+      await silentService.sweep();
+
+      expect(await rowOf(run.runId)).toMatchObject({ replay_verdict: "timeout", verdict: "ok", ranked: true });
+      expect(await silent.has(jobIdOf(run.runId, 0))).toBe(false);
+    } finally {
+      await silent.onModuleDestroy();
+    }
+  }, TIMEOUT_MS);
+
+  it("потерянное задание (очередь очищена) ставится заново через полчаса, отметка постановки прежняя", async () => {
     const account = await player();
     const run = await finishedRun(account);
     await service.onRecorded(run);
     await proofs.receive(account.accountId, run.runId, packed(run.runId));
+    await proofs.idle();
     await untilFinished(run.runId);
     await queue.remove(jobIdOf(run.runId, 0));
     await prisma.$executeRaw`UPDATE run SET replay_queued_at = now() - interval '40 minutes' WHERE run_id = ${run.runId}`;
@@ -402,4 +444,3 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перепроверк
     expect((await rowOf(run.runId))?.replay_verdict).toBe("match");
   }, TIMEOUT_MS);
 });
-    await proofs.idle();

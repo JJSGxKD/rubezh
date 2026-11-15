@@ -106,15 +106,16 @@ export interface RunReplayRepository {
    * можно только прибавить: повтор, ставший нужным позже (редкая добыча), её не теряет.
    */
   markPending(runId: string, required: boolean): Promise<boolean>;
-  /** занять постановку в очередь; возвращает номер попытки, `null` — занято другим или забег не ждёт */
+  /**
+   * занять постановку в очередь; возвращает номер попытки, `null` — занято другим или забег не ждёт.
+   * Отметка — время первой постановки: дальше она не сдвигается, от неё считается молчание воркера.
+   */
   claimQueue(runId: string, at: Date): Promise<number | null>;
   /** вернуть отметку постановки, если задание не поставилось (Redis недоступен): следующий проход повторит */
   releaseQueue(runId: string, at: Date): Promise<void>;
-  /** отодвинуть срок постановки, пока предыдущее значение не изменилось — одна реплика из нескольких */
-  requeue(runId: string, from: Date, to: Date): Promise<boolean>;
   /** ждущие постановки: запись пришла, задания нет; обязательные первыми */
   dueForQueue(limit: number): Promise<DueRun[]>;
-  /** поставлены до `before` и всё ещё ждут исхода */
+  /** поставлены до `before` и всё ещё ждут исхода, самые давние первыми */
   staleQueued(before: Date, limit: number): Promise<DueRun[]>;
   /** ждут исхода, закончились до `before`, а записи нет */
   withoutProof(before: Date, limit: number): Promise<string[]>;
@@ -187,11 +188,6 @@ export class PrismaRunReplayRepository implements RunReplayRepository {
 
   async releaseQueue(runId: string, at: Date): Promise<void> {
     await this.prisma.run.updateMany({ where: { runId, replayVerdict: "pending", replayQueuedAt: at }, data: { replayQueuedAt: null } });
-  }
-
-  async requeue(runId: string, from: Date, to: Date): Promise<boolean> {
-    const moved = await this.prisma.run.updateMany({ where: { runId, replayVerdict: "pending", replayQueuedAt: from }, data: { replayQueuedAt: to } });
-    return moved.count > 0;
   }
 
   async dueForQueue(limit: number): Promise<DueRun[]> {

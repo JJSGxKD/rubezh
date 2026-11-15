@@ -102,13 +102,6 @@ class MemoryReplayRepository implements RunReplayRepository {
     return Promise.resolve();
   }
 
-  requeue(runId: string, from: Date, to: Date): Promise<boolean> {
-    const found = this.rows.get(runId);
-    if (found === undefined || found.replayVerdict !== "pending" || found.replayQueuedAt?.getTime() !== from.getTime()) return Promise.resolve(false);
-    found.replayQueuedAt = to;
-    return Promise.resolve(true);
-  }
-
   dueForQueue(limit: number): Promise<DueRun[]> {
     const due = [...this.rows.values()].filter((found) => found.replayVerdict === "pending" && found.replayQueuedAt === null && this.proofs.has(found.runId));
     due.sort((a, b) => Number(b.replayRequired) - Number(a.replayRequired));
@@ -213,9 +206,12 @@ interface QueuedJob {
 class MemoryQueue implements ReplayQueue {
   readonly jobs = new Map<string, QueuedJob>();
   failAdd = false;
+  /** сколько раз сервис просил поставить задание (идемпотентные повторы входят) */
+  addCalls = 0;
 
   add(payload: ReplayJobPayload, options: { jobId: string; priority: number }): Promise<void> {
     if (this.failAdd) return Promise.reject(new Error("Redis недоступен"));
+    this.addCalls += 1;
     // Как BullMQ: тот же идентификатор второй раз — не новое задание.
     if (!this.jobs.has(options.jobId)) this.jobs.set(options.jobId, { payload, priority: options.priority, state: "waiting", result: null, failedReason: null });
     return Promise.resolve();
@@ -520,6 +516,10 @@ describe("исход: что сервер делает с забегом", () =>
 
   it("observe (умолчание) — расхождение только записано: исход, тик, запись 180 дней и событие; вердикт, причины, рейтинг и доски прежние", async () => {
     const { t, jobId } = await queued();
+    t.queue.complete(jobId, verdictOf("mismatch"));
+
+    await t.service.sweep();
+
     expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "mismatch", verdict: "ok", verdictReasons: [], ranked: true });
     expect(t.repository.results.get(RUN)).toMatchObject({ divergedTick: 1800, at: NOW });
     expect(t.unranked).toEqual([]);
@@ -568,10 +568,6 @@ describe("исход: что сервер делает с забегом", () =>
 
     await t.service.sweep();
 
-    t.queue.complete(jobId, verdictOf("mismatch"));
-
-    await t.service.sweep();
-
     expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "mismatch", verdict: "suspicious", verdictReasons: ["replay_mismatch"], ranked: false });
     expect(t.repository.results.get(RUN)).toMatchObject({ divergedTick: 1800, at: NOW });
     expect(t.unranked).toEqual([RUN]);
@@ -581,6 +577,10 @@ describe("исход: что сервер делает с забегом", () =>
   it("ключ replay.mismatch-verdict = rejected — отказ", async () => {
     const { t, jobId } = await queued({ [SETTINGS.replayMismatchVerdict.key]: "rejected" });
     t.queue.complete(jobId, verdictOf("mismatch"));
+    await t.service.sweep();
+    expect(t.repository.rows.get(RUN)).toMatchObject({ verdict: "rejected", ranked: false });
+  });
+
   it("повторное расхождение после «Повторить снова» — причина replay_mismatch в забеге одна", async () => {
     const { t, jobId } = await queued(SUSP_KEY);
     t.queue.complete(jobId, verdictOf("mismatch"));
@@ -594,10 +594,6 @@ describe("исход: что сервер делает с забегом", () =>
     expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "mismatch", verdict: "suspicious", verdictReasons: ["replay_mismatch"], ranked: false });
     // Из рейтинга забег ушёл в первый раз и во второй раз доски не пересчитываются.
     expect(t.unranked).toEqual([RUN]);
-  });
-
-    await t.service.sweep();
-    expect(t.repository.rows.get(RUN)).toMatchObject({ verdict: "rejected", ranked: false });
   });
 
   it("отказ, поставленный раньше, подозрением не смягчается", async () => {
@@ -634,14 +630,14 @@ describe("исход: что сервер делает с забегом", () =>
   });
 
   it("исход не по форме — тоже «broken»: чужой результат из Redis не кладётся в базу как есть", async () => {
-    const { t, jobId } = await queued(SUSP_KEY);
+    const { t, jobId } = await queued();
     t.queue.complete(jobId, { verdict: "банан" });
     await t.service.sweep();
     expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "broken", verdict: "ok" });
   });
 
   it("два воркера сервера снимают один исход одновременно: эффект один — одно снятие с рейтинга, одно событие", async () => {
-    const { t, jobId } = await queued();
+    const { t, jobId } = await queued(SUSP_KEY);
     t.queue.complete(jobId, verdictOf("mismatch"));
 
     await Promise.all([t.service.sweep(), t.service.sweep()]);
@@ -697,34 +693,127 @@ describe("тишина: нет записи, молчит воркер", () => {
     expect(t.logs.some((line) => line.includes("replay_outcome_total") && line.includes('"verdict":"no_proof"'))).toBe(true);
   });
 
-  it("запись есть, а воркер молчит 72 часа — «timeout»: наша сторона, вердикт прежний", async () => {
+  /** Проход раз в 30 минут, как при молчащем воркере: сколько проходов — столько и сдвигов часов. */
+  async function sweepEvery30Minutes(t: Setup, from: Date, hours: number, after?: () => void): Promise<void> {
+    for (let step = 1; step <= hours * 2; step += 1) {
+      t.clock.now = new Date(from.getTime() + step * 30 * 60_000);
+      await t.service.sweep();
+      after?.();
+    }
+  }
+
+  it("запись есть, а воркер молчит 72 часа — «timeout»: наша сторона, вердикт прежний, задание снято с очереди", async () => {
+    const t = setup();
+    t.repository.add({ replayVerdict: "pending", replayRequired: true });
+    await t.service.onProofStored(RUN);
+    expect(t.queue.ids).toEqual([jobIdOf(RUN, 0)]);
+
+    // Проход каждые 30 минут: до 71,5 часа ещё ждём, ровно через 72 — «timeout».
+    await sweepEvery30Minutes(t, NOW, 71.5);
+    expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "pending", replayQueuedAt: NOW });
+    expect(t.queue.ids).toEqual([jobIdOf(RUN, 0)]);
+
+    t.clock.now = new Date(NOW.getTime() + 72 * HOUR);
+    await t.service.sweep();
+
+    expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "timeout", verdict: "ok", ranked: true });
+    expect(t.queue.jobs.size).toBe(0);
+    expect(t.queue.addCalls).toBe(1);
+    expect(t.events.map((event) => event.payload.verdict)).toEqual(["timeout"]);
+  });
+
+  it("молчащий воркер и проход каждую минуту — тот же срок: отметка постановки не сдвигается", async () => {
+    const t = setup();
+    t.repository.add({ replayVerdict: "pending", replayRequired: false });
+    await t.service.onProofStored(RUN);
+    for (let minute = 1; minute <= 60; minute += 1) {
+      t.clock.now = new Date(NOW.getTime() + minute * 60_000);
+      await t.service.sweep();
+    }
+    expect(t.repository.rows.get(RUN)?.replayQueuedAt).toEqual(NOW);
+
+    t.clock.now = new Date(NOW.getTime() + 72 * HOUR - 60_000);
+    await t.service.sweep();
+    expect(t.repository.rows.get(RUN)?.replayVerdict).toBe("pending");
+    t.clock.now = new Date(NOW.getTime() + 72 * HOUR);
+    await t.service.sweep();
+    expect(t.repository.rows.get(RUN)?.replayVerdict).toBe("timeout");
+  });
+
+  it("запись есть, воркер молчит, а задание то и дело пропадает из очереди — «timeout» всё равно через 72 часа от первой постановки", async () => {
+    const t = setup();
+    t.repository.add({ replayVerdict: "pending", replayRequired: true });
+    await t.service.onProofStored(RUN);
+
+    await sweepEvery30Minutes(t, NOW, 72, () => t.queue.jobs.clear());
+
+    expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "timeout", verdict: "ok", ranked: true });
+    // Потерянное задание ставилось заново на каждом проходе, но срок от этого не уезжал.
+    expect(t.queue.addCalls).toBeGreaterThan(100);
+  });
+
+  it("запись есть, а воркер молчит 72 часа от постановки — «timeout» и без прохода посреди срока", async () => {
     const t = setup();
     t.repository.add({ replayVerdict: "pending", replayRequired: true, replayQueuedAt: new Date(NOW.getTime() - 73 * HOUR) });
     await t.service.sweep();
     expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "timeout", verdict: "ok", ranked: true });
   });
 
-  it("задание потеряно (Redis очищен) — через полчаса ставится заново под новым идентификатором", async () => {
+  it("задание потеряно (Redis очищен) — через полчаса ставится заново под тем же идентификатором, срок прежний", async () => {
     const t = setup();
     const queuedAt = new Date(NOW.getTime() - 40 * 60_000);
     t.repository.add({ replayVerdict: "pending", replayRequired: true, replayQueuedAt: queuedAt });
     await t.service.sweep();
-    expect(t.queue.jobs.size).toBe(1);
-    expect(t.repository.rows.get(RUN)?.replayQueuedAt).toEqual(NOW);
+    expect(t.queue.ids).toEqual([jobIdOf(RUN, 0)]);
+    expect(t.repository.rows.get(RUN)?.replayQueuedAt).toEqual(queuedAt);
+    expect(t.queue.addCalls).toBe(1);
+
+    // Следующий проход задание уже видит и второй раз не ставит.
+    t.clock.now = new Date(NOW.getTime() + 60_000);
+    await t.service.sweep();
+    expect(t.queue.addCalls).toBe(1);
   });
 
-  it("задание ещё стоит в очереди (воркер занят) — второго не ставим, срок просто отодвигается", async () => {
+  it("задание ещё стоит в очереди (воркер занят) — второго не ставим и срок не сдвигаем", async () => {
     const t = setup();
     t.repository.add({ replayVerdict: "pending", replayRequired: true });
     await t.service.onProofStored(RUN);
-    const first = t.repository.rows.get(RUN)?.replayQueuedAt;
-    expect(first).toEqual(NOW);
+    expect(t.repository.rows.get(RUN)?.replayQueuedAt).toEqual(NOW);
 
     t.clock.now = new Date(NOW.getTime() + 40 * 60_000);
     await t.service.sweep();
 
     expect(t.queue.jobs.size).toBe(1);
-    expect(t.repository.rows.get(RUN)?.replayQueuedAt?.getTime()).toBeGreaterThan(NOW.getTime());
+    expect(t.queue.addCalls).toBe(1);
+    expect(t.repository.rows.get(RUN)?.replayQueuedAt).toEqual(NOW);
+  });
+
+  it("Redis недоступен на повторной постановке — срок не сбрасывается, следующий проход ставит снова", async () => {
+    const t = setup();
+    t.repository.add({ replayVerdict: "pending", replayRequired: true, replayQueuedAt: new Date(NOW.getTime() - 40 * 60_000) });
+    t.queue.failAdd = true;
+    await t.service.sweep();
+    expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "pending", replayQueuedAt: new Date(NOW.getTime() - 40 * 60_000) });
+    expect(t.queue.jobs.size).toBe(0);
+
+    t.queue.failAdd = false;
+    t.clock.now = new Date(NOW.getTime() + 60_000);
+    await t.service.sweep();
+    expect(t.queue.ids).toEqual([jobIdOf(RUN, 0)]);
+  });
+
+  it("«Повторить снова» заводит срок молчания заново: новая попытка не наследует 72 часа прежней", async () => {
+    const t = setup();
+    t.repository.add({ replayVerdict: "pending", replayRequired: true });
+    await t.service.onProofStored(RUN);
+    await sweepEvery30Minutes(t, NOW, 72);
+    expect(t.repository.rows.get(RUN)?.replayVerdict).toBe("timeout");
+
+    await t.service.repeat(admin, RUN);
+    expect(t.repository.rows.get(RUN)).toMatchObject({ replayVerdict: "pending", replayAttempt: 1, replayQueuedAt: t.clock.now });
+    t.clock.now = new Date(t.clock.now.getTime() + 60 * 60_000);
+    await t.service.sweep();
+    expect(t.repository.rows.get(RUN)?.replayVerdict).toBe("pending");
   });
 });
 
@@ -842,7 +931,7 @@ describe("«Повторить снова»", () => {
   });
 
   it("новый исход после повтора снова применяется: был «timeout», стал «mismatch»", async () => {
-    const t = setup();
+    const t = setup(SUSP_KEY);
     t.repository.add({ replayVerdict: "timeout", replayRequired: true });
     await t.service.repeat(admin, RUN);
     t.queue.complete(t.queue.ids[0] ?? "", verdictOf("mismatch"));
@@ -898,7 +987,7 @@ describe("чтение для панели", () => {
 
 describe("страховка слушателя", () => {
   it("сбой базы при решении не роняет приём забега: слушатель ловит ошибку, ответ игроку уже ушёл", async () => {
-    const t = setup(SUSP_KEY);
+    const t = setup();
     vi.spyOn(t.repository, "markPending").mockRejectedValueOnce(new Error("база недоступна"));
     t.repository.add();
     t.facts.value = { ...ordinary, boardPlace: 1 };

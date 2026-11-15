@@ -267,25 +267,32 @@ export class RunReplayService {
     const at = this.environment.now();
     const attempt = await this.repository.claimQueue(runId, at);
     if (attempt === null) return false;
-    await this.submit(row, attempt, stored.proof, byModerator, at);
+    const result = await this.submit(row, attempt, stored.proof, byModerator);
+    // Задание не встало (Redis недоступен) — отметка снимается, и следующий проход ставит его заново; срок молчания воркера отсчитывается от удачной постановки.
+    if (result === "failed") await this.repository.releaseQueue(runId, at);
     return true;
   }
 
-  /** Собрать задание и отдать очереди; недоступная очередь — снять отметку, чтобы следующий проход повторил. */
-  private async submit(row: ReplayRunRow, attempt: number, packed: Uint8Array, byModerator: boolean, claimedAt: Date): Promise<void> {
+  /**
+   * Собрать задание и отдать очереди. `queued` — задание в очереди (или уже стояло под тем же
+   * идентификатором); `failed` — очередь недоступна, решать вызывающему; `broken` — запись не
+   * читается, исход уже записан. Отметку постановки здесь не трогаем: от неё зависит срок молчания.
+   */
+  private async submit(row: ReplayRunRow, attempt: number, packed: Uint8Array, byModerator: boolean): Promise<"queued" | "failed" | "broken"> {
     let payload: ReplayJobPayload;
     try {
       payload = await this.payloadOf(row, packed);
     } catch (error: unknown) {
       // Запись прошла проверку при приёме, поэтому нечитаемой она быть не может — разве что хранилище повреждено. Это не вина игрока.
       await this.apply(row, attempt, { verdict: "broken", reason: `запись не читается: ${error instanceof Error ? error.message.slice(0, 120) : "неизвестная ошибка"}`, divergedTick: null, replayed: null, durationMs: 0 });
-      return;
+      return "broken";
     }
     try {
       await this.queue.add(payload, { jobId: jobIdOf(row.runId, attempt), priority: jobPriorityOf({ required: row.replayRequired, byModerator }) });
+      return "queued";
     } catch (error: unknown) {
-      await this.repository.releaseQueue(row.runId, claimedAt);
       this.note("replay_enqueue_failed", { runId: row.runId, reason: error instanceof Error ? error.message.slice(0, 200) : "unknown" }, "warn");
+      return "failed";
     }
   }
 
@@ -340,9 +347,14 @@ export class RunReplayService {
   }
 
   /**
-   * Поставлены давно, а исхода нет: задание могло пропасть (Redis очищен) или стоять в
-   * очереди за другими. Тот же идентификатор в очереди — не новое задание, поэтому постановку
-   * просто повторяем; воркер молчит дольше срока — `timeout`, наша сторона.
+   * Поставлены давно, а исхода нет. Отметка постановки (`replay_queued_at`) — когда задание
+   * встало в очередь впервые, и **не сдвигается**: от неё считается молчание воркера, и сдвиг
+   * при каждой проверке делал бы `timeout` недостижимым. Что с заданием, решает очередь:
+   * - стоит там (воркер занят или молчит) — ничего не делаем;
+   * - пропало (Redis очищен) — ставим заново под тем же идентификатором, отметка прежняя;
+   * - молчит дольше срока — `timeout`, наша сторона, и задание с записью до 2 МБ уходит из Redis.
+   * Проход идёт от самых давних: кончившийся срок разбирается первым, а живые задания
+   * проверяются одним чтением Redis на строку, не больше 200 строк за проход.
    */
   private async requeueStale(): Promise<number> {
     const now = this.environment.now();
@@ -350,18 +362,17 @@ export class RunReplayService {
     for (const due of await this.repository.staleQueued(new Date(now.getTime() - REPLAY_REQUEUE_MINUTES * MINUTE_MS), BATCH)) {
       if (due.queuedAt === null) continue;
       const row = await this.repository.find(due.runId);
-      if (row === null) continue;
+      // Пока читали, исход мог лечь или модератор нажал «Повторить снова»: чужую попытку не трогаем.
+      if (row === null || row.replayVerdict !== "pending" || row.replayAttempt !== due.attempt) continue;
       if (now.getTime() - due.queuedAt.getTime() >= REPLAY_SILENT_HOURS * HOUR_MS) {
         const reason = `воркер не ответил за ${String(REPLAY_SILENT_HOURS)} ч`;
         if (await this.apply(row, due.attempt, { verdict: "timeout", reason, divergedTick: null, replayed: null, durationMs: 0 })) await this.queue.remove(jobIdOf(due.runId, due.attempt));
         continue;
       }
-      // Срок отодвигается условно: из нескольких реплик ставит одна.
-      if (!(await this.repository.requeue(due.runId, due.queuedAt, now))) continue;
+      if (await this.queue.has(jobIdOf(due.runId, due.attempt))) continue;
       const stored = await this.proofs.find(due.runId);
       if (stored === null) continue;
-      await this.submit(row, due.attempt, stored.proof, false, now);
-      requeued += 1;
+      if ((await this.submit(row, due.attempt, stored.proof, false)) === "queued") requeued += 1;
     }
     return requeued;
   }
