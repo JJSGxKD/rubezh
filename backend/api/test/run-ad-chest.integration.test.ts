@@ -33,7 +33,7 @@ const MINUTE = 60_000;
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 const at = (minutes: number) => new Date(NOON.getTime() + minutes * MINUTE);
 const CAP_KEY = "ads.rewarded.daily-cap";
-const PLACES: readonly AdPlace[] = ["clad_chest", "run_double"];
+const PLACES: readonly AdPlace[] = ["clad_chest", "run_double", "card_reroll", "second_chance"];
 
 /**
  * Сессии пишутся в живую базу, а блоки для выдачи берутся из памяти: готовность
@@ -210,8 +210,8 @@ describe.skipIf(DATABASE_URL === "")("второй сундук клада на 
     const { ads, passes, service } = stack(panelSettings({ [CAP_KEY]: 2 }));
     // Сессия сундука выдана, пока кап свободен; потом два других ролика заняли кап.
     const chest = await watched(me, "clad_chest");
-    await ads.claim(me, await watched(me, "run_double"), "run_double", at(1));
-    await ads.claim(me, await watched(me, "run_double"), "run_double", at(1));
+    await ads.claim(me, await watched(me, "card_reroll"), "card_reroll", at(1));
+    await ads.claim(me, await watched(me, "second_chance"), "second_chance", at(1));
 
     expect(await service.view(player(me), runId, at(2))).toEqual({ status: "unavailable", reason: "daily_cap" });
     await expect(service.claim(player(me), runId, chest, at(2))).rejects.toMatchObject({ code: "ad_daily_cap", status: 409 });
