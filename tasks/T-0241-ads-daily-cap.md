@@ -11,6 +11,7 @@ depends_on: [T-0199]
 zones:
   - backend/api/test/ads-daily-cap.test.ts
   - backend/api/test/ads-daily-cap.integration.test.ts
+  - backend/api/test/ads.test.ts
 shared:
   - backend/api/src/modules/ads/ads-rules.ts
   - backend/api/src/modules/ads/ads.service.ts
