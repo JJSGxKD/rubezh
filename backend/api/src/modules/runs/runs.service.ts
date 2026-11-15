@@ -17,6 +17,7 @@ import { isRatedDifficulty, type Difficulty, type RunMode } from "./run-rules.js
 import { judgeRun, rubezhClaimsWin, rubezhWinOf, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
 import { RatingRestrictions, boardsOf } from "./rating-restrictions.js";
 import { RUNS_REPOSITORY, type RatingRestricted, type RunsRepository } from "./runs.repository.js";
+import { RunAdChestService } from "./run-ad-chest.service.js";
 import { RunAdRerollService } from "./run-ad-reroll.service.js";
 import { RunContinues } from "./run-continues.js";
 import { RunLoadouts } from "./run-loadouts.js";
@@ -101,6 +102,8 @@ export class RunsService {
     @Optional() @Inject(RunScorer) private readonly scorer: RunScorer | null = null,
     // Книга рекламных перебросов (T-0199). Без неё заявленный переброс — без подтверждения.
     @Optional() private readonly adRerolls?: RunAdRerollService,
+    // Книга вторых сундуков клада (T-0327). Без неё заявленный второй сундук — без подтверждения.
+    @Optional() private readonly adChests?: RunAdChestService,
   ) {}
 
   /** Старт забега: сервер ставит свою отметку времени. Повтор из очереди — не ошибка. */
@@ -128,12 +131,15 @@ export class RunsService {
     if (existing?.status === "finished") return await this.replay(account, run.runId);
 
     const adRerolls = run.adRerolls ?? 0;
-    const [paid, loadout, boosts, paidAdRerolls] = await Promise.all([
+    const adChests = run.adChests;
+    const [paid, loadout, boosts, paidAdRerolls, paidAdChests] = await Promise.all([
       this.continues.check(run.runId, run.continues),
       this.loadouts.check(account.accountId, run.loadout),
       this.loadouts.checkBoosts(account.accountId, run.runId, run.boosts),
       // Заявлен рекламный переброс — сверяем с книгой показов; без сервиса книги подтверждённых нет.
       adRerolls === 0 ? Promise.resolve(0) : (this.adRerolls?.paid(run.runId, adRerolls) ?? Promise.resolve(0)),
+      // То же для второго сундука клада: заявлен — сверяем с книгой показов.
+      adChests === 0 ? Promise.resolve(0) : (this.adChests?.paid(run.runId, adChests) ?? Promise.resolve(0)),
     ]);
     const counters = countersOf(run.stats);
     const mode = await this.modeOf(account, run.mode, run.difficultyId);
@@ -156,6 +162,8 @@ export class RunsService {
         underpaidContinues: paid.underpaid,
         adRerolls,
         paidAdRerolls,
+        adChests,
+        paidAdChests,
         cheats: run.cheats,
         loadout,
         boosts,
