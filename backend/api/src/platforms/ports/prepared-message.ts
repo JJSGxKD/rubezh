@@ -15,6 +15,13 @@ export interface PreparedMessageInput {
   /** простой текст сообщения — без разметки: её ломает имя игрока */
   text: string;
   button: { text: string; url: string };
+  /**
+   * Публичный адрес картинки (`modules/cards`): площадка, умеющая крупный
+   * предпросмотр, кладёт её над текстом; не умеющая — шлёт текст без картинки.
+   * Адрес должен открываться без входа; предпросмотр берёт и PNG, в отличие
+   * от фото по адресу, которое Telegram принимает только JPEG.
+   */
+  imageUrl?: string;
 }
 
 export interface PreparedMessage {
