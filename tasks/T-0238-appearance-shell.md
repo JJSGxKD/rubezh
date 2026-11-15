@@ -28,6 +28,7 @@ shared:
   - packages/app-shell/src/screens/meta/arsenal.tsx
   - packages/app-shell/src/screens/meta/profile.tsx
   - packages/app-shell/src/screens/meta/rating.tsx
+  - packages/app-shell/src/screens/meta/rating-podium.tsx
   - packages/app-shell/src/screens/meta/friends-parts.tsx
   - packages/app-shell/src/state/runs-api.ts
   - packages/app-shell/src/state/friends-api.ts
