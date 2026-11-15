@@ -59,6 +59,8 @@ export type RollbackOutcome =
   | { outcome: "ok"; previousVersionNo: number | null; changed: boolean }
   | { outcome: "no_version" }
   | { outcome: "not_published" }
+  /** «Всем» откатывают на версию, которую у всех не бывало, — её видела только команда */
+  | { outcome: "team_only" }
   | { outcome: "nothing_published" };
 
 /** Что дописать в черновик: новый снимок и основа, на которую он теперь опирается. */
@@ -82,18 +84,29 @@ export interface ContentPublishRepository {
    * указатель, уже стоящий на ней, не трогает.
    */
   publish(input: PublishInput): Promise<PublishOutcome>;
-  /** Указатель аудитории — на версию, которая уже бывала в игре. Новой версии не заводит. */
+  /**
+   * Указатель аудитории — на версию, которая уже бывала в игре у неё: «Команде» —
+   * у команды или у всех, «Всем» — только у всех (`released_all_at`). Откат «Всем»
+   * на версию «только команде» был бы публикацией в обход окна «Всем». Новой
+   * версии не заводит.
+   */
   rollback(input: { audience: Audience; versionNo: number; setBy: string; now: Date }): Promise<RollbackOutcome>;
   /**
    * Версия «из кода» после выката: становится текущей у каждой аудитории,
    * чья текущая версия — тоже из кода (или её нет). Остальное — «рядом».
-   * Возвращает аудитории, у которых указатель сдвинулся.
+   * Возвращает аудитории, у которых указатель сдвинулся; «бывала у всех»
+   * отмечается, только если среди них `all`.
    */
   adopt(versionNo: number, now: Date): Promise<Audience[]>;
   /** последняя версия «из кода»: ту, что ждёт рядом, «Взять из кода» и сливает */
   latestRepoVersion(): Promise<ContentVersionSummary | null>;
-  /** последняя из бывших в игре версий не новее `maxVersionNo`, чья схема не выше клиентской */
-  compatibleUpTo(maxVersionNo: number, schema: number): Promise<ContentVersionSummary | null>;
+  /**
+   * Версия для клиента со схемой `schema`: сама версия указателя аудитории
+   * (`pointerVersionNo`), если клиент её понимает, иначе — последняя из бывших
+   * у всех версий не новее неё. Версия «только команде» запасным путём не
+   * выдаётся: игрок получил бы то, что команда смотрела и, возможно, отвергла.
+   */
+  compatibleUpTo(pointerVersionNo: number, schema: number): Promise<ContentVersionSummary | null>;
   /** снимок версии, которая бывала в игре, по хэшу; остальные версии клиенту не отдаются */
   publishedSnapshot(contentHash: string): Promise<{ contentHash: string; snapshot: unknown } | null>;
   /**
@@ -103,7 +116,7 @@ export interface ContentPublishRepository {
   mergeDraft(draftId: string, at: Date, compute: (current: DraftRebase) => DraftRebase | null): Promise<DraftMergeOutcome>;
 }
 
-const VERSION_SUMMARY = { versionNo: true, contentHash: true, schemaVersion: true, source: true, createdBy: true, createdAt: true, publishedAt: true } as const;
+const VERSION_SUMMARY = { versionNo: true, contentHash: true, schemaVersion: true, source: true, createdBy: true, createdAt: true, publishedAt: true, releasedAllAt: true } as const;
 
 interface VersionRow {
   versionNo: number;
@@ -113,6 +126,7 @@ interface VersionRow {
   createdBy: string | null;
   createdAt: Date;
   publishedAt: Date | null;
+  releasedAllAt: Date | null;
 }
 
 function toSummary(row: VersionRow): ContentVersionSummary {
@@ -154,9 +168,15 @@ export class PrismaContentPublishRepository implements ContentPublishRepository 
         WHERE NOT EXISTS (SELECT 1 FROM content_version WHERE content_hash = ${input.contentHash})
         ON CONFLICT (content_hash) DO NOTHING
         RETURNING version_no`;
-      let row = await tx.contentVersion.findUniqueOrThrow({ where: { contentHash: input.contentHash }, select: VERSION_SUMMARY });
       // Версия без отметки публикации в игре не бывала; публикуя, отмечаем — иначе на неё нельзя будет откатиться.
-      if (row.publishedAt === null) row = await tx.contentVersion.update({ where: { versionNo: row.versionNo }, data: { publishedAt: input.now }, select: VERSION_SUMMARY });
+      // «Всем» отмечает ещё и «бывала у всех», «Команде» — нет. Отметки ставятся одним выражением над текущей строкой,
+      // а не записью прочитанного: две публикации одного снимка («Команде» и «Всем» разом) не затрут друг другу отметку.
+      const reachesAll = input.audiences.includes("all");
+      await tx.$executeRaw`
+        UPDATE content_version SET published_at = COALESCE(published_at, ${input.now}::timestamptz),
+               released_all_at = CASE WHEN ${reachesAll}::boolean THEN COALESCE(released_all_at, ${input.now}::timestamptz) ELSE released_all_at END
+        WHERE content_hash = ${input.contentHash} AND (published_at IS NULL OR (${reachesAll}::boolean AND released_all_at IS NULL))`;
+      const row = await tx.contentVersion.findUniqueOrThrow({ where: { contentHash: input.contentHash }, select: VERSION_SUMMARY });
 
       const previous: Record<Audience, number | null> = { team: null, all: null };
       const moved: Audience[] = [];
@@ -175,9 +195,11 @@ export class PrismaContentPublishRepository implements ContentPublishRepository 
 
   async rollback(input: { audience: Audience; versionNo: number; setBy: string; now: Date }): Promise<RollbackOutcome> {
     return await this.prisma.$transaction(async (tx) => {
-      const target = await tx.contentVersion.findUnique({ where: { versionNo: input.versionNo }, select: { publishedAt: true } });
+      const target = await tx.contentVersion.findUnique({ where: { versionNo: input.versionNo }, select: { publishedAt: true, releasedAllAt: true } });
       if (target === null) return { outcome: "no_version" } as const;
       if (target.publishedAt === null) return { outcome: "not_published" } as const;
+      // «Бывала в игре» у аудиторий разное: команде годится всё, что видели она или все, «Всем» — только то, что видели все.
+      if (input.audience === "all" && target.releasedAllAt === null) return { outcome: "team_only" } as const;
 
       const own = await this.lockedPointer(tx, input.audience);
       // Команда без своего указателя играет версией «всем»: откатывается она от неё.
@@ -213,7 +235,14 @@ export class PrismaContentPublishRepository implements ContentPublishRepository 
           adopted.push(audience);
         }
       }
-      if (adopted.length > 0) await tx.$executeRaw`UPDATE content_version SET published_at = COALESCE(published_at, ${now}::timestamptz) WHERE version_no = ${versionNo}`;
+      if (adopted.length > 0) {
+        // Версию, подхваченную одним указателем команды, у всех не бывало: откат «Всем» на неё остаётся закрытым.
+        const toAll = adopted.includes("all");
+        await tx.$executeRaw`
+          UPDATE content_version SET published_at = COALESCE(published_at, ${now}::timestamptz),
+                 released_all_at = CASE WHEN ${toAll}::boolean THEN COALESCE(released_all_at, ${now}::timestamptz) ELSE released_all_at END
+          WHERE version_no = ${versionNo}`;
+      }
       return adopted;
     });
   }
@@ -223,9 +252,15 @@ export class PrismaContentPublishRepository implements ContentPublishRepository 
     return row === null ? null : toSummary(row);
   }
 
-  async compatibleUpTo(maxVersionNo: number, schema: number): Promise<ContentVersionSummary | null> {
+  async compatibleUpTo(pointerVersionNo: number, schema: number): Promise<ContentVersionSummary | null> {
     const row = await this.prisma.contentVersion.findFirst({
-      where: { publishedAt: { not: null }, versionNo: { lte: maxVersionNo }, schemaVersion: { lte: schema } },
+      where: {
+        publishedAt: { not: null },
+        versionNo: { lte: pointerVersionNo },
+        schemaVersion: { lte: schema },
+        // Сама версия указателя годится всегда (команда смотрит свою), запасные — только те, что бывали у всех.
+        OR: [{ versionNo: pointerVersionNo }, { releasedAllAt: { not: null } }],
+      },
       orderBy: { versionNo: "desc" },
       select: VERSION_SUMMARY,
     });

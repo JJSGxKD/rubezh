@@ -179,13 +179,20 @@ export class ContentPublishService {
     });
   }
 
-  /** Откат: указатель аудитории — на версию, которая уже бывала в игре. Новой версии не заводит. */
+  /**
+   * Откат: указатель аудитории — на версию, которая уже бывала в игре у неё.
+   * «Команде» годится версия, что видели команда или все; «Всем» — только та,
+   * что уже бывала у всех. Новой версии не заводит.
+   */
   async rollback(actor: AccountRef, input: { audience: Audience; versionNo: number }, now = new Date()): Promise<RollbackResult> {
     await this.roles.require(actor, "content.publish");
     return await this.withLock(async () => {
       const outcome = await this.publications.rollback({ ...input, setBy: actor.accountId, now });
       if (outcome.outcome === "no_version") throw new ContentVersionNotFoundError();
       if (outcome.outcome === "not_published") throw new ContentRollbackInvalidError(`Версия v${String(input.versionNo)} не публиковалась — откатиться можно только на ту, что была в игре`);
+      if (outcome.outcome === "team_only") {
+        throw new ContentRollbackInvalidError(`Версия v${String(input.versionNo)} была только у команды — у всех её не бывало, откатом «Всем» её не вернуть: её выкатывает публикация «Всем» с подтверждением`);
+      }
       if (outcome.outcome === "nothing_published") throw new ContentRollbackInvalidError("Откатывать нечего: версию для всех ещё не публиковали");
       if (outcome.changed) {
         await this.roles.audit({

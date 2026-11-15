@@ -19,7 +19,7 @@ export class ContentPublishBusyError extends DomainError {
   }
 }
 
-/** Версия не годится целью отката: её не было в игре, а у «Всем» — нечего откатывать. */
+/** Версия не годится целью отката: её не было в игре (или у «Всем» — видела только команда), а у «Всем» нечего откатывать. */
 export class ContentRollbackInvalidError extends DomainError {
   constructor(message: string) {
     super("content_rollback_invalid", message, 409);
