@@ -187,6 +187,21 @@ export const EVENT_DICTIONARY = {
       strengthBand: id,
     }),
   },
+  // Серверное событие: сервер перепроверил забег повтором (tasks/T-0319, WP5). `verdict` —
+  // исход, `divergedTick` — тик первого расхождения (у остальных исходов `null`),
+  // `durationMs` — сколько считал повтор (у `no_proof` нуль), `clientOs` — площадка
+  // клиента по последней сессии игрока: по ней видно, где движок сервера расходится с
+  // клиентским. Шлёт только сервер, клиент его не пишет.
+  run_replayed: {
+    version: 1,
+    payload: payload({
+      runId: id,
+      verdict: z.enum(["match", "mismatch", "content_mismatch", "not_replayable", "broken", "timeout", "no_proof"]),
+      divergedTick: count.nullable(),
+      durationMs: count,
+      clientOs: z.enum(["ios", "android", "desktop", "web", "unknown"]),
+    }),
+  },
   run_abandoned: { version: 1, payload: runOutcome },
   // Серверное событие: бот отправил игроку сообщение (tasks/T-0394, Р199).
   // `format` — как сообщение задумано, `outcome` — чем кончилось: `fallback` —
