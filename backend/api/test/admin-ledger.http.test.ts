@@ -815,7 +815,7 @@ describe("журнал учёта в панели по HTTP", () => {
     ]);
   });
 
-  it.each(["status=done", "kind=payout", "limit=0", "limit=101", "limit=abc", "unknown=1", "cursor=%20%20", "status=draft&status=posted"])("список: некорректный запрос %s — 400", async (query) => {
+  it.each(["status=done", "kind=gift", "limit=0", "limit=101", "limit=abc", "unknown=1", "cursor=%20%20", "status=draft&status=posted"])("список: некорректный запрос %s — 400", async (query) => {
     const ctx = await start();
     const finance = await ctx.staff("985", "Финансы", "finance");
 
