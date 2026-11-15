@@ -40,6 +40,7 @@ shared:
   - backend/api/test/wipe-plan.test.ts
   - backend/api/test/admin-my-project.http.test.ts
   - backend/api/test/helpers/memory-payouts.ts
+  - backend/api/test/route-permissions.test.ts
   - packages/app-shell/src/screens/meta/notifications.tsx
   - packages/app-shell/src/i18n/ru-account.json
   - packages/app-shell/test/notifications.test.ts
