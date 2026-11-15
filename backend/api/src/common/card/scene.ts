@@ -113,16 +113,19 @@ export function clampLines(lines: readonly string[], max: number, size: number, 
   });
 }
 
-/** Плашка: поля 8 × 20, радиус до круга, контур и подпись одного тона. */
-function badgePill(x: number, y: number, badge: SceneBadge): { svg: string; bottom: number } {
+/**
+ * Плашка: поля 8 × 20, радиус до круга, контур и подпись одного тона. Знак без
+ * глифа в Russo One (★, эмодзи) переводит на запасной шрифт всю строку, а не
+ * один знак, — подпись плашки лучше писать без таких знаков.
+ */
+function badgePill(x: number, y: number, badge: SceneBadge): string {
   const color = toneColor(badge.tone ?? "elite");
   const width = estimateWidth(badge.text, BADGE_SIZE, true) + 40;
   const height = BADGE_SIZE + 16;
-  const svg = [
+  return [
     `<rect x="${round(x)}" y="${round(y)}" width="${round(width)}" height="${height}" rx="${height / 2}" fill="${color}" fill-opacity="0.18" stroke="${color}" stroke-opacity="0.6" stroke-width="2"/>`,
     text(x + 20, y + 8 + BADGE_SIZE * 0.85, badge.text, { size: BADGE_SIZE, fill: color, heading: true }),
   ].join("");
-  return { svg, bottom: y + height };
 }
 
 /**
@@ -148,8 +151,7 @@ export function heroScene(input: HeroSceneInput): string {
   }
 
   if (input.badge !== undefined) {
-    const pill = badgePill(SCENE_PAD, top + 28, input.badge);
-    parts.push(pill.svg);
+    parts.push(badgePill(SCENE_PAD, top + 28, input.badge));
   }
 
   return svgDocument(SCENE_WIDTH, SCENE_HEIGHT, parts);
