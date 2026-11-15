@@ -3320,6 +3320,8 @@ enum LedgerOperationKind {
   income
   loan
   reversal
+  /// выплата за закрытый месяц: участнику, владельцу, налог, транш займа (Р222, tasks/T-0469)
+  payout
 }
 
 /// draft — черновик (в том числе из шаблона), pending — ждёт второго ключа (tasks/T-0462), posted — проведена,
@@ -3357,11 +3359,17 @@ model LedgerOperation {
   /// шаблон повторяющегося расхода, из которого создан черновик, и период «ГГГГ-ММ»: на период один черновик
   templateId     String?               @map("template_id") @db.VarChar(64)
   templatePeriod String?               @map("template_period") @db.Char(7)
+  /// у выплаты: кому — `stakeholder:<аккаунт>`, `owner`, `tax`, `loan:<заём>`; месяц отчёта «ГГГГ-ММ», за который платят,
+  /// и причина решения владельца (участник молчит дольше срока или оспорил отчёт); у остальных видов пусто (tasks/T-0469)
+  payee          String?               @db.VarChar(96)
+  payoutPeriod   String?               @map("payout_period") @db.Char(7)
+  overrideReason String?               @map("override_reason") @db.VarChar(500)
 
   loan LedgerLoan?
 
   @@unique([templateId, templatePeriod])
   @@index([status, createdAt])
+  @@index([payoutPeriod])
   @@map("ledger_operation")
 }
 
@@ -3514,4 +3522,27 @@ model SecretFound {
 
   @@id([accountId, kind])
   @@map("secret_found")
+}
+
+// Подтверждение отчёта участником (docs/37-accounting.md §13, Р222, tasks/T-0469)
+
+enum LedgerConfirmationStatus {
+  confirmed
+  disputed
+}
+
+/// Решение участника по отчёту закрытого месяца: подтвердил или оспорил (с комментарием). Одно на участника и месяц,
+/// пока ему не выплачено, его можно поменять. Снятие закрытия стирает подтверждения месяца; подтверждение, данное
+/// раньше последнего закрытия, не считается (сверка — по `decided_at` и `ledger_period.closed_at`). Без внешнего ключа,
+/// как весь учёт: он переживает аккаунты.
+model LedgerConfirmation {
+  period    String                   @db.Char(7)
+  accountId String                   @map("account_id") @db.Uuid
+  status    LedgerConfirmationStatus
+  /// у спора обязателен (3…1000 знаков), у подтверждения — по желанию
+  comment   String?                  @db.VarChar(1000)
+  decidedAt DateTime                 @map("decided_at") @db.Timestamptz(3)
+
+  @@id([period, accountId])
+  @@map("ledger_confirmation")
 }

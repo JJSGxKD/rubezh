@@ -2,6 +2,8 @@ import { Decimal, fromMinorUnits, isCurrencyCode } from "@bh/fx";
 import { formatMinor, periodOf } from "@bh/ledger";
 import { ChartRuleError, feeOf, slugify } from "../ledger-chart.js";
 import { currencySpec } from "../ledger-currencies.js";
+import { buildPayout } from "../payouts/payout-builder.js";
+import type { PayoutFacts } from "../payouts/payout-rules.js";
 import { Assembly, minorOf, parseAt, placesIn, type BuildResult, type ChartPlace, type OperationsChart } from "./builder-kit.js";
 import type { BuildableInput, FeeBody, OperationInput, OperationInputOf } from "./operation-input.js";
 
@@ -136,9 +138,9 @@ function buildLoan(a: Assembly, input: OperationInputOf<"loan">): BuildResult {
 /**
  * Собрать проводку операции. Ничего не пишет: на выходе проводка с ключом `op:<id>`, счета, которые нужно завести
  * до записи, условия займа и оценка в долларах — или все найденные проблемы разом, чтобы человек исправил их за
- * один заход.
+ * один заход. Выплате нужны данные закрытого месяца (`payout`): их загружает сервис, сборщик остаётся чистой функцией.
  */
-export function buildOperation(operationId: string, input: BuildableInput, chart: OperationsChart, now: Date): BuildResult {
+export function buildOperation(operationId: string, input: BuildableInput, chart: OperationsChart, now: Date, payout?: PayoutFacts): BuildResult {
   const assembly = new Assembly(operationId, input, chart, now);
   switch (input.kind) {
     case "transfer":
@@ -151,6 +153,8 @@ export function buildOperation(operationId: string, input: BuildableInput, chart
       return buildIncome(assembly, input);
     case "loan":
       return buildLoan(assembly, input);
+    case "payout":
+      return buildPayout(assembly, input, payout);
   }
 }
 
