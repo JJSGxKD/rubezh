@@ -3,7 +3,7 @@ id: T-0403
 title: Оформленные рассылки — сервер — ограниченный Markdown, разбор в RichDocument, запуск только после теста себе
 epic: E5
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -22,7 +22,10 @@ zones:
 shared:
   - backend/api/prisma/schema.prisma
   - backend/api/test/broadcasts.integration.test.ts
+  - backend/api/test/admin-overview.test.ts
+  - backend/api/test/admin-pulse.test.ts
   - docs/29-admin-panel.md
+  - docs/21-diagrams.md
 runner: any
 executor: sonnet-5.5
 effort: extra
