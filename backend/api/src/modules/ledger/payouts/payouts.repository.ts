@@ -26,7 +26,10 @@ export interface PayoutsRepository {
   clearConfirmations(period: string): Promise<number>;
   /** Кредитовое сальдо счёта обязательства: сколько ещё записано долгом (минус сумма строк). */
   debtBalance(accountId: string): Promise<bigint>;
-  /** Проведённые и не сторнированные выплаты месяца. */
+  /**
+   * Выплаты месяца, по которым деньги записаны в журнал и сторно нет — и проведённые, и те, у кого проводка `op:<id>` уже
+   * лежит, а отметки «проведена» ещё нет (сбой между ними): считать их неоплаченными значило бы заплатить дважды.
+   */
   payoutsOf(period: string): Promise<PayoutRecord[]>;
   /** По месяцу была выплата: проведённая операция или проводка `op:<id>` в журнале (сбой между ними). */
   hasPayouts(period: string): Promise<boolean>;
@@ -94,10 +97,10 @@ export class PrismaPayoutsRepository implements PayoutsRepository {
         SELECT o.operation_id::text AS "operationId", o.payout_period AS "period", o.payee AS "payee", l.account_id AS "accountId",
                a.currency AS "currency", l.amount::text AS "minor", o.override_reason AS "overrideReason", e.at AS "at"
         FROM ledger_operation o
-        JOIN ledger_entry e ON e.source_key = o.source_key
+        JOIN ledger_entry e ON e.source_key = 'op:' || o.operation_id::text
         JOIN ledger_line l ON l.entry_id = e.entry_id
         JOIN ledger_account a ON a.account_id = l.account_id
-        WHERE o.kind = 'payout' AND o.status = 'posted' AND o.payout_period = ${period}
+        WHERE o.kind = 'payout' AND o.payout_period = ${period}
           AND l.amount > 0 AND a.type IN ('liability', 'equity')
           AND NOT EXISTS (SELECT 1 FROM ledger_entry r WHERE r.reversal_of = e.entry_id)
         ORDER BY e.at, o.operation_id`,

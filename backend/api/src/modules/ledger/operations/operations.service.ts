@@ -342,7 +342,7 @@ export class OperationsService {
   /** Сборка проводки: выплате сервис сначала читает данные закрытого месяца — сборщик остаётся чистой функцией. */
   private async build(operationId: string, input: BuildableInput, chart: OperationsChart, now: Date): Promise<BuildResult> {
     if (input.kind !== "payout") return buildOperation(operationId, input, chart, now);
-    return buildOperation(operationId, input, chart, now, await this.payoutSupport().facts(input, now));
+    return buildOperation(operationId, input, chart, now, await this.payoutSupport().facts(input, now, operationId));
   }
 
   private payoutSupport(): PayoutSupport {

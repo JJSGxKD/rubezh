@@ -289,6 +289,35 @@ describe.skipIf(DATABASE_URL === "")("выплаты участникам на �
     expect(await messagesOf(alice.accountId, "finance_payout")).toHaveLength(1);
   });
 
+  it("сбой между проводкой и отметкой «проведена»: деньги уже записаны — их видят и остаток, и запрет снятия, и решение участника; повтор доводит операцию, а не упирается в остаток", async () => {
+    const { period, alice } = await closedMonth();
+    await payouts.confirm(alice, period, { decision: "confirmed" });
+    const stuck = await draft(owner, payoutInput(period, `stakeholder:${alice.accountId}`, "1000.00"));
+    // проводка записана, отметки нет: так выглядит сбой между ними
+    await ledger.post({
+      sourceKey: `op:${stuck.operationId}`,
+      at: new Date(),
+      memo: "Выплата за месяц",
+      lines: [
+        { accountId: bank, amount: -100_000n },
+        { accountId: `liability.stakeholder.${alice.accountId}.RUB`, amount: 100_000n },
+      ],
+    });
+
+    expect(await payoutsRepository.hasPayouts(period)).toBe(true);
+    expect((await domainError(periods.reopen(owner, period, "Ошибка в курсе рубля"))).code).toBe("ledger_period_has_payouts");
+    expect((await domainError(payouts.confirm(alice, period, { decision: "disputed", comment: "Передумал, не сходится" }))).code).toBe("ledger_confirmation_paid");
+    // записанная тысяча уже считается выплаченной: остаток — 1 600 ₽, и платёж на 1 600,01 отказан
+    expect((await domainError(draft(owner, payoutInput(period, `stakeholder:${alice.accountId}`, "1600.01")))).message).toContain("остатка долга");
+    await pay(period, alice, "1600.00");
+
+    const done = await operations.submit(owner, stuck.operationId);
+
+    expect(done.status).toBe("posted");
+    expect(await entriesWithKey(`op:${stuck.operationId}`)).toBe(1);
+    expect(await debtSum(alice.accountId)).toBe(0n);
+  });
+
   it("выплата больше остатка долга — отказ; частями — можно, пока не выйдет весь долг", async () => {
     const { period, alice } = await closedMonth();
     await payouts.confirm(alice, period, { decision: "confirmed" });

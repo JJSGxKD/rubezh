@@ -415,6 +415,20 @@ describe("факты месяца для выплаты", () => {
     expect(await loadPayoutFacts(empty, settings, PAYOUT, DAY_2)).toMatchObject({ periodStatus: "open", closedAt: null, inReport: false });
   });
 
+  it("повтор операции, чья проводка уже в журнале: её строка не считается выплаченной ранее и не уменьшает сальдо", async () => {
+    const repository = repoWithClosedMonth();
+    repository.payoutRows.push({ operationId: OP_ID, period: PERIOD, payee: `stakeholder:${ALICE}`, accountId: aliceDebt, currency: "RUB", minor: 100_000n, overrideReason: null, at: DAY_2 });
+    repository.payoutRows.push({ operationId: "op-other", period: PERIOD, payee: `stakeholder:${ALICE}`, accountId: aliceDebt, currency: "RUB", minor: 50_000n, overrideReason: null, at: DAY_2 });
+    // журнал уже учёл обе выплаты: сальдо — долг минус 1 500 ₽
+    repository.balances.set(aliceDebt, ALICE_OWED - 150_000n);
+
+    const retry = await loadPayoutFacts(repository, settings, PAYOUT, DAY_2, OP_ID);
+    const other = await loadPayoutFacts(repository, settings, PAYOUT, DAY_2);
+
+    expect(retry).toMatchObject({ paid: 50_000n, debtBalance: ALICE_OWED - 50_000n });
+    expect(other).toMatchObject({ paid: 150_000n, debtBalance: ALICE_OWED - 150_000n });
+  });
+
   it("срок подтверждения — настройка `finance.confirm-days`", async () => {
     const repository = repoWithClosedMonth();
     const custom = panelSettings({ [SETTINGS.financeConfirmDays.key]: 9 });

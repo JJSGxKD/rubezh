@@ -13,7 +13,7 @@ import { PAYOUTS_REPOSITORY, type PayoutsRepository } from "./payouts.repository
  * видов операций, а правила месяца живут здесь.
  */
 export interface PayoutSupport {
-  facts(input: OperationInputOf<"payout">, now: Date): Promise<PayoutFacts>;
+  facts(input: OperationInputOf<"payout">, now: Date, operationId?: string): Promise<PayoutFacts>;
   /** Проведение выплаты под замком месяца: проверка остатка и запись проводки идут вместе, без чужих выплат и снятия закрытия. */
   exclusive<T>(period: string, work: () => Promise<T>): Promise<T>;
   /** Выплата проведена: участнику — сообщение. Не бросает. */
@@ -31,8 +31,8 @@ export class PayoutSupportService implements PayoutSupport {
     @Inject(PayoutNotices) private readonly notices: Pick<PayoutNotices, "paid">,
   ) {}
 
-  async facts(input: OperationInputOf<"payout">, now: Date): Promise<PayoutFacts> {
-    return await loadPayoutFacts(this.repository, this.settings, input, now);
+  async facts(input: OperationInputOf<"payout">, now: Date, operationId?: string): Promise<PayoutFacts> {
+    return await loadPayoutFacts(this.repository, this.settings, input, now, operationId);
   }
 
   async exclusive<T>(period: string, work: () => Promise<T>): Promise<T> {

@@ -23,6 +23,8 @@ export async function db<T>(promise: Promise<T>): Promise<T> {
 
 const sumOf = (records: readonly PayoutRecord[], payee: string): bigint => records.filter((record) => record.payee === payee).reduce((sum, record) => sum + record.minor, 0n);
 
+const sumOnAccount = (records: readonly PayoutRecord[], accountId: string): bigint => records.filter((record) => record.accountId === accountId).reduce((sum, record) => sum + record.minor, 0n);
+
 /** Что снимок месяца говорит о получателе: сколько ему причитается (`null` — получателя в отчёте нет) и как его назвать. */
 interface SnapshotShare {
   owed: bigint | null;
@@ -57,9 +59,10 @@ function unsettled(base: Pick<PayoutFacts, "now" | "confirmDays">, status: Payou
 
 /**
  * Факты для выплаты `input` на момент `now`. Получатель не разобран или месяц не закрыт — факты «платить нельзя»:
- * сборщик назовёт причину сам.
+ * сборщик назовёт причину сам. `operationId` — сама операция: если её проводка уже в журнале (сбой до отметки «проведена»),
+ * повтор не должен считать её выплаченной дважды и упереться в остаток.
  */
-export async function loadPayoutFacts(repository: PayoutsRepository, settings: SettingsReader, input: OperationInputOf<"payout">, now: Date): Promise<PayoutFacts> {
+export async function loadPayoutFacts(repository: PayoutsRepository, settings: SettingsReader, input: OperationInputOf<"payout">, now: Date, operationId?: string): Promise<PayoutFacts> {
   const base = { now, confirmDays: settings.get(SETTINGS.financeConfirmDays) };
   const payee = parsePayee(input.payee);
   const row = await db(repository.period(input.period));
@@ -67,7 +70,12 @@ export async function loadPayoutFacts(repository: PayoutsRepository, settings: S
   if (row === null || row.status !== "closed" || row.closedAt === null || row.snapshot === null) return unsettled(base, row?.status ?? "open", input.payee);
 
   const snapshot = parseSnapshot(row.snapshot);
-  const records = await db(repository.payoutsOf(input.period));
+  const everything = await db(repository.payoutsOf(input.period));
+  // Проводка самой операции, уже лежащая в журнале, — не «выплачено ранее»: повтор той же проводки её не удвоит.
+  const records = everything.filter((record) => record.operationId !== operationId);
+  const own = everything.filter((record) => record.operationId === operationId);
+  /** Сальдо счёта без вклада самой операции: её собственная строка в журнале сальдо уже уменьшила. */
+  const balanceOf = async (accountId: string): Promise<bigint> => (await db(repository.debtBalance(accountId))) + sumOnAccount(own, accountId);
   const names = payee.kind === "stakeholder" ? await db(repository.names([payee.accountId])) : new Map<string, string>();
   const share = shareOf(payee, snapshot, names);
   const common = { ...base, periodStatus: row.status, closedAt: row.closedAt, inReport: share.owed !== null, label: share.label };
@@ -80,13 +88,13 @@ export async function loadPayoutFacts(repository: PayoutsRepository, settings: S
         owed: share.owed,
         currency: "RUB",
         debtAccountId,
-        debtBalance: await db(repository.debtBalance(debtAccountId)),
+        debtBalance: await balanceOf(debtAccountId),
         paid: sumOf(records, input.payee),
         confirmation: await db(repository.confirmation(input.period, payee.accountId)),
       };
     }
     case "tax":
-      return { ...common, owed: share.owed, currency: "RUB", debtAccountId: TAX_DEBT_ACCOUNT, debtBalance: await db(repository.debtBalance(TAX_DEBT_ACCOUNT)), paid: sumOf(records, "tax"), confirmation: null };
+      return { ...common, owed: share.owed, currency: "RUB", debtAccountId: TAX_DEBT_ACCOUNT, debtBalance: await balanceOf(TAX_DEBT_ACCOUNT), paid: sumOf(records, "tax"), confirmation: null };
     case "loan": {
       const loan = await db(repository.loan(payee.loanId));
       const snapshotLoan = snapshot.loans.find((entry) => entry.loanId === payee.loanId);
@@ -97,7 +105,7 @@ export async function loadPayoutFacts(repository: PayoutsRepository, settings: S
         owed: share.owed,
         currency: loan?.currency ?? snapshotLoan?.currency ?? null,
         debtAccountId: loan?.accountId ?? null,
-        debtBalance: loan === null ? 0n : await db(repository.debtBalance(loan.accountId)),
+        debtBalance: loan === null ? 0n : await balanceOf(loan.accountId),
         paid: sumOf(records, input.payee),
         confirmation: null,
       };
