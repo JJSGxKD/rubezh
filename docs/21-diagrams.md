@@ -1312,7 +1312,8 @@ erDiagram
         string source "repo или panel (CHECK)"
         uuid created_by "без FK; null — завёл выкат"
         datetime created_at
-        datetime published_at "null — в игре не бывала; ставит публикация из панели или подхват версии из кода при выкате (T-0306)"
+        datetime published_at "null — в игре не бывала ни у команды, ни у всех; ставит публикация из панели или подхват версии из кода при выкате (T-0306)"
+        datetime released_all_at "null — у всех не бывала, её видела разве что команда; ставит публикация «Всем» и подхват указателем all; CHECK: только вместе с published_at. Откат «Всем» и запасная выдача старой схеме берут только такие версии (T-0306)"
     }
 
     CONTENT_DRAFT {
@@ -5960,9 +5961,9 @@ sequenceDiagram
         S-->>P: {versionNo, created, changed, previousVersionNo}; аудит content.publish
     end
     P->>S: POST /rollback {audience, versionNo}
-    S->>D: версия уже бывала в игре (published_at) → указатель аудитории на неё; новой версии нет
+    S->>D: версия уже бывала в игре у этой аудитории (команде — published_at, «Всем» — released_all_at) → указатель на неё; новой версии нет
     C->>S: GET /content/current?schema=n (токен)
-    S->>D: указатели; роль в account_role — аудитория «команда»; версия с schema_version ≤ n
+    S->>D: указатели; роль в account_role — аудитория «команда»; версия указателя с schema_version ≤ n, а иначе последняя бывшая у всех (released_all_at)
     S-->>C: {versionNo, hash, url} или null — играть встроенным
     C->>E: GET /content/v/<хэш>.json
     E-->>C: снимок, Cache-Control: public, max-age=31536000, immutable; повтор — 304

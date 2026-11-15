@@ -45,6 +45,9 @@ shared:
   - backend/api/test/content-drafts.integration.test.ts
   - apps/admin/src/screens/balance/BalanceWorkspace.tsx
   - apps/admin/src/ui/help.ts
+  - backend/api/src/modules/content/content.repository.ts
+  - backend/api/test/content-drafts.test.ts
+  - apps/admin/test/balance-editor.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
