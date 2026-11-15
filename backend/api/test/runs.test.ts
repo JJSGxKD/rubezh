@@ -5,6 +5,9 @@ import { DomainError } from "../src/common/domain-error.js";
 import { runFinishSchema, type RunFinish } from "../src/modules/runs/dto/runs.dto.js";
 import { RunsService } from "../src/modules/runs/runs.service.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
+import type { AdsService } from "../src/modules/ads/ads.service.js";
+import { RunAdRerollService } from "../src/modules/runs/run-ad-reroll.service.js";
+import type { RunAdRerollsRepository } from "../src/modules/runs/run-ad-rerolls.repository.js";
 import { RunContinues, type ContinueLedger } from "../src/modules/runs/run-continues.js";
 import { detailsOf, RunExtras, storedDetailsSchema, TOP_KILLS_SHOWN } from "../src/modules/runs/run-details.js";
 import { RunLoadouts, type LoadoutCheck, type SignedLoadout } from "../src/modules/runs/run-loadouts.js";
@@ -317,6 +320,82 @@ describe("второй шанс в итоге забега", () => {
     expect(runFinishSchema.safeParse({ ...base, continues: [301] }).success).toBe(false);
     expect(runFinishSchema.safeParse({ ...base, continues: [200, 100] }).success).toBe(false);
     expect(runFinishSchema.parse({ ...base, continues: undefined }).continues).toEqual([]);
+  });
+});
+
+describe("рекламный переброс в итоге забега (tasks/T-0199)", () => {
+  /** Книга показов: у каких забегов записан рекламный переброс; спросили ли её — видно по `asked`. */
+  class BookedRerolls implements RunAdRerollsRepository {
+    readonly booked = new Set<string>();
+    readonly asked: string[] = [];
+    async grant(): Promise<"granted"> {
+      throw new Error("приём итога ничего не записывает в книгу показов");
+    }
+    async bySession(): Promise<null> {
+      throw new Error("приём итога не ищет сессию");
+    }
+    async count(runId: string): Promise<number> {
+      this.asked.push(runId);
+      return this.booked.has(runId) ? 1 : 0;
+    }
+  }
+
+  function setup() {
+    const runs = new MemoryRunsRepository();
+    const board = new MemoryLeaderboardStore();
+    const hooks = new RunsHooks();
+    const recorded: RecordedRun[] = [];
+    hooks.onRecorded("test", async (run) => void recorded.push(run));
+    const book = new BookedRerolls();
+    const rerolls = new RunAdRerollService(runs, book, {} as AdsService);
+    const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
+    const service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating, undefined, survivalScorer(), rerolls);
+    return { service, book, recorded, runs, board };
+  }
+
+  it("заявлен рекламный переброс без записи показа — отказ с нейтральной причиной, мимо рейтинга, но забег записан", async () => {
+    const { service, recorded, board } = setup();
+    const me = account();
+
+    const result = await service.finish(me, finish(randomUUID(), { survivalSec: 600, adRerolls: 1 }));
+
+    expect(result).toMatchObject({ verdict: "rejected", recorded: false });
+    expect(recorded[0]).toMatchObject({ reasons: expect.arrayContaining(["unpaid_ad_reroll"]) });
+    expect(await board.best("hard", me.accountId, "common")).toBeNull();
+  });
+
+  it("с записью показа — обычный забег в рейтинге", async () => {
+    const { service, book, runs } = setup();
+    const runId = randomUUID();
+    book.booked.add(runId);
+
+    await expect(service.finish(account(), finish(runId, { survivalSec: 600, adRerolls: 1 }))).resolves.toMatchObject({ verdict: "ok", recorded: true });
+    expect(runs.rows.get(runId)?.record).toBeDefined();
+  });
+
+  it("итог без поля и с нулём — как ноль: в книгу показов не ходят", async () => {
+    const { service, book } = setup();
+
+    await expect(service.finish(account(), finish(randomUUID(), { survivalSec: 600 }))).resolves.toMatchObject({ verdict: "ok", recorded: true });
+    await expect(service.finish(account(), finish(randomUUID(), { survivalSec: 600, adRerolls: 0 }))).resolves.toMatchObject({ verdict: "ok", recorded: true });
+    expect(book.asked).toEqual([]);
+  });
+
+  it("забег с читами разработчика причиной не отклоняется, как у продолжений", async () => {
+    const { service, recorded } = setup();
+
+    await service.finish(account(), finish(randomUUID(), { survivalSec: 600, adRerolls: 1, cheats: true }));
+
+    expect(recorded[0]?.reasons ?? []).not.toContain("unpaid_ad_reroll");
+  });
+
+  it("число рекламных перебросов вне 0..1 — битые данные, а не вердикт", () => {
+    const base = { ...finish(randomUUID(), { survivalSec: 300 }) };
+
+    expect(runFinishSchema.safeParse({ ...base, adRerolls: 0 }).success).toBe(true);
+    expect(runFinishSchema.safeParse({ ...base, adRerolls: 1 }).success).toBe(true);
+    for (const adRerolls of [2, -1, 1.5, "1", null]) expect(runFinishSchema.safeParse({ ...base, adRerolls }).success, String(adRerolls)).toBe(false);
+    expect(runFinishSchema.safeParse(base).success).toBe(true);
   });
 });
 

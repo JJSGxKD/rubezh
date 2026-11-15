@@ -915,7 +915,7 @@ describe("OperationsService: черновик и проведение", () => {
   it("неверная операция при create — 400 ledger_operation_invalid с текстом проблем, ничего не записано", async () => {
     const { service, repository, audit } = harness();
 
-    const error = await domainError(service.create(OWNER, { ...VPS, from: "bank.net", at: "2026-11-14" }));
+    const error = await domainError(service.create(OWNER, { ...VPS, from: "bank.net", at: "2099-01-01" }));
 
     expect(error).toMatchObject({ code: "ledger_operation_invalid", status: 400 });
     expect(error.message).toContain("«bank.net» нет");

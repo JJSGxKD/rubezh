@@ -42,6 +42,7 @@ import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { ratingRestrictions, secondsScore } from "./helpers/memory-runs.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Решения разбора забегов на настоящих Postgres и Redis (Р203, tasks/T-0419).
@@ -80,7 +81,7 @@ describe.skipIf(!live)("разбор забегов на живых Postgres и 
   let moderator: AccountRef;
 
   async function player(name = "Игрок"): Promise<string> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(600_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: name, username: null, photoUrl: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
     return created.accountId;
   }
 

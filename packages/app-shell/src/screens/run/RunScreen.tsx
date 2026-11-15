@@ -4,6 +4,7 @@ import type { RunResult } from "@bh/shared-types";
 import { ErrorState } from "../../design-system/components";
 import { t } from "../../i18n";
 import "../../i18n/run";
+import { useAdReroll } from "../../state/ad-reroll";
 import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
 import { useHints } from "../../state/hints";
@@ -25,6 +26,7 @@ import { DeathOverlayLazy, prefetchDeathOverlay } from "./death-overlay-lazy";
 import { DevSheetLazy } from "./dev-sheet-lazy";
 import { DevTechPanelLazy } from "./dev-tech-panel-lazy";
 import { RunStatsSheet } from "./RunStatsSheet";
+import { adRerollButton } from "./card-tools-rules";
 import { useRunKeyboard } from "./run-keys";
 import type { SecondChanceProps } from "./SecondChance";
 
@@ -131,6 +133,21 @@ export function RunScreen(): ReactNode {
     if (prologueDowned) useRun.getState().declineContinue();
   }, [prologueDowned]);
 
+  // Переброс карточек за рекламу (T-0199): сервер спрашивается один раз на забег, когда у игрока на
+  // выборе нет зарядов переброса и движок обещает переброс; в прологе кнопки нет.
+  const adReroll = useAdReroll();
+  useEffect(() => {
+    if (run.phase !== "levelUp" || run.runId === null || prologue) return;
+    void useAdReroll.getState().prepare({ runId: run.runId, reroll: run.tools.reroll, canAdReroll: run.canAdReroll });
+  }, [run.phase, run.runId, run.tools.reroll, run.canAdReroll, prologue]);
+  // Событие «кнопка показана» — раз на новый выбор; режим изгнания в нём не участвует: новый выбор начинается без него.
+  const adButtonReady = !prologue && adRerollButton({ left: run.tools, canAdReroll: run.canAdReroll, stage: adReroll.stage, banishing: false }).kind === "ready";
+  useEffect(() => {
+    if (run.phase === "levelUp" && adButtonReady) useAdReroll.getState().reportOffered({ seq: run.offerSeq, level: run.level });
+  }, [run.phase, adButtonReady, run.offerSeq, run.level]);
+  // Уход с экрана сбрасывает состояние кнопки: следующий забег спросит сервер заново.
+  useEffect(() => () => useAdReroll.getState().reset(), []);
+
   // Экран смерти — отдельный чанк: подтягиваем его, как только забег пошёл,
   // чтобы смерть не ждала сети.
   const running = run.phase === "running";
@@ -210,6 +227,19 @@ export function RunScreen(): ReactNode {
                   onReroll: () => useRun.getState().reroll(),
                   onSkip: () => useRun.getState().skip(),
                   onBanish: (optionId: string) => useRun.getState().banish(optionId),
+                },
+              })}
+          // Переброс за рекламу: в прологе его нет — игроку там нечего перебрасывать и рекламы он ещё не видел.
+          {...(prologue
+            ? {}
+            : {
+                adReroll: {
+                  left: run.tools,
+                  canAdReroll: run.canAdReroll,
+                  stage: adReroll.stage,
+                  // Заметка живёт один выбор: на следующем она устарела.
+                  notice: adReroll.noticeSeq === run.offerSeq ? adReroll.notice : null,
+                  onWatch: () => void useAdReroll.getState().watch(),
                 },
               })}
           onStats={openStats}

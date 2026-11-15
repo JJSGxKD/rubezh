@@ -141,6 +141,7 @@ const RESTRICTED_BY: Partial<Record<AdPlace, RestrictionKind>> = {
   second_chance: "ad_rewards",
   wheel_spin: "ad_rewards",
   run_double: "ad_rewards",
+  card_reroll: "ad_rewards",
 };
 
 @Injectable()

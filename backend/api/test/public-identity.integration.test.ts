@@ -40,6 +40,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Знак у имени в строках рейтинга, сезона и друзей на живых Postgres и Redis
@@ -71,7 +72,7 @@ describe.skipIf(!live)("знак у имени в строках списков 
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(960_000_000 + Math.floor(Math.random() * 15_000_000)), displayName: "Знак в списке", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Знак в списке", username: null },
       Date.now(),
     );
     return created.accountId;

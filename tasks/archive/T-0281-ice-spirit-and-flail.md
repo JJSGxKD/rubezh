@@ -36,7 +36,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/meta-v2.md
-batch: 6
+batch: 4
 ---
 
 # T-0281. Новый контент, данные — враг Ледяной дух и оружие Кистень с эволюцией «Круговерть» на готовых паттерне и поведении

@@ -18,7 +18,8 @@ import "../../i18n/run";
 import { ItemMedallion, type ItemKind } from "../item-icons";
 import { CardToolsBar } from "./CardTools";
 import { hintForOffer } from "./evolution-hints";
-import { cardTapAction, toolButtons } from "./card-tools-rules";
+import type { AdRerollNotice } from "../../state/ad-reroll";
+import { adRerollButton, cardTapAction, toolButtons, type AdRerollStageView } from "./card-tools-rules";
 import { guarded, useTapGuard } from "./overlay-guard";
 import { CategoryLabel, ElementLabel, passiveCategoryOf, SlotSummary, weaponElementOf } from "./SlotSummary";
 import { formatChange } from "./upgrade-format";
@@ -113,6 +114,8 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
   );
 }
 
+const noop = (): void => undefined;
+
 export interface LevelUpOverlayProps {
   level: number;
   offers: readonly UpgradeOption[];
@@ -132,6 +135,20 @@ export interface LevelUpOverlayProps {
     onSkip(): void;
     onBanish(optionId: string): void;
   };
+  /**
+   * Переброс за рекламу (tasks/T-0199): кнопка под рядом действий, а когда ряда нет — одна под
+   * карточками. Без поля кнопки нет: площадка без рекламы, окно пролога.
+   */
+  adReroll?: {
+    /** зарядов осталось: пока переброс есть, за рекламу не предлагаем */
+    left: CardTools;
+    /** сработает ли переброс за рекламу — по движку */
+    canAdReroll: boolean;
+    stage: AdRerollStageView;
+    /** заметка о прошлой попытке на этом выборе; `null` — нечего сказать */
+    notice: AdRerollNotice | null;
+    onWatch(): void;
+  };
   /** открыть лист «Характеристики» — значком в углу окна, без лишней строки */
   onStats?: () => void;
 }
@@ -147,6 +164,11 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
   const tools = props.tools;
   const buttons =
     tools === undefined ? [] : toolButtons({ left: tools.left, total: tools.total, canReroll: tools.canReroll, offers: props.offers });
+  const adReroll = props.adReroll;
+  const adState =
+    adReroll === undefined
+      ? ({ kind: "hidden" } as const)
+      : adRerollButton({ left: adReroll.left, canAdReroll: adReroll.canAdReroll, stage: adReroll.stage, banishing });
   const mode = banishing ? "banish" : "choose";
   const tap = (offer: UpgradeOption): void => {
     const action = cardTapAction(mode, offer);
@@ -259,14 +281,15 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
           {t("run.hint.choose")}
         </p>
       ) : null}
-      {tools === undefined ? null : (
+      {tools === undefined && adReroll === undefined ? null : (
         <>
           <CardToolsBar
             buttons={buttons}
             banishing={banishing}
-            onReroll={guarded(ready, tools.onReroll)}
-            onSkip={guarded(ready, tools.onSkip)}
+            onReroll={guarded(ready, tools?.onReroll ?? noop)}
+            onSkip={guarded(ready, tools?.onSkip ?? noop)}
             onToggleBanish={guarded(ready, () => setBanish({ key: offersKey, on: !banishing }))}
+            {...(adReroll === undefined ? {} : { adReroll: { state: adState, notice: adReroll.notice, onWatch: guarded(ready, adReroll.onWatch) } })}
           />
           {/* На невысоком экране подпись уходит: числа на кнопках говорят сами. */}
           {buttons.length === 0 ? null : (

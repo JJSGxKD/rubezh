@@ -12,6 +12,7 @@ import { AuthService } from "../src/modules/auth/auth.service.js";
 import { RedisRefreshStore } from "../src/modules/auth/redis-refresh.store.js";
 import { launchFor } from "./helpers/init-data.js";
 import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Вход на настоящих Postgres и Redis (docs/17-testing-strategy.md §4.2).
@@ -35,7 +36,7 @@ describe.skipIf(!live)("вход на живых Postgres и Redis", () => {
   let service: AuthService;
   // Телеграм-идентификаторы у каждого прогона свои: файлы тестов идут
   // параллельно, и чистить таблицу аккаунтов целиком нельзя.
-  const telegramId = (): number => 900_000_000 + Math.floor(Math.random() * 90_000_000);
+  const telegramId = (): number => Number(uniquePlatformUserId());
 
   beforeAll(async () => {
     config = loadAppConfig({
