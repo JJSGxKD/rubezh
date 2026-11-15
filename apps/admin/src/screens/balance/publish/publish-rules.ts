@@ -81,10 +81,13 @@ function authorOf(version: VersionSummary, meId: string): string {
 }
 
 /**
- * Строки «Истории»: новые сверху. Откат — на версию, что бывала в игре
- * (`publishedAt`) и у аудитории сейчас не стоит; откатывать «нечего», пока
- * ничего не публиковалось. «Взять из кода» — у последней версии из кода, что
- * ждёт рядом: старые ждущие уже устарели, а из панельной версии брать нечего.
+ * Строки «Истории»: новые сверху. Откат «Команде» — на версию, что бывала в
+ * игре у команды или у всех (`publishedAt`), «Всем» — только на ту, что уже
+ * бывала у всех (`releasedAllAt`): версию, которую видела одна команда, у всех
+ * ставит публикация «Всем» с её окном, а не откат. Версия, что у аудитории
+ * сейчас стоит, не предлагается; откатывать «нечего», пока ничего не
+ * публиковалось. «Взять из кода» — у последней версии из кода, что ждёт рядом:
+ * старые ждущие уже устарели, а из панельной версии брать нечего.
  */
 export function historyRows(input: { versions: readonly VersionSummary[]; current: CurrentPointers; canPublish: boolean; canEdit: boolean; hasDraft: boolean; meId: string }): HistoryRow[] {
   const sorted = [...input.versions].sort((a, b) => b.versionNo - a.versionNo);
@@ -94,7 +97,8 @@ export function historyRows(input: { versions: readonly VersionSummary[]; curren
     const isNewConcept = waiting && version.versionNo === newestRepo;
     const rollbackTo = AUDIENCES.filter((audience) => {
       const live = pointerOf(input.current, audience);
-      return input.canPublish && version.publishedAt !== null && live !== null && live !== version.versionNo;
+      const wasLive = audience === "all" ? version.releasedAllAt !== null : version.publishedAt !== null;
+      return input.canPublish && wasLive && live !== null && live !== version.versionNo;
     });
     return {
       versionNo: version.versionNo,

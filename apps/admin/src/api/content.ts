@@ -21,7 +21,10 @@ export const versionSummarySchema = z.object({
   source: z.string(),
   createdBy: z.string().nullable(),
   createdAt: dateText,
+  /** впервые вышла в игру у команды или у всех; `null` — не публиковалась */
   publishedAt: dateText.nullable(),
+  /** впервые стала текущей у всех; `null` — у всех не бывала, её видела только команда */
+  releasedAllAt: dateText.nullable(),
 });
 export type VersionSummary = z.infer<typeof versionSummarySchema>;
 
