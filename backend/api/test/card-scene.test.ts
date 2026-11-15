@@ -19,9 +19,9 @@ function embeddedImages(svg: string): string[] {
   return [...svg.matchAll(/href="data:image\/svg\+xml;base64,([^"]+)"/g)].map((match) => Buffer.from(match[1] ?? "", "base64").toString("utf8"));
 }
 
-/** Строки текста сцены: каждая строка — свой `<text>`. */
-function textLines(svg: string): string[] {
-  return [...svg.matchAll(/<text [^>]*>([^<]*)<\/text>/g)].map((match) => match[1] ?? "");
+/** Строки текста сцены заданного кегля: каждая строка — свой `<text>`. */
+function textLines(svg: string, size: number): string[] {
+  return [...svg.matchAll(/<text [^>]*font-size="(\d+)"[^>]*>([^<]*)<\/text>/g)].filter((match) => Number(match[1]) === size).map((match) => match[2] ?? "");
 }
 
 describe("шрифт игры", () => {
@@ -88,15 +88,16 @@ describe("сцена картинок бота", () => {
     const longText = "Облик игрока, мир забега и словесный знак — одна витрина игры. ".repeat(6);
     const svg = heroScene({ title: longTitle, text: longText });
 
-    const lines = textLines(svg);
-    const titleLines = lines.filter((line) => longTitle.includes(line) && line !== "");
-    const bodyLines = lines.filter((line) => longText.includes(line) && line !== "");
+    const titleLines = textLines(svg, 52);
+    const bodyLines = textLines(svg, 28);
     expect(titleLines.length).toBeGreaterThan(1);
     expect(titleLines.length).toBeLessThanOrEqual(2);
-    expect(bodyLines.length).toBeGreaterThan(1);
-    expect(bodyLines.length).toBeLessThanOrEqual(3);
+    expect(bodyLines.length).toBe(3);
     // Лишнее обрезается многоточием, а не уходит за край.
-    expect(lines.join(" ")).toContain("…");
+    expect(titleLines.at(-1)).toMatch(/…$/);
+    expect(bodyLines.at(-1)).toMatch(/…$/);
+    // Короткое не трогается.
+    expect(textLines(heroScene({ title: "Привет, Анна", text: "Коротко" }), 52)).toEqual(["Привет, Анна"]);
   });
 
   it("плашка числа рисуется, а имя и подписи не ломают разметку", () => {
