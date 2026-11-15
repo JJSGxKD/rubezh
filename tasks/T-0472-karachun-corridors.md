@@ -4,7 +4,7 @@ title: Коридоры калибровки под игру с Карачуно
 epic: E10
 priority: P1
 status: in-progress
-owner: claude-lead-1 / sonnet-5.5 / high
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []
