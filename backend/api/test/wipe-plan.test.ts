@@ -36,15 +36,21 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 93 модели, стирается 30", () => {
+  it("остаётся 94 модели, стирается 30", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(93);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(94);
     expect(actions.filter((action) => action === "wipe")).toHaveLength(30);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
     for (const model of ["PassProgress", "PassClaim", "BoostCredit"]) expect(plan[model]?.action, model).toBe("wipe");
     expect(plan.PassSeason?.action).toBe("keep");
+  });
+
+  it("выданные облики (T-0245) остаются: окрас куплен за звёзды, а журнал покупок вайп не стирает", () => {
+    expect(plan.AppearanceGrant?.action).toBe("keep");
+    expect(plan.AppearanceGrant?.why).toContain("куплен");
+    expect(order).not.toContain("AppearanceGrant");
   });
 
   it("контент игры на сервере (T-0303) остаётся: это правила игры, а не данные игроков", () => {
