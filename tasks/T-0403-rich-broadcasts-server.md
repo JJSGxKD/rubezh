@@ -3,8 +3,8 @@ id: T-0403
 title: Оформленные рассылки — сервер — ограниченный Markdown, разбор в RichDocument, запуск только после теста себе
 epic: E5
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0394]
