@@ -78,7 +78,9 @@ describe("кнопки «Команде» и «Всем»: живут тольк
   });
 });
 
+/** По умолчанию версия бывала у всех: отметка равна времени публикации, а без публикации её нет. */
 function version(no: number, extra: Partial<VersionSummary> = {}): VersionSummary {
+  const publishedAt = extra.publishedAt === undefined ? `2026-10-2${String(no)}T10:05:00.000Z` : extra.publishedAt;
   return {
     versionNo: no,
     contentHash: `hash${String(no)}`,
@@ -86,7 +88,8 @@ function version(no: number, extra: Partial<VersionSummary> = {}): VersionSummar
     source: "panel",
     createdBy: "me",
     createdAt: `2026-10-2${String(no)}T10:00:00.000Z`,
-    publishedAt: `2026-10-2${String(no)}T10:05:00.000Z`,
+    publishedAt,
+    releasedAllAt: publishedAt,
     ...extra,
   };
 }
@@ -118,6 +121,20 @@ describe("«История и откат»", () => {
     // версия 1 была в игре до панели (published), версия 4 из кода и не публиковалась — на неё откатиться нельзя
     expect(history.find((row) => row.versionNo === 1)?.rollbackTo).toEqual(["team", "all"]);
     expect(history.find((row) => row.versionNo === 4)?.rollbackTo).toEqual([]);
+  });
+
+  it("откат «Всем» — только на версию, что бывала у всех; версия «только команде» откатывается лишь «Команде»", () => {
+    const mixed = [version(1, { source: "repo", createdBy: null }), version(2), version(3, { releasedAllAt: null })];
+    const history = historyRows({ ...rows, versions: mixed, current: { team: pointer(2), all: pointer(2) } });
+    expect(history.find((row) => row.versionNo === 3)?.rollbackTo).toEqual(["team"]);
+    expect(history.find((row) => row.versionNo === 1)?.rollbackTo).toEqual(["team", "all"]);
+    // версия «только команде» стоит у команды: откатывать «Команде» некуда, а «Всем» её не предлагается по-прежнему
+    const live = historyRows({ ...rows, versions: mixed, current: { team: pointer(3), all: pointer(2) } });
+    expect(live.find((row) => row.versionNo === 3)?.rollbackTo).toEqual([]);
+    expect(live.find((row) => row.versionNo === 3)?.live).toEqual(["team"]);
+    // версия «только команде» не предлагается «Всем» и тогда, когда «всем» стоит другая, а у команды нет своего указателя
+    const follows = historyRows({ ...rows, versions: mixed, current: { team: null, all: pointer(2) } });
+    expect(follows.find((row) => row.versionNo === 3)?.rollbackTo).toEqual(["team"]);
   });
 
   it("без права content.publish откат не предлагается; «Всем» без публикаций откатывать не с чего", () => {

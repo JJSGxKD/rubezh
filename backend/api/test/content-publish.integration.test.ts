@@ -489,6 +489,113 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     expect(await ctx.pointers()).toMatchObject({ all: { versionNo: base.versionNo } });
   });
 
+  it("откат «Всем» на версию, которую видела только команда, — 409: это публикация в обход окна «Всем»; «Команде» на неё откатить можно", async () => {
+    const base = await importSnapshot();
+    const ctx = await start();
+    await adoptRepoVersion(publishRepository, base.versionNo, new Date());
+    const first = await ctx.draftOf(base.versionNo, { hp: 91, check: {} });
+    const teamOnly = (await ctx.publish(first.draftId, "team")).data?.versionNo ?? 0;
+    const second = await ctx.draftOf(base.versionNo, { hp: 92, check: {} });
+    const newer = (await ctx.publish(second.draftId, "team")).data?.versionNo ?? 0;
+    expect(await ctx.pointers()).toMatchObject({ team: { versionNo: newer }, all: { versionNo: base.versionNo } });
+    const auditBefore = ctx.roles.entries.filter((row) => row.action === "content.rollback").length;
+
+    // «Всем» на версию «только команде» откатом не уходит: версию у всех ставит публикация «Всем» с её окном
+    const refused = await ctx.rollback("all", teamOnly);
+    expect(refused.status).toBe(409);
+    expect(refused.error?.code).toBe("content_rollback_invalid");
+    expect(refused.error?.message).toContain("только у команды");
+    expect(await ctx.pointers()).toMatchObject({ team: { versionNo: newer }, all: { versionNo: base.versionNo } });
+    expect(ctx.roles.entries.filter((row) => row.action === "content.rollback")).toHaveLength(auditBefore);
+
+    // команде можно: она эту версию уже видела
+    const back = await ctx.rollback("team", teamOnly);
+    expect(back.status).toBe(201);
+    expect(back.data).toMatchObject({ versionNo: teamOnly, previousVersionNo: newer, changed: true });
+
+    // версия выходит «Всем» — после этого она бывала и у всех, и откат «Всем» на неё возможен
+    expect((await ctx.publish(first.draftId, "all")).data).toMatchObject({ versionNo: teamOnly, created: false, changed: true });
+    expect((await ctx.publish(second.draftId, "all")).data?.versionNo).toBe(newer);
+    expect((await ctx.rollback("all", teamOnly)).data).toMatchObject({ versionNo: teamOnly, previousVersionNo: newer, changed: true });
+  });
+
+  it("отметка «бывала у всех»: «Команде» её не ставит, «Всем» и подхват версии из кода — ставят, повтор её не двигает", async () => {
+    const base = await importSnapshot();
+    const ctx = await start();
+    expect(await repository.version(base.versionNo)).toMatchObject({ publishedAt: null, releasedAllAt: null });
+    await adoptRepoVersion(publishRepository, base.versionNo, new Date());
+    const adopted = await repository.version(base.versionNo);
+    expect(adopted?.publishedAt).not.toBeNull();
+    expect(adopted?.releasedAllAt).toEqual(adopted?.publishedAt);
+
+    const { draftId } = await ctx.draftOf(base.versionNo, { hp: 93, check: {} });
+    const versionNo = (await ctx.publish(draftId, "team")).data?.versionNo ?? 0;
+    expect(await repository.version(versionNo)).toMatchObject({ releasedAllAt: null });
+    expect((await repository.version(versionNo))?.publishedAt).not.toBeNull();
+
+    await ctx.publish(draftId, "all");
+    const released = (await repository.version(versionNo))?.releasedAllAt ?? null;
+    expect(released).not.toBeNull();
+    // повтор «Всем» и ещё раз «Команде» не двигают ни отметку, ни время публикации
+    const publishedAt = (await repository.version(versionNo))?.publishedAt;
+    await ctx.publish(draftId, "all");
+    await ctx.publish(draftId, "team");
+    expect(await repository.version(versionNo)).toMatchObject({ releasedAllAt: released, publishedAt });
+  });
+
+  it("версия из кода, подхваченная только указателем команды, у всех не бывала: откат «Всем» на неё — 409", async () => {
+    const base = await importSnapshot();
+    const ctx = await start();
+    await adoptRepoVersion(publishRepository, base.versionNo, new Date());
+    const { draftId } = await ctx.draftOf(base.versionNo, { hp: 94, check: {} });
+    const panel = (await ctx.publish(draftId, "all")).data?.versionNo ?? 0;
+    // команде возвращается версия из кода (откат «Команде»), «всем» стоит версия панели
+    expect((await ctx.rollback("team", base.versionNo)).status).toBe(201);
+    const next = await importSnapshot(SNAPSHOT, randomHash());
+    expect(await adoptRepoVersion(publishRepository, next.versionNo, new Date())).toEqual({ adopted: ["team"] });
+    expect(await ctx.pointers()).toMatchObject({ team: { versionNo: next.versionNo }, all: { versionNo: panel } });
+
+    const stored = await repository.version(next.versionNo);
+    expect(stored?.publishedAt).not.toBeNull();
+    expect(stored?.releasedAllAt).toBeNull();
+    const refused = await ctx.rollback("all", next.versionNo);
+    expect(refused.status).toBe(409);
+    expect(refused.error?.code).toBe("content_rollback_invalid");
+  });
+
+  it("запасная выдача игроку — только из бывших у всех: версия «только команде» старой схеме не достаётся; команде — её собственная", async () => {
+    const base = await importSnapshot();
+    const ctx = await start();
+    const gamer = await ctx.player("9331");
+    const teammate = await ctx.player("9332", "analyst");
+    await adoptRepoVersion(publishRepository, base.versionNo, new Date());
+    const draft = await ctx.draftOf(base.versionNo, { hp: 95, check: {} });
+    const teamOnly = (await ctx.publish(draft.draftId, "team")).data?.versionNo ?? 0;
+    // «всем» выходит версия со схемой 2 — позже версии «только команде»
+    const wide = await prisma.contentVersion.create({
+      data: { contentHash: randomBytes(32).toString("hex"), schemaVersion: 2, snapshot: { ...SNAPSHOT, schemaVersion: 2 }, jsonSchema: {}, names: {}, source: "panel", publishedAt: new Date(), releasedAllAt: new Date() },
+    });
+    track(wide.versionNo);
+    expect((await ctx.rollback("all", wide.versionNo)).status).toBe(201);
+    expect(await ctx.pointers()).toMatchObject({ team: { versionNo: teamOnly }, all: { versionNo: wide.versionNo } });
+
+    // игрок со схемой 1 при текущей «всем» со схемой 2: промежуточная версия «только команде» ему не достаётся
+    expect((await gamer.current(1)).data?.versionNo).toBe(base.versionNo);
+    expect((await gamer.current(2)).data?.versionNo).toBe(wide.versionNo);
+    // команда смотрит свою версию — она понятна схеме 1
+    expect((await teammate.current(1)).data?.versionNo).toBe(teamOnly);
+
+    // у команды своя версия новее клиента: запасная — по-прежнему из бывших у всех, а не промежуточная «только команде»
+    const teamWide = await prisma.contentVersion.create({
+      data: { contentHash: randomBytes(32).toString("hex"), schemaVersion: 2, snapshot: { ...SNAPSHOT, schemaVersion: 2 }, jsonSchema: {}, names: {}, source: "panel", publishedAt: new Date() },
+    });
+    track(teamWide.versionNo);
+    expect((await ctx.rollback("team", teamWide.versionNo)).status).toBe(201);
+    expect((await teammate.current(1)).data?.versionNo).toBe(base.versionNo);
+    expect((await teammate.current(2)).data?.versionNo).toBe(teamWide.versionNo);
+    expect((await gamer.current(1)).data?.versionNo).toBe(base.versionNo);
+  });
+
   it("две публикации разом — одна версия; даже без замка", async () => {
     const base = await importSnapshot();
     for (const lock of [undefined, new OpenLock()]) {
@@ -535,6 +642,7 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
         names: {},
         source: "panel",
         publishedAt: new Date(),
+        releasedAllAt: new Date(),
       },
     });
     track(row.versionNo);
@@ -551,12 +659,12 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     const ctx = await start();
     const gamer = await ctx.player("9322");
     const row = await prisma.contentVersion.create({
-      data: { contentHash: randomBytes(32).toString("hex"), schemaVersion: 5, snapshot: {}, jsonSchema: {}, names: {}, source: "panel", publishedAt: new Date() },
+      data: { contentHash: randomBytes(32).toString("hex"), schemaVersion: 5, snapshot: {}, jsonSchema: {}, names: {}, source: "panel", publishedAt: new Date(), releasedAllAt: new Date() },
     });
     track(row.versionNo);
     await prisma.contentCurrent.create({ data: { audience: "all", versionNo: row.versionNo, setAt: new Date() } });
-    // База общая: версии соседних тестов тоже бывали в игре, поэтому ждём ровно последнюю из них, а не пустоту.
-    const older = await prisma.contentVersion.findFirst({ where: { publishedAt: { not: null }, versionNo: { lt: row.versionNo }, schemaVersion: { lte: 1 } }, orderBy: { versionNo: "desc" } });
+    // База общая: версии соседних тестов тоже бывали у всех, поэтому ждём ровно последнюю из них, а не пустоту.
+    const older = await prisma.contentVersion.findFirst({ where: { releasedAllAt: { not: null }, versionNo: { lt: row.versionNo }, schemaVersion: { lte: 1 } }, orderBy: { versionNo: "desc" } });
     expect((await gamer.current(1)).data?.versionNo ?? null).toBe(older?.versionNo ?? null);
     expect((await gamer.current(5)).data?.versionNo).toBe(row.versionNo);  });
 
@@ -798,6 +906,12 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     await expect(prisma.$executeRaw`INSERT INTO content_current (audience, version_no, set_at) VALUES ('all', 2000000000, now())`).rejects.toThrow();
     await prisma.contentCurrent.create({ data: { audience: "all", versionNo: base.versionNo, setAt: new Date() } });
     await expect(prisma.contentVersion.delete({ where: { versionNo: base.versionNo } })).rejects.toThrow();
+  });
+
+  it("база держит отметку «бывала у всех»: без отметки публикации в игре её не бывает", async () => {
+    const base = await importSnapshot();
+    await expect(prisma.$executeRaw`UPDATE content_version SET released_all_at = now() WHERE version_no = ${base.versionNo} AND published_at IS NULL`).rejects.toThrow(/content_version_released_all_check/);
+    await prisma.$executeRaw`UPDATE content_version SET published_at = now(), released_all_at = now() WHERE version_no = ${base.versionNo}`;
   });
 });
 
