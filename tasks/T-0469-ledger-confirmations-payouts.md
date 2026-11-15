@@ -3,8 +3,8 @@ id: T-0469
 title: Подтверждение отчёта участниками, выплаты и сообщения в боте
 epic: E15
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0468]
