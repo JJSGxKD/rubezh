@@ -133,6 +133,7 @@ describe("план вайпа: порядок стирания", () => {
       "BoostCredit",
       "CodexEntry",
       "SecretFound",
+      "BotCard",
     ]);
   });
 

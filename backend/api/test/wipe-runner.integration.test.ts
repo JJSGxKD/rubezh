@@ -151,12 +151,12 @@ function tableOf(model: string): string {
 }
 
 describe("захват таблиц на время вайпа: список и текст", () => {
-  it("список — 30 таблиц плана по @@map, purchase и tester_compensation, ровно и без повторов", () => {
+  it("список — 31 таблица плана по @@map, purchase и tester_compensation, ровно и без повторов", () => {
     const expected = [...WIPE_ORDER.map((model) => tableOf(model)), "purchase", "tester_compensation"];
 
     expect([...WIPE_LOCK_TABLES].sort()).toEqual([...expected].sort());
     expect(new Set(WIPE_LOCK_TABLES).size).toBe(WIPE_LOCK_TABLES.length);
-    expect(WIPE_LOCK_TABLES).toHaveLength(32);
+    expect(WIPE_LOCK_TABLES).toHaveLength(33);
   });
 
   it("текст отказа по сроку: 10 секунд из «Решений», остальные — со склонением", () => {

@@ -160,6 +160,7 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "boost_credit",
   "codex_entry",
   "secret_found",
+  "bot_card",
   "purchase",
   "tester_compensation",
 ];
@@ -247,6 +248,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.passClaim.deleteMany({});
     case "BoostCredit":
       return await tx.boostCredit.deleteMany({});
+    case "BotCard":
+      return await tx.botCard.deleteMany({});
     default:
       throw new Error(`Модель ${model} не входит в план стирания`);
   }
