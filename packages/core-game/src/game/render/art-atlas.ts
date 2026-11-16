@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import type Phaser from "phaser";
 import { SECRET_KINDS } from "@bh/shared-types";
 import { mixChannels, STAGE_LOOKS } from "./looks";
