@@ -3,8 +3,8 @@ id: T-0470
 title: «Бухгалтерия → Месяцы» в панели — сверка, отчёт, закрытие и выплаты
 epic: E15
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0468, T-0469, T-0464]
