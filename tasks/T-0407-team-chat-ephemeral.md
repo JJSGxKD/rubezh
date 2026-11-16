@@ -3,8 +3,8 @@ id: T-0407
 title: Эфемерные ответы в чате команды — /help, меню выгрузки и отказы видит только спросивший
 epic: E5
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0393, T-0394]
