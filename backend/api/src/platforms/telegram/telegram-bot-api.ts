@@ -145,6 +145,12 @@ export interface PreparedArticle {
   description: string;
   text: string;
   button: InlineButton;
+  /**
+   * Картинка сообщения. Фото по адресу Telegram берёт только JPEG, а наши
+   * картинки — PNG: поэтому она идёт не фото, а большим предпросмотром ссылки
+   * над текстом, без загрузки в Telegram.
+   */
+  imageUrl?: string;
 }
 
 const preparedSchema = z.object({ id: z.string().min(1), expiration_date: z.number().int().optional() });
@@ -355,7 +361,10 @@ export class TelegramBotApi {
           id: article.id,
           title: article.title,
           description: article.description,
-          input_message_content: { message_text: article.text },
+          input_message_content: {
+            message_text: article.text,
+            ...(article.imageUrl === undefined ? {} : { link_preview_options: { url: article.imageUrl, prefer_large_media: true, show_above_text: true } }),
+          },
           reply_markup: { inline_keyboard: [[article.button]] },
         },
         { allow_user_chats: true, allow_group_chats: true, allow_channel_chats: true, allow_bot_chats: false },
