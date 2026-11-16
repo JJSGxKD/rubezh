@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { DomainError } from "../src/common/domain-error.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
-import { REDIS, closeRedis, createRedis } from "../src/infra/redis.js";
+import { closeRedis, createRedis } from "../src/infra/redis.js";
 import { PrismaAchievementsRepository } from "../src/modules/achievements/achievements.repository.js";
 import { EMBLEM_IDS } from "../src/modules/achievements/emblem-rules.js";
 import { PrismaEmblemsRepository, emblemHoldersSql } from "../src/modules/achievements/emblems.repository.js";
@@ -35,7 +35,7 @@ import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
 import { VIP_GIFT_DAY_LIMIT } from "../src/modules/vip/vip-gift-rules.js";
-import { PrismaVipGiftRepository, type VipGiftRepository } from "../src/modules/vip/vip-gift.repository.js";
+import { PrismaVipGiftRepository } from "../src/modules/vip/vip-gift.repository.js";
 import { VipGiftService } from "../src/modules/vip/vip-gift.service.js";
 import { VIP_GIFT_SKU, VIP_PERIOD_SEC } from "../src/modules/vip/vip-plan.js";
 import { PrismaVipRepository } from "../src/modules/vip/vip.repository.js";
@@ -206,7 +206,7 @@ describe.skipIf(DATABASE_URL === "")("VIP в подарок на живых Post
       expect(indexes.map((row) => row.indexdef).join("\n")).toMatch(/\(recipient_account_id, ends_at\)/);
     });
 
-    it("база не примет срок нулевой длины, отозванное раньше начала не нужно: отзыв — отметка времени", async () => {
+    it("база не примет срок нулевой длины", async () => {
       const giver = await player();
       const recipient = await player();
       const purchaseId = await paidVip(giver.accountId);
