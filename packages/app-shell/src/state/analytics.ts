@@ -66,6 +66,7 @@ export const ANALYTICS_EVENTS = [
   "codex_viewed",
   "emblem_shown_changed",
   "appearance_changed",
+  "player_card_opened",
   "task_link_opened",
   "task_shown",
   "bot_mention_started",
