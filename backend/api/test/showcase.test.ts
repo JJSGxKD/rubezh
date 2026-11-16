@@ -13,6 +13,7 @@ import { ITEM_SLOTS, MAX_ITEM_LEVEL, RARITY_RULES, type ItemSlot } from "../src/
 import { levelCap, rollItem, seededRandom } from "../src/modules/items/item-rules.js";
 import { ItemRuleError } from "../src/modules/items/items-errors.js";
 import type { ItemsService, PurchasedItem } from "../src/modules/items/items.service.js";
+import { FreeGemsService } from "../src/modules/shop/free-gems.service.js";
 import { ShopController } from "../src/modules/shop/shop.controller.js";
 import { ShowcaseExpiredError, ShowcaseOfferNotFoundError, ShowcaseSoldError } from "../src/modules/shop/shop-errors.js";
 import { ShopService } from "../src/modules/shop/shop.service.js";
@@ -290,6 +291,7 @@ describe("витрина по HTTP", () => {
         { provide: REDIS, useValue: unavailableRedis },
         { provide: ShopService, useValue: {} },
         { provide: ShowcaseService, useValue: ctx.service },
+        { provide: FreeGemsService, useValue: {} },
         RateLimiter,
         AuthGuard,
       ],

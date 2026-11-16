@@ -98,14 +98,14 @@ const NETWORKS: AdNetwork[] = [
   { networkKey: "taddy", name: "Taddy", active: false, priority: 40, keys: {}, missing: ["pubId"], problem: null },
 ];
 
-const FORMATS = { second_chance: "rewarded", wheel_spin: "rewarded", run_double: "rewarded", card_reroll: "rewarded", daily_double: "rewarded", task: "task", interstitial: "interstitial" };
+const FORMATS = { second_chance: "rewarded", wheel_spin: "rewarded", run_double: "rewarded", card_reroll: "rewarded", daily_double: "rewarded", free_gems: "rewarded", task: "task", interstitial: "interstitial" };
 
 function block(patch: Partial<AdBlock> = {}): AdBlock {
   return { blockId: "b1", networkKey: "adsgram", place: "wheel_spin", externalId: "123", success: "view", active: true, platforms: [], devices: [], problem: null, archivedAt: null, ...patch };
 }
 
 function view(patch: Partial<AdsView> = {}): AdsView {
-  return { networks: NETWORKS, blocks: [], funnel: [], passes: [], days: 7, places: ["second_chance", "wheel_spin", "run_double", "card_reroll", "daily_double", "task", "interstitial"], profiles: PROFILES, formats: FORMATS, testMode: false, ...patch };
+  return { networks: NETWORKS, blocks: [], funnel: [], passes: [], days: 7, places: ["second_chance", "wheel_spin", "run_double", "card_reroll", "daily_double", "free_gems", "task", "interstitial"], profiles: PROFILES, formats: FORMATS, testMode: false, ...patch };
 }
 
 function form(patch: Partial<BlockForm> = {}): BlockForm {
@@ -171,7 +171,7 @@ describe("реклама в панели: место «Награда дня ×2
 describe("реклама в панели: форма блока по профилю сети", () => {
   it("места — по форматам сети; недоступные — с причиной словами", () => {
     const richads = placeOptions(view(), "richads");
-    expect(richads.filter((option) => option.support !== null).map((option) => option.place)).toEqual(["second_chance", "wheel_spin", "run_double", "card_reroll", "daily_double", "interstitial"]);
+    expect(richads.filter((option) => option.support !== null).map((option) => option.place)).toEqual(["second_chance", "wheel_spin", "run_double", "card_reroll", "daily_double", "free_gems", "interstitial"]);
     expect(richads.find((option) => option.place === "task")?.reason).toBe("месту нужен формат «задание сети», у RichAds его нет");
     expect(placeOptions(view(), "monetag")[0]?.reason).toBe("сети нет в коде");
   });
