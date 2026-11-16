@@ -395,7 +395,7 @@ describe("выборка материалов партнёра (последня
 
   it("оставляет общие и свои неархивные, остальное отбрасывает, даже если хранилище отдало лишнее", () => {
     const mine = randomUUID();
-    const rows = [row({ title: "общий" }), row({ title: "свой", partnerId: mine }), row({ title: "чужой", partnerId: randomUUID() }), row({ title: "архив", archivedAt: NOW }), row({ title: "свой архив", partnerId: mine, archivedAt: NOW })];
+    const rows = [row({ title: "общий" }), row({ title: "свой", partnerId: mine, sort: 1 }), row({ title: "чужой", partnerId: randomUUID() }), row({ title: "архив", archivedAt: NOW }), row({ title: "свой архив", partnerId: mine, archivedAt: NOW })];
     expect(materialsVisibleTo(rows, mine).map((item) => item.title)).toEqual(["общий", "свой"]);
   });
 
