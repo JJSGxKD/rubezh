@@ -1,6 +1,7 @@
 import type { RunGraphicsOptions } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
+import { useOwnAppearance } from "./appearance-api";
 import { draftArtAllowed } from "./flags";
 import { createPersistedValue } from "./persisted";
 import { reportError, track, useShell } from "./shell";
@@ -110,7 +111,11 @@ export function runGraphics(): RunGraphicsOptions {
   const { telegraphs, weaponEffects, damageNumbers, art } = useGraphics.getState();
   // Без доступа арта нет при любой настройке: сохранённое «включён» — умолчание,
   // а не выбор игрока.
-  return { telegraphs, weaponEffects, damageNumbers, art: draftArtAllowed() && art };
+  const artOn = draftArtAllowed() && art;
+  // Облик — только вид и только с артом: в режиме фигур его кадров нет. Не
+  // загруженный облик (гость, нет сети) — пусто, герой остаётся Хранителем.
+  const appearance = artOn ? useOwnAppearance.getState().own?.effective : undefined;
+  return { telegraphs, weaponEffects, damageNumbers, art: artOn, ...(appearance === undefined ? {} : { appearance }) };
 }
 
 type StoredGraphics = z.infer<typeof schema>;

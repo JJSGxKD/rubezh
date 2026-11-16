@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import type Phaser from "phaser";
 import { SECRET_KINDS } from "@bh/shared-types";
 import { mixChannels, STAGE_LOOKS } from "./looks";
@@ -68,6 +69,68 @@ const ATLASES = [
     json: new URL("../../../../../design/art/out/atlas-env.json", import.meta.url).href,
   },
 ] as const;
+
+/** Ключ текстуры атласа облика: в забеге надет один облик, поэтому ключ один. */
+export const ART_SKIN_KEY = "art-skin";
+
+/**
+ * Адреса атласов обликов `atlas-skin-<id>` — Vite кладёт их ассетами с хэшем.
+ * Сами файлы не качаются, пока облик не нужен: здесь только адреса.
+ */
+const SKIN_PNG = import.meta.glob("../../../../../design/art/out/atlas-skin-*.png", { query: "?url", import: "default", eager: true }) as Record<string, string>;
+const SKIN_JSON = import.meta.glob("../../../../../design/art/out/atlas-skin-*.json", { query: "?url", import: "default", eager: true }) as Record<string, string>;
+
+function skinUrls(files: Record<string, string>, ext: string): Map<string, string> {
+  const byId = new Map<string, string>();
+  for (const [path, url] of Object.entries(files)) {
+    const id = new RegExp(`atlas-skin-([^/]+)\\.${ext}$`).exec(path)?.[1];
+    if (id !== undefined) byId.set(id, url);
+  }
+  return byId;
+}
+
+const SKIN_PNG_BY_ID = skinUrls(SKIN_PNG, "png");
+const SKIN_JSON_BY_ID = skinUrls(SKIN_JSON, "json");
+
+/** Облик Хранителя — кадры `hero/…` атласа core, своего атласа у него нет. */
+const DEFAULT_APPEARANCE = "keeper";
+
+/** Адреса атласа облика; `null` — Хранитель, пустой или неизвестный id. */
+export function skinAtlasFor(appearance: string | undefined): { png: string; json: string } | null {
+  if (appearance === undefined || appearance === DEFAULT_APPEARANCE) return null;
+  const png = SKIN_PNG_BY_ID.get(appearance);
+  const json = SKIN_JSON_BY_ID.get(appearance);
+  return png !== undefined && json !== undefined ? { png, json } : null;
+}
+
+/** Имена кадров героя: покой, шаг и кадр под вспышку ранения. */
+export interface HeroFrameNames {
+  idle: string[];
+  walk: string[];
+  hurt: string;
+}
+
+const HERO_IDLE_FRAMES = 2;
+
+/**
+ * Кадры героя по облику. У Хранителя и у облика, которого нет в атласе целиком
+ * (`has` — «кадр найден»), — `hero/…` атласа core: смесь двух героев хуже
+ * прежнего. У облика кадра ранения нет — ранение показывает кадр покоя, а
+ * вспышку даёт рендер.
+ */
+export function heroFrameNames(appearance: string | undefined, has: (name: string) => boolean): HeroFrameNames {
+  const keeper: HeroFrameNames = {
+    idle: Array.from({ length: HERO_IDLE_FRAMES }, (_, k) => `hero/idle${String(k)}`),
+    walk: Array.from({ length: ART_WALK_FRAMES }, (_, k) => `hero/walk${String(k)}`),
+    hurt: "hero/hurt0",
+  };
+  if (appearance === undefined || appearance === DEFAULT_APPEARANCE) return keeper;
+  const idle = Array.from({ length: HERO_IDLE_FRAMES }, (_, k) => `hero-${appearance}/idle${String(k)}`);
+  const walk = Array.from({ length: ART_WALK_FRAMES }, (_, k) => `hero-${appearance}/walk${String(k)}`);
+  const first = idle[0];
+  if (first === undefined || ![...idle, ...walk].every(has)) return keeper;
+  return { idle, walk, hurt: first };
+}
 
 /** Нейтральная плитка земли: цвет зоны рендер кладёт окраской по вершинам. */
 const GROUND_URL = new URL("../../../../../design/art/out/ground-neutral.webp", import.meta.url).href;
@@ -153,9 +216,16 @@ export function faceLeft(vx: number, speed: number, wasLeft: boolean): boolean {
 export class ArtAtlas {
   private readonly scene: Phaser.Scene;
   private state: "idle" | "loading" | "ready" | "failed" = "idle";
+  /** Атлас облика: необязательный, недошедший оставляет героя Хранителем. */
+  private skin: { png: string; json: string } | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  /** Какой облик качать; работает до начала загрузки — облик не меняется посреди забега. */
+  setSkin(appearance: string | undefined): void {
+    if (this.state === "idle") this.skin = skinAtlasFor(appearance);
   }
 
   get ready(): boolean {
@@ -174,6 +244,7 @@ export class ArtAtlas {
     for (const atlas of ATLASES) {
       if (!this.scene.textures.exists(atlas.key)) this.scene.load.atlas(atlas.key, atlas.png, atlas.json);
     }
+    if (this.skin !== null && !this.scene.textures.exists(ART_SKIN_KEY)) this.scene.load.atlas(ART_SKIN_KEY, this.skin.png, this.skin.json);
     if (!this.scene.textures.exists(ART_GROUND_KEY)) this.scene.load.image(ART_GROUND_KEY, GROUND_URL);
     this.scene.load.once("complete", () => {
       // Недошедший атлас не роняет забег: режим разработчика остаётся на фигурах.
@@ -192,6 +263,7 @@ export class ArtAtlas {
     for (const atlas of ATLASES) {
       if (this.scene.textures.get(atlas.key).has(frame)) return { texture: atlas.key, frame };
     }
+    if (this.scene.textures.exists(ART_SKIN_KEY) && this.scene.textures.get(ART_SKIN_KEY).has(frame)) return { texture: ART_SKIN_KEY, frame };
     return null;
   }
 }
@@ -233,6 +305,7 @@ export class ArtMode {
   private readonly lastFrame: Int8Array;
   private readonly left: Uint8Array;
   private heroLeft = false;
+  private appearance: string | undefined;
   /** масштаб кадра атласа к игровым единицам на экране */
   readonly scale: number;
 
@@ -248,6 +321,15 @@ export class ArtMode {
 
   get on(): boolean {
     return this.enabled;
+  }
+
+  /**
+   * Облик героя (только вид, RunGraphicsOptions.appearance). Действует, пока
+   * атласы не начали грузиться: у забега облик один.
+   */
+  setAppearance(appearance: string | undefined): void {
+    this.appearance = appearance;
+    this.atlas.setSkin(appearance);
   }
 
   /**
@@ -282,11 +364,11 @@ export class ArtMode {
         }
       }
     });
-    const hero = (state: string, count: number): ArtFrame[] =>
-      Array.from({ length: count }, (_, k) => this.atlas.find(`hero/${state}${String(k)}`)).filter((frame): frame is ArtFrame => frame !== null);
-    const idle = hero("idle", 2);
-    const walk = hero("walk", ART_WALK_FRAMES);
-    this.heroFrames = idle.length > 0 && walk.length > 0 ? { idle, walk, hurt: this.atlas.find("hero/hurt0") } : null;
+    const names = heroFrameNames(this.appearance, (name) => this.atlas.find(name) !== null);
+    const found = (list: readonly string[]): ArtFrame[] => list.map((name) => this.atlas.find(name)).filter((frame): frame is ArtFrame => frame !== null);
+    const idle = found(names.idle);
+    const walk = found(names.walk);
+    this.heroFrames = idle.length > 0 && walk.length > 0 ? { idle, walk, hurt: this.atlas.find(names.hurt) } : null;
     // Порядок — как у GEM_TIERS и PICKUP_LOOKS в looks.ts: индекс ступени и вида подбора.
     this.pickupFrames = {
       gems: ["gem1", "gem2", "gem3", "gem4"].map((id) => this.atlas.find(`pickup/${id}/0`)),

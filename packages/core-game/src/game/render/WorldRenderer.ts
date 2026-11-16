@@ -325,6 +325,7 @@ export class WorldRenderer {
    * лист разработчика: режим листа работает независимо от настроек игрока.
    */
   private applyArtMode(): void {
+    this.art.setAppearance(this.graphics?.appearance);
     this.art.setWanted(this.graphics?.art === true || this.visuals?.sprites === true, () => {
       // Режим сменился — кэши вида и текстуры слотов устарели целиком.
       this.enemySpriteType.fill(-1);
