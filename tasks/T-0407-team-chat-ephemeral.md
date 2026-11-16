@@ -16,6 +16,9 @@ zones:
   - backend/api/test/export-bot.test.ts
 shared:
   - backend/api/src/platforms/telegram/telegram-bot-api.ts
+  - backend/api/src/platforms/telegram/telegram-api-call.ts
+  - backend/api/src/platforms/telegram/telegram-update-schema.ts
+  - backend/api/test/player-address.test.ts
   - backend/api/src/platforms/telegram/bot-router.ts
   - backend/api/src/platforms/telegram/bot-commands.ts
   - backend/api/src/platforms/telegram/bot.module.ts
