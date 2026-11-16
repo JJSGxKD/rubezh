@@ -474,14 +474,14 @@ describe("награда дня ×2 по HTTP", () => {
 
     const claimed = await server.inject({ method: "POST", url: "/api/v1/daily/claim", headers });
     expect(claimed.statusCode).toBe(200);
-    expect(claimed.json<{ data: { claimed: boolean; view: { double: unknown } } }>().data).toMatchObject({ claimed: true, view: { double: { status: "available", coins: 60, shards: 0 } } });
+    expect(claimed.json<{ data: { claimed: boolean; view: { double: unknown } } }>().data).toMatchObject({ claimed: true, view: { double: { status: "available", coins: 63, shards: 0 } } });
 
     const first = await session();
     const result = await double({ sessionId: first });
     expect(result.statusCode).toBe(200);
-    expect(result.json<{ data: unknown }>().data).toEqual({ credited: { coins: 60, shards: 0 }, view: { status: "doubled", coins: 60, shards: 0 } });
+    expect(result.json<{ data: unknown }>().data).toEqual({ credited: { coins: 63, shards: 0 }, view: { status: "doubled", coins: 63, shards: 0 } });
     const after = await server.inject({ method: "GET", url: "/api/v1/daily", headers });
-    expect(after.json<{ data: { double: unknown } }>().data.double).toEqual({ status: "doubled", coins: 60, shards: 0 });
+    expect(after.json<{ data: { double: unknown } }>().data.double).toEqual({ status: "doubled", coins: 63, shards: 0 });
 
     const second = await double({ sessionId: await session() });
     expect(second.statusCode).toBe(409);

@@ -77,7 +77,7 @@ export class DailyDoubleService {
     if (!state.claimedToday) return { status: "unavailable" };
     const done = await this.db(this.doubles.today(accountId, at));
     if (done !== null) return { status: "doubled", coins: done.coins, shards: done.shards };
-    const reward = dailyReward(state.claimedDays, await this.level(accountId), this.ladder());
+    const reward = dailyReward(state.claimedDays, await this.level(accountId), this.ladder(), state.streak);
     const ready = await this.ads.readiness(player, "daily_double", at);
     return {
       status: "available",
@@ -97,7 +97,8 @@ export class DailyDoubleService {
     const state = await this.db(this.daily.state(accountId, at));
     if (!state.claimedToday) throw new DailyNotClaimedError();
     if ((await this.db(this.doubles.today(accountId, at))) !== null) throw new DailyAlreadyDoubledError();
-    const reward = dailyReward(state.claimedDays, await this.level(accountId), this.ladder());
+    // Серия в ставке: удвоение повторяет забор дня, а он уже умножен на серию (T-0262).
+    const reward = dailyReward(state.claimedDays, await this.level(accountId), this.ladder(), state.streak);
 
     // Чужая, незавершённая и чужого места сессия, кап роликов, ограничение — отказы модуля рекламы.
     await this.ads.claim(accountId, sessionId, "daily_double", at);

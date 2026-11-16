@@ -11,6 +11,8 @@
  * docs/30-configuration-map.md.
  */
 
+import { streakMul } from "./daily-streak.js";
+
 export interface DayBase {
   coins: number;
   /** обычные осколки — только седьмому дню: он должен ощущаться крупнее */
@@ -111,13 +113,15 @@ export function levelMul(level: number): number {
 }
 
 /**
- * Награда за день `dayNumber` на уровне `level`. Осколки уровнем не
- * растут: их тратят на улучшение предметов, и цена улучшения от уровня
- * аккаунта не зависит.
+ * Награда за день `dayNumber` на уровне `level` при серии `streak` ступеней
+ * (`daily-streak.ts`, Р154): множитель серии идёт в то же округление, что и
+ * остальное. Осколки уровнем не растут: их тратят на улучшение предметов, и
+ * цена улучшения от уровня аккаунта не зависит; серия растит и монеты, и осколки.
  */
-export function dailyReward(dayNumber: number, level: number, ladder: DailyLadder = DAILY_BASE): DailyRewardAmount {
+export function dailyReward(dayNumber: number, level: number, ladder: DailyLadder = DAILY_BASE, streak = 0): DailyRewardAmount {
   const { dayOfWeek, closedWeeks } = dayPosition(dayNumber);
   const base = ladder[dayOfWeek] ?? { coins: 0, shards: 0 };
   const step = stepMul(closedWeeks);
-  return { coins: Math.round(base.coins * step * levelMul(level)), shards: Math.round(base.shards * step) };
+  const series = streakMul(streak);
+  return { coins: Math.round(base.coins * step * levelMul(level) * series), shards: Math.round(base.shards * step * series) };
 }

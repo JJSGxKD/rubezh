@@ -13,6 +13,12 @@ export interface DailyState {
   claimedDays: number;
   /** забрано ли в эти игровые сутки */
   claimedToday: boolean;
+  /** ступень серии после последнего забора (T-0262); ноль — забора не было */
+  streak: number;
+  /** игровые сутки последнего забора, `ГГГГ-ММ-ДД`; `null` — забора не было */
+  lastClaimDay: string | null;
+  /** сегодняшние игровые сутки по часам базы, `ГГГГ-ММ-ДД` */
+  today: string;
 }
 
 export const DAILY_REPOSITORY = Symbol("DAILY_REPOSITORY");
@@ -22,11 +28,18 @@ export interface DailyRepository {
   /**
    * Отметить забор дня: только если забрано ровно `expected` дней и не в эти
    * сутки. `false` — опередил параллельный запрос или сутки уже закрыты.
+   * `streak` — новая ступень серии, пишется той же строкой (T-0262).
    */
-  advance(accountId: string, expected: number, at: Date): Promise<boolean>;
+  advance(accountId: string, expected: number, at: Date, streak: number): Promise<boolean>;
 }
 
-const stateSchema = z.object({ claimed_days: z.number().int().nonnegative().nullable(), claimed_today: z.boolean().nullable() });
+const stateSchema = z.object({
+  claimed_days: z.number().int().nonnegative().nullable(),
+  claimed_today: z.boolean().nullable(),
+  streak: z.number().int().min(0).max(10).nullable(),
+  last_claim_day: z.string().nullable(),
+  today: z.string(),
+});
 
 @Injectable()
 export class PrismaDailyRepository implements DailyRepository {
@@ -34,27 +47,28 @@ export class PrismaDailyRepository implements DailyRepository {
 
   async state(accountId: string, at: Date): Promise<DailyState> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT d.claimed_days, d.last_claim_day = (${at}::timestamptz AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date AS claimed_today
+      SELECT d.claimed_days, d.last_claim_day = (${at}::timestamptz AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date AS claimed_today,
+        d.streak::int AS streak, d.last_claim_day::text AS last_claim_day, (${at}::timestamptz AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date::text AS today
       FROM (SELECT 1) AS one LEFT JOIN daily_reward d ON d.account_id = ${accountId}::uuid`;
     const row = stateSchema.parse(rows[0]);
-    return { claimedDays: row.claimed_days ?? 0, claimedToday: row.claimed_today ?? false };
+    return { claimedDays: row.claimed_days ?? 0, claimedToday: row.claimed_today ?? false, streak: row.streak ?? 0, lastClaimDay: row.last_claim_day, today: row.today };
   }
 
-  async advance(accountId: string, expected: number, at: Date): Promise<boolean> {
+  async advance(accountId: string, expected: number, at: Date, streak: number): Promise<boolean> {
     // Строка появляется с первым забранным днём, поэтому «ноль» — это «строки
     // нет»: второй параллельный первый забор упрётся в ключ.
     if (expected === 0) {
       return (
         (await this.prisma.$executeRaw`
-          INSERT INTO daily_reward (account_id, claimed_days, last_claim_day, updated_at)
-          VALUES (${accountId}::uuid, 1, (${at}::timestamptz AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date, ${at})
+          INSERT INTO daily_reward (account_id, claimed_days, last_claim_day, streak, updated_at)
+          VALUES (${accountId}::uuid, 1, (${at}::timestamptz AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date, ${streak}::smallint, ${at})
           ON CONFLICT (account_id) DO NOTHING`) > 0
       );
     }
     return (
       (await this.prisma.$executeRaw`
         UPDATE daily_reward
-        SET claimed_days = claimed_days + 1, last_claim_day = (${at}::timestamptz AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date, updated_at = ${at}
+        SET claimed_days = claimed_days + 1, last_claim_day = (${at}::timestamptz AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date, streak = ${streak}::smallint, updated_at = ${at}
         WHERE account_id = ${accountId}::uuid AND claimed_days = ${expected}::int
           AND last_claim_day < (${at}::timestamptz AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date`) > 0
     );
