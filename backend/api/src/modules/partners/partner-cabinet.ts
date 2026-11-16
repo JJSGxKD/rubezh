@@ -28,6 +28,8 @@ import { SETTINGS, type SettingDefinition } from "../settings/setting-catalog.js
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import { CABINET_FUNNEL, buildCabinetFunnel, checkFunnelPeriod, type CabinetFunnel, type CabinetFunnelSource } from "./partner-cabinet-funnel.js";
 import { PartnerNotFoundError } from "./partner-errors.js";
+import { cabinetMaterials, type CabinetMaterials } from "./partner-materials.js";
+import { PARTNER_MATERIALS, type PartnerMaterialsRepository } from "./partner-materials.repository.js";
 import { withTerms, type PartnerStatus } from "./partner-rules.js";
 import { PARTNERS_REPOSITORY, type PartnersRepository } from "./partners.repository.js";
 
@@ -44,7 +46,8 @@ import { PARTNERS_REPOSITORY, type PartnersRepository } from "./partners.reposit
  *   словом, в пределах лимитов из настроек, без прав `links.manage` и `promo.edit`: право кабинета проверено
  *   в `partnerOf`, а владелец записи — всегда партнёр кабинета. Награду копии партнёр не выбирает — она
  *   берётся у исходной кампании; игроков, их имён и ID в ответах нет (docs/23 §4.4);
- * - воронка (T-0219): вехи игроков партнёра по ссылкам, кодам и дням — в `partner-cabinet-funnel.ts`, где и порог группы.
+ * - воронка (T-0219): вехи игроков партнёра по ссылкам, кодам и дням — в `partner-cabinet-funnel.ts`, где и порог группы;
+ * - материалы (T-0221): общие и свои, без архивных, — в `partner-materials.ts`; партнёр — только из `partnerOf`.
  */
 
 /** Состояние кабинета в карточке партнёра: с каким аккаунтом связан и есть ли у аккаунта роль. */
@@ -298,6 +301,7 @@ export class PartnerCabinet {
     @Optional() @Inject(PARTNER_PROMOS) private readonly partnerPromos: PartnerPromos | null = null,
     @Optional() @Inject(SETTINGS_READER) private readonly settings: SettingsReader | null = null,
     @Optional() @Inject(CABINET_FUNNEL) private readonly funnelSource: CabinetFunnelSource | null = null,
+    @Optional() @Inject(PARTNER_MATERIALS) private readonly materialStore: PartnerMaterialsRepository | null = null,
   ) {}
 
   /**
@@ -337,6 +341,11 @@ export class PartnerCabinet {
     if ((await this.db(this.partners.byId(scope.partnerId, at))) === null) throw new PartnerNotFoundError();
     const raw = await withTimeout(this.need(this.funnelSource, "воронка").report(scope.partnerId, period.from, period.to), FUNNEL_TIMEOUT_MS, "воронка кабинета партнёра");
     return buildCabinetFunnel(raw, period, this.setting(SETTINGS.partnersCabinetMinGroup));
+  }
+
+  async materials(actor: AccountRef, query: CabinetQuery): Promise<CabinetMaterials> {
+    const scope = await this.partnerOf(actor, query);
+    return await this.db(cabinetMaterials(this.need(this.materialStore, "материалы"), scope));
   }
 
   /** Ссылки партнёра с переходами и запусками — те же числа, что в разделе «Ссылки» команды. */
