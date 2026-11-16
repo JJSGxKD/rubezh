@@ -27,6 +27,12 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - packages/app-shell/src/screens/meta/player-card-link.tsx
+  - packages/app-shell/src/screens/meta/rating-podium.tsx
+  - packages/app-shell/src/i18n/player-card.ts
+  - packages/app-shell/src/i18n/ru-player-card.json
+  - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/test/player-card-open.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
