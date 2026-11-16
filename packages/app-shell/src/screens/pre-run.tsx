@@ -4,10 +4,12 @@ import { ACCOUNT_UNLOCKS, unlockLevelOf, unlocksAt, BASE_WEAPONS } from "@bh/cor
 import { Button, Card, Modal, SectionTitle, SegmentedControl } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../i18n";
+import "../i18n/account";
 import "../i18n/boosts";
 import { buyBoosts, type BoostCatalog } from "../state/boosts-api";
 import { hasCheats, useDevMode } from "../state/dev-mode";
 import { createId } from "../state/ids";
+import { modifierIdsOf, modifierRewardNote, modifierRows, resolveModifierChoice } from "../state/modifier-choice";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
 import { useProgress } from "../state/progress";
@@ -45,6 +47,33 @@ function useRunLevel(): number {
   return runLevel ?? 1;
 }
 
+/**
+ * Уровень аккаунта **с сервера**: из подписанного снимка с уровнем и только у
+ * игрока со входом (T-0123). Гость, нет снимка, загрузка — `null`, и блок
+ * модификаторов не показывается: награду платит сервер, играть «вхолостую»
+ * незачем, а мелькающий блок хуже отсутствующего.
+ */
+function useServerLevel(enabled: boolean): number | null {
+  const runLevel = useProgress((state) => state.runLevel);
+  const [serverLevel, setServerLevel] = useState<number | null>(null);
+  useEffect(() => {
+    if (!enabled) {
+      setServerLevel(null);
+      return;
+    }
+    let alive = true;
+    import("../state/run-loadouts")
+      .then(({ equippedLoadout }) => {
+        if (alive) setServerLevel(equippedLoadout()?.accountLevel ?? null);
+      })
+      .catch((error: unknown) => console.warn("Снимок снаряжения не загрузился:", error));
+    return () => {
+      alive = false;
+    };
+  }, [enabled, runLevel]);
+  return serverLevel;
+}
+
 const MODE_LABEL: Record<PreRunMode, string> = {
   endless: "mode.endless",
   dev: "prerun.mode.dev",
@@ -70,6 +99,9 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
   const devSettings = useDevMode((state) => state.settings);
   const [devOpen, setDevOpen] = useState(false);
   const withAccount = useShell((state) => state.capabilities.auth !== undefined);
+  const serverLevel = useServerLevel(withAccount);
+  const modifier = serverLevel === null ? null : resolveModifierChoice(meta.lastModifierId, serverLevel);
+  const modifierItems = serverLevel === null ? [] : modifierRows(serverLevel);
 
   const [boosts, setBoosts] = useState<string[]>([]);
   const [touched, setTouched] = useState<string | null>(null);
@@ -106,7 +138,8 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
       }
       bought = { runId: result.runId, ids: result.boosts };
     }
-    useRun.getState().intend(bought === undefined ? { kind: "new" } : { kind: "new", boosts: bought });
+    const modifierIds = modifierIdsOf(modifier);
+    useRun.getState().intend({ kind: "new", ...(bought === undefined ? {} : { boosts: bought }), ...(modifierIds === undefined ? {} : { modifierIds }) });
     // Лист закрывается, и забег встаёт над главной: назад из него — на главную.
     onClose();
     navigation.push("run");
@@ -240,6 +273,37 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
                   <b className="mr-1.5 font-display text-[13px] font-normal text-text">{t(selectedWeapon.nameKey)}</b>
                   {t(selectedWeapon.descriptionKey)}
                 </div>
+              )}
+
+              {serverLevel === null || mode === "dev" ? null : (
+                <>
+                  <SectionTitle spacing="mt-2">{t("modifier.title")}</SectionTitle>
+                  <SegmentedControl
+                    track="modifier"
+                    size="s"
+                    label={t("modifier.title")}
+                    activeId={modifier ?? "none"}
+                    onSelect={(id) => {
+                      // Закрытый пункт ничего не меняет: уровень решает сервер, а не нажатие.
+                      if (id === "none") meta.rememberModifier(null);
+                      else if (resolveModifierChoice(id, serverLevel) !== null) meta.rememberModifier(resolveModifierChoice(id, serverLevel));
+                    }}
+                    items={[
+                      { id: "none", label: t("modifier.none") },
+                      ...modifierItems.map((row) => ({
+                        id: row.id,
+                        label: row.locked ? `${t(row.nameKey)} · ${t("weapon.select.locked.short", { level: row.level })}` : t(row.nameKey),
+                      })),
+                    ]}
+                  />
+                  {modifier === null ? null : (
+                    <div className="surface-sunken rounded-md px-2.5 py-2 text-xs leading-snug text-text-muted">
+                      <b className="mr-1.5 font-display text-[13px] font-normal text-text">{t(`modifier.${modifier}.name`)}</b>
+                      {t(`modifier.${modifier}.description`)}
+                      <span className="mt-1 block text-text">{modifierRewardNote(modifier)}</span>
+                    </div>
+                  )}
+                </>
               )}
 
               {meta.runs === 0 ? <p className="text-xs text-text-muted">{t("prerun.tutorial")}</p> : null}
