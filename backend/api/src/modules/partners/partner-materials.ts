@@ -156,7 +156,7 @@ export class PartnerMaterialsService {
     await this.roles.require(actor, "partners.edit");
     const current = await this.db(this.store.byId(materialId));
     if (current === null) throw new PartnerMaterialNotFoundError();
-    if (input.kind !== current.kind) throw new ValidationError("Вид материала не меняется — заведите новый");
+    if (input.kind !== current.kind) throw new ValidationError("Вид материала не меняется: нужен новый материал");
     await this.checkTargets(input, current, at);
     const patch = { title: input.title, text: input.text, imageId: input.imageId, partnerId: input.partnerId, sort: input.sort };
     const changed = await this.db(this.store.update(materialId, patch, at));

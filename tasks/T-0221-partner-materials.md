@@ -30,6 +30,9 @@ shared:
   - backend/api/src/modules/admin/admin.module.ts
   - docs/21-diagrams.md
   - docs/23-referral-and-partner-program.md
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/partner-materials.test.ts
+  - backend/api/src/modules/partners/partners.module.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
