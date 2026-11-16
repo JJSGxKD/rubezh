@@ -16,6 +16,7 @@ shared:
   - packages/core-game/src/game/render/WorldRenderer.ts
   - packages/app-shell/src/state/graphics.ts
   - packages/app-shell/src/state/run.ts
+  - packages/app-shell/test/graphics.test.ts
   - docs/27-design-system-and-app-shell.md
 runner: any
 executor: sonnet-5.5
