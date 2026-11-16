@@ -21,6 +21,8 @@ export interface AuthApiConfig {
 
 export interface AuthAccount {
   accountId: string;
+  /** публичный id игрока (T-0247): по нему открывается своя карточка «Как меня видят»; нет поля — сервер до публичных id */
+  publicId?: string | undefined;
   displayName: string;
   photoUrl: string | null;
   createdAt: string;
@@ -103,6 +105,7 @@ const sessionSchema = z.object({
   refreshToken: z.string(),
   account: z.object({
     accountId: z.string(),
+    publicId: z.optional(z.string()),
     displayName: z.string(),
     photoUrl: z.nullable(z.string()),
     createdAt: z.string(),

@@ -66,6 +66,8 @@ export const leaderboardSchema = z.object({
       rank: z.number(),
       /** лучший забег игрока: по нему строка открывает карточку забега (T-0297); сервер до карточки поля не отдавал */
       runId: z.optional(z.string()),
+      /** публичный id игрока (T-0247): по нему открывается карточка; сервер до публичных id поля не отдавал, строка тогда не открывает карточку */
+      publicId: z.optional(z.string()),
       name: z.string(),
       photoUrl: z.nullable(z.string()),
       survivalSec: z.number(),

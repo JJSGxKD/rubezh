@@ -32,6 +32,7 @@ shared:
   - packages/app-shell/src/i18n/player-card.ts
   - packages/app-shell/src/i18n/ru-player-card.json
   - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/src/state/auth-api.ts
   - packages/app-shell/test/player-card-open.test.ts
 runner: any
 executor: sonnet-5.5
