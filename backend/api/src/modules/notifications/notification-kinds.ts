@@ -22,6 +22,8 @@ export const NOTIFICATION_KINDS = {
   friend_request: z.object({ fromAccountId: z.string().uuid(), fromName: name }),
   /** подарок друга ждёт, чтобы его забрали */
   friend_gift: z.object({ fromAccountId: z.string().uuid(), fromName: name }),
+  /** другу подарили VIP (T-0249, Р155): имя дарящего — копия на момент выдачи, `days` — сколько суток подарено */
+  vip_gift: z.object({ fromName: name, days: z.number().int().min(1).max(366) }),
   /** редкая добыча забега */
   rare_loot: z.object({ itemId: z.string().uuid(), slot: id, rarity: id, salvaged: z.boolean() }),
   /** бусты вернулись: забег так и не начался */

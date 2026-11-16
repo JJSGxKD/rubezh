@@ -52,3 +52,24 @@ export function vipProduct(): Product {
 }
 
 export const VIP_PERIOD_SEC = VIP_PLAN.periodDays * 24 * 60 * 60;
+
+/**
+ * VIP в подарок другу (Р155, T-0249): разовая покупка на один период подписки, не подписка —
+ * продлевать за друга нельзя. Цена — как месяц подписки: подарок не дешевле и не дороже.
+ */
+export const VIP_GIFT_SKU = {
+  /** товар в строке покупки и в отчёте о выручке; продукт покупки — `vip_gift` */
+  sku: "vip_gift",
+  /** название в окне оплаты — у площадки до 32 знаков с пометкой тестовой оплаты; имя получателя — в описании */
+  title: "VIP в подарок",
+  /** базовая цена в рублях — для отчёта; ручная цена в звёздах побеждает пересчёт */
+  baseRub: VIP_PLAN.baseRub,
+  stars: VIP_PLAN.stars,
+  /** сколько суток VIP получает друг */
+  days: VIP_PLAN.periodDays,
+} as const;
+
+/** VIP в подарок для слоя цен WP9: базовая цена и ручная — в звёздах. */
+export function vipGiftProduct(): Product {
+  return { id: VIP_GIFT_SKU.sku, base: { currency: "RUB", amount: VIP_GIFT_SKU.baseRub }, manual: { telegram_stars: String(VIP_GIFT_SKU.stars) } };
+}
