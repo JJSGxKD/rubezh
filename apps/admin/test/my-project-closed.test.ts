@@ -65,7 +65,7 @@ const CONFIRMED = withMine({ confirmation: { status: "confirmed", comment: null,
 const DISPUTED = withMine({ confirmation: { status: "disputed", comment: "Не сходятся расходы на серверы", decidedAt: DECIDED_AT } });
 const PAID = withMine({ confirmation: { status: "confirmed", comment: null, decidedAt: DECIDED_AT }, paidRub: "15980.40", remainingRub: "0.00", canChange: false });
 
-const plain = (text: string) => text.replace(/[  ]/g, " ");
+const plain = (text: string) => text.replace(/\s/g, " ");
 const html = (report: MyReport, props: { error?: ApiError | null; initialDisputing?: boolean } = {}) =>
   plain(renderToStaticMarkup(createElement(ClosedMonth, { report, busy: false, error: props.error ?? null, initialDisputing: props.initialDisputing ?? false, onDecide: () => undefined })));
 

@@ -1,10 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../../services";
-import { loadMyProject, monthTitle, moneyLine, type MyProject } from "../../api/my-project";
+import type { ApiError, ApiResult } from "../../api/client";
+import { decideMyReport, loadMyProject, loadMyReport, monthTitle, moneyLine, reportStatus, type MyDecision, type MyProject, type MyReport } from "../../api/my-project";
 import { monthFrom } from "../../api/stakeholders";
 import { formatNumber, plural } from "../../format";
 import { Button, ErrorNotice, Notice, Panel, Select } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
+import { ClosedMonth } from "./ClosedMonth";
 
 /**
  * Кабинет «Мой проект» (docs/29-admin-panel.md §6.6, Р218): доля, выручка месяца, холд и черновик своей
@@ -152,9 +154,31 @@ function RateLine({ data }: { data: MyProject }) {
   );
 }
 
+/**
+ * Что показывать за выбранный месяц: черновик (месяц идёт или ещё не закрыт), отчёт закрытого месяца, загрузку отчёта
+ * или ошибку. Закрыт ли месяц, решает сервер: на не закрытый он отвечает 409, на чужой — 403 (T-0469).
+ */
+export type MonthState = { status: "loading" } | { status: "draft" } | { status: "closed"; report: MyReport } | { status: "error"; error: ApiError };
+
+interface ContentProps {
+  data: MyProject;
+  onMonth: (month: string) => void;
+  /** без него — черновик, как у открытого месяца */
+  state?: MonthState;
+  /** месяцы, где отчёт ждёт подтверждения участника: метка в списке */
+  awaiting?: ReadonlySet<string>;
+  busy?: boolean;
+  decideError?: ApiError | null;
+  onDecide?: (decision: MyDecision, comment?: string) => void;
+  onRetry?: () => void;
+}
+
+const AWAITING_LABEL = "ждёт подтверждения";
+
 /** Экран без загрузки: данные и смена месяца приходят снаружи — так его проверяют отдельно. */
-export function MyProjectContent({ data, onMonth }: { data: MyProject; onMonth: (month: string) => void }) {
+export function MyProjectContent({ data, onMonth, state = { status: "draft" }, awaiting, busy = false, decideError = null, onDecide, onRetry }: ContentProps) {
   const current = data.months[0] === data.month;
+  const draft = state.status === "draft";
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -162,19 +186,73 @@ export function MyProjectContent({ data, onMonth }: { data: MyProject; onMonth: 
           {data.months.map((month) => (
             <option key={month} value={month}>
               {monthTitle(month)}
+              {awaiting?.has(month) === true ? ` · ${AWAITING_LABEL}` : ""}
             </option>
           ))}
         </Select>
         {current ? <span className="text-sm text-text-muted">месяц ещё идёт</span> : null}
       </div>
-      <ShareBlock data={data} />
+      {state.status === "closed" ? (
+        <ClosedMonth report={state.report} busy={busy} error={decideError} onDecide={onDecide ?? (() => undefined)} />
+      ) : null}
+      {state.status === "error" ? <ErrorNotice error={state.error} {...(onRetry === undefined ? {} : { onRetry })} /> : null}
+      {state.status === "loading" ? <div className="h-24 rounded-md border border-border bg-surface-raised" aria-busy="true" aria-label="Загрузка отчёта" /> : null}
+      {state.status === "closed" ? null : <ShareBlock data={data} />}
       <RevenueBlock data={data} />
       <HoldBlock data={data} />
-      <DraftBlock data={data} />
-      <ParticipantsBlock data={data} />
-      <RateLine data={data} />
+      {draft ? <DraftBlock data={data} /> : null}
+      {state.status === "closed" ? null : <ParticipantsBlock data={data} />}
+      {state.status === "closed" ? null : <RateLine data={data} />}
     </div>
   );
+}
+
+/** Ответ на запрос отчёта месяца: закрытый — отчёт; 409 и 403 — это не отчёт, а черновик; остальное — ошибка. */
+export function monthStateOf(result: ApiResult<MyReport>): MonthState {
+  if (result.ok) return { status: "closed", report: result.data };
+  const { status } = result.error;
+  return status === 409 || status === 403 || status === 404 ? { status: "draft" } : { status: "error", error: result.error };
+}
+
+/** Отчёты всех прошлых месяцев: по ним строятся и экран месяца, и метки «ждёт подтверждения» в списке. */
+function useMonthReports(months: readonly string[], attempt: number) {
+  const [reports, setReports] = useState<Record<string, MonthState>>({});
+  const key = months.join(",");
+  useEffect(() => {
+    let alive = true;
+    setReports({});
+    for (const month of months.slice(1)) {
+      void loadMyReport(api, month).then((result) => {
+        if (alive) setReports((previous) => ({ ...previous, [month]: monthStateOf(result) }));
+      });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [key, attempt]);
+  return { reports, put: (month: string, report: MyReport) => setReports((previous) => ({ ...previous, [month]: { status: "closed", report } })) };
+}
+
+function MyProjectLoaded({ data, onMonth, attempt, onRetry }: { data: MyProject; onMonth: (month: string) => void; attempt: number; onRetry: () => void }) {
+  const { reports, put } = useMonthReports(data.months, attempt);
+  const [busy, setBusy] = useState(false);
+  const [decideError, setDecideError] = useState<ApiError | null>(null);
+  useEffect(() => setDecideError(null), [data.month]);
+
+  const state: MonthState = data.months[0] === data.month ? { status: "draft" } : (reports[data.month] ?? { status: "loading" });
+  const awaiting = new Set(Object.entries(reports).filter(([, value]) => value.status === "closed" && reportStatus(value.report) === "waiting").map(([month]) => month));
+
+  const decide = (decision: MyDecision, comment?: string) => {
+    setBusy(true);
+    setDecideError(null);
+    void decideMyReport(api, data.month, decision, comment).then((result) => {
+      setBusy(false);
+      if (result.ok) put(data.month, result.data);
+      else setDecideError(result.error);
+    });
+  };
+
+  return <MyProjectContent data={data} onMonth={onMonth} state={state} awaiting={awaiting} busy={busy} decideError={decideError} onDecide={decide} onRetry={onRetry} />;
 }
 
 function Skeleton() {
@@ -190,12 +268,17 @@ function Skeleton() {
 export function MyProjectScreen() {
   const [month, setMonth] = useState<string | undefined>(undefined);
   const { state, reload } = useApi(() => loadMyProject(api, month), [month]);
+  const [attempt, setAttempt] = useState(0);
+  const refresh = () => {
+    reload();
+    setAttempt((value) => value + 1);
+  };
   return (
     <div className="flex flex-col gap-4">
       {state.status === "loading" ? <Skeleton /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
-      {state.status === "ok" ? <MyProjectContent data={state.data} onMonth={setMonth} /> : null}
-      {state.status === "error" ? null : <Button onClick={reload}>Обновить</Button>}
+      {state.status === "ok" ? <MyProjectLoaded data={state.data} onMonth={setMonth} attempt={attempt} onRetry={refresh} /> : null}
+      {state.status === "error" ? null : <Button onClick={refresh}>Обновить</Button>}
     </div>
   );
 }

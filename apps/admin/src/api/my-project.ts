@@ -52,7 +52,7 @@ export function monthTitle(month: string): string {
 const MONEY = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** «11651.64» → «11 651,64 ₽». Сумма — строка сервера, разряды разбираются без Number только при сомнении. */
-export function moneyLine(amount: string, symbol: "$" | "₽"): string {
+export function moneyLine(amount: string, symbol: string): string {
   const value = Number(amount);
   return `${Number.isFinite(value) ? MONEY.format(value) : amount} ${symbol}`;
 }
