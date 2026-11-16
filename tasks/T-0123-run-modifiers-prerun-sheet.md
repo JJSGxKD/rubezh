@@ -3,8 +3,8 @@ id: T-0123
 title: Модификаторы забега: выбор в листе «Перед забегом»
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead2-19
 size: M
 depends_on: [T-0119, T-0122, T-0084, T-0094, T-0190, T-0193, T-0196]
