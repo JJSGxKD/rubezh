@@ -3,8 +3,8 @@ id: T-0328
 title: Второй сундук в кладе за ролик — движок и окно: кнопка «Ещё сундук за ролик» в окне сундука клада, команда в записи забега, сундук из своего потока
 epic: E1
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0327, T-0258, T-0260]
@@ -16,6 +16,8 @@ shared:
   - packages/core-game/src/game/sim/chests.ts
   - packages/core-game/src/game/sim/secrets.ts
   - packages/core-game/src/game/sim/world.ts
+  - packages/core-game/src/game/sim/create-world.ts
+  - packages/core-game/src/engine/run-engine.ts
   - packages/core-game/src/game/run/snapshot.ts
   - packages/core-game/src/game/run/run-result.ts
   - packages/core-game/src/game/MainScene.ts
@@ -30,6 +32,8 @@ shared:
   - packages/app-shell/src/state/ads-api.ts
   - packages/app-shell/src/i18n/ru-run.json
   - packages/app-shell/src/screens/gallery.tsx
+  - packages/app-shell/src/screens/run/RunScreen.tsx
+  - packages/app-shell/src/i18n/ru-gallery.json
   - packages/app-shell/test/**
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md

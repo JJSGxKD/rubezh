@@ -22,7 +22,7 @@ import { restartSceneData } from "./run/restart-data";
 import { inspectWorld } from "./run/inspect";
 import { AD_REROLL_COMMAND, applyCardTool, BANISH_PREFIX, canAdReroll, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
-import { takeChestEvents, type ChestCursor } from "./sim/chests";
+import { AD_CHEST_COMMAND, applyAdChest, canAdChest, takeChestEvents, type ChestCursor } from "./sim/chests";
 import { describePressureStart } from "./sim/pressure";
 import { chooseBlessing, isAwaitingBlessing, takeSecretEvents, type SecretCursor } from "./sim/secrets";
 import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
@@ -540,6 +540,19 @@ export class MainScene extends Phaser.Scene {
   }
 
   /**
+   * Второй сундук клада за ролик (tasks/T-0328, Р162). Оболочка зовёт его только после того, как сервер
+   * записал показ: сцена о ролике не знает, правило «раз за забег» и окно клада держит мир. Награды второго
+   * сундука придут тем же событием `chestOpened`, окно остаётся открытым. Команда — часть лога выбора.
+   */
+  openAdChest(): void {
+    if (this.phase !== "chest") return;
+    if (!applyAdChest(this.world)) return;
+    this.probe.choice(this.world, AD_CHEST_COMMAND);
+    this.emitChestEvents();
+    this.emitHud();
+  }
+
+  /**
    * Ответ оболочки на капище: одно из предложенных благословений. Неизвестный id
    * игнорируется — он приходит снаружи, — и забег стоит дальше. Выбор — часть
    * записи забега: на этом тике повтор применит то же.
@@ -801,7 +814,11 @@ export class MainScene extends Phaser.Scene {
     this.chestCursor = events.cursor;
     const bus = this.sceneData.bus;
     for (const found of events.found) bus.emit("chestFound", found);
-    for (const opening of events.opened) bus.emit("chestOpened", opening);
+    // «Можно ли взять второй сундук» — по состоянию мира на конец шага: у сундука, который перебит
+    // другим в тот же шаг, кнопки нет.
+    for (const opening of events.opened) {
+      bus.emit("chestOpened", { ...opening, canAdChest: opening.via === "clad" && canAdChest(this.world) });
+    }
     if (events.opened.length > 0 && this.sceneData.pauseOnChest === true) this.enterChest();
   }
 

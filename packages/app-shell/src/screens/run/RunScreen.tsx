@@ -4,6 +4,7 @@ import type { RunResult } from "@bh/shared-types";
 import { ErrorState } from "../../design-system/components";
 import { t } from "../../i18n";
 import "../../i18n/run";
+import { useAdChest } from "../../state/ad-chest";
 import { useAdReroll } from "../../state/ad-reroll";
 import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
@@ -148,6 +149,16 @@ export function RunScreen(): ReactNode {
   // Уход с экрана сбрасывает состояние кнопки: следующий забег спросит сервер заново.
   useEffect(() => () => useAdReroll.getState().reset(), []);
 
+  // Второй сундук клада за ролик (T-0328): сервер спрашивается один раз на забег, когда движок обещает
+  // второй сундук; в прологе кнопки нет.
+  const adChest = useAdChest();
+  const chestCanAd = run.phase === "chest" && run.chest?.canAdChest === true;
+  useEffect(() => {
+    if (!chestCanAd || run.runId === null || prologue) return;
+    void useAdChest.getState().prepare({ runId: run.runId, canAdChest: true });
+  }, [chestCanAd, run.runId, prologue]);
+  useEffect(() => () => useAdChest.getState().reset(), []);
+
   // Экран смерти — отдельный чанк: подтягиваем его, как только забег пошёл,
   // чтобы смерть не ждала сети.
   const running = run.phase === "running";
@@ -250,7 +261,11 @@ export function RunScreen(): ReactNode {
           разработчика в этой фазе не открываются — окно только показывает. */}
       {run.phase === "chest" && run.chest !== null ? (
         <Suspense fallback={null}>
-          <ChestOverlay chest={run.chest} onTake={() => useRun.getState().closeChest()} />
+          <ChestOverlay
+            chest={run.chest}
+            onTake={() => useRun.getState().closeChest()}
+            {...(prologue ? {} : { adChest: { stage: adChest.stage, onWatch: () => void useAdChest.getState().watch() } })}
+          />
         </Suspense>
       ) : null}
 

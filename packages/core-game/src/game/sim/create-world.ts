@@ -399,6 +399,7 @@ export function createWorld(options: CreateWorldOptions): World {
       opened: 0,
       founds: [],
       openings: [],
+      adWindow: null,
     },
     pressureRules,
     secretRules,
@@ -452,6 +453,7 @@ export function createWorld(options: CreateWorldOptions): World {
       toolsTotal,
       banished: [],
       adRerolls: 0,
+      adChests: 0,
       limitStacks: limitTypes.map(() => 0),
     },
     // До первого отрезка таймлайна сложность нейтральна: в мире без директора

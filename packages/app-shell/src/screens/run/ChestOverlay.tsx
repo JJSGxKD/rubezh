@@ -1,5 +1,5 @@
-import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
-import { Star } from "lucide-react";
+import { useCallback, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { Star, Tv } from "lucide-react";
 import type { ChestReward } from "@bh/shared-types";
 import { PASSIVES, WEAPONS } from "@bh/core-game";
 import { audio } from "../../audio";
@@ -10,6 +10,7 @@ import type { OpenedChest } from "../../state/run";
 import { haptic } from "../../state/haptics";
 import { ItemTile, type ItemKind } from "../item-icons";
 import {
+  adChestButton,
   announceText,
   CHEST_LOOKS,
   CHEST_TIMING,
@@ -21,6 +22,8 @@ import {
   revealTimes,
   rewardView,
   sparkVectors,
+  type AdChestButtonState,
+  type AdChestStageView,
   type ChestTier,
   type RewardTag,
 } from "./chest-rules";
@@ -44,6 +47,15 @@ import { formatChange } from "./upgrade-format";
 export interface ChestOverlayProps {
   chest: OpenedChest;
   onTake(): void;
+  /**
+   * «Ещё сундук за ролик» (tasks/T-0328, Р162): вторая кнопка под «Забрать», у сундука клада. Нет поля —
+   * кнопки нет: сундук элиты или босса, площадка без рекламы, пролог. Второй сундук открывается в этом же
+   * окне той же анимацией и встаёт на место первого.
+   */
+  adChest?: {
+    stage: AdChestStageView;
+    onWatch(): void;
+  };
 }
 
 /** Отвлекающие плитки ленты — всё оружие и все пассивки контента. */
@@ -59,21 +71,27 @@ function prefersReducedMotion(): boolean {
 
 export function ChestOverlay(props: ChestOverlayProps): ReactNode {
   const ready = useTapGuard();
-  const { chest } = props;
+  // Второй сундук клада за ролик встаёт на место первого в этом же окне и открывается той же анимацией.
+  const chest = props.chest.second ?? props.chest;
+  const second = props.chest.second !== undefined;
   const titleId = useId();
   const tier = chestTier(chest.size);
   const look = CHEST_LOOKS[tier];
   const [reduced] = useState(prefersReducedMotion);
-  const [opened, setOpened] = useState(reduced);
+  // Вскрытие привязано к сундуку: пришёл второй — сцена закрыта заново, а не остаётся открытой от первого.
+  const [openState, setOpenState] = useState({ index: chest.index, opened: reduced });
+  const opened = openState.index === chest.index ? openState.opened : reduced;
+  const open = useCallback(() => setOpenState({ index: chest.index, opened: true }), [chest.index]);
   const times = revealTimes(chest.rewards.length, reduced);
+  const adButton = props.adChest === undefined ? ({ kind: "hidden" } as const) : adChestButton({ canAdChest: props.chest.canAdChest, stage: props.adChest.stage, taken: second });
 
   // Предвкушение: тряска с нарастающим стуком, потом вскрытие само.
   useEffect(() => {
     if (opened) return;
     audio.runEvent("chestRattle");
-    const timer = setTimeout(() => setOpened(true), look.shakeMs);
+    const timer = setTimeout(open, look.shakeMs);
     return () => clearTimeout(timer);
-  }, [opened, look.shakeMs]);
+  }, [opened, open, look.shakeMs]);
 
   // Вскрытие и звоны наград — по тому же расписанию, что анимация лент.
   useEffect(() => {
@@ -87,9 +105,9 @@ export function ChestOverlay(props: ChestOverlayProps): ReactNode {
       }, ms),
     );
     return () => timers.forEach(clearTimeout);
-    // Только `opened`: расписание считается от вскрытия один раз, а массив
+    // Только `opened` и номер сундука: расписание считается от вскрытия один раз, а массив
     // времён новый на каждой отрисовке и перезапускал бы звоны.
-  }, [opened]);
+  }, [opened, chest.index]);
 
   const lastLandMs = times[times.length - 1] ?? 0;
 
@@ -102,7 +120,7 @@ export function ChestOverlay(props: ChestOverlayProps): ReactNode {
           tier={tier}
           opened={opened}
           finaleMs={tier === "grand" ? lastLandMs : null}
-          onOpen={() => setOpened(true)}
+          onOpen={open}
         />
       }
     >
@@ -116,6 +134,8 @@ export function ChestOverlay(props: ChestOverlayProps): ReactNode {
           Основным текстом: верх реликвии подсвечен тоном яруса, и серый у
           большого сундука падал до 3,5:1. */}
       <p className="mt-1.5 mb-2 text-center text-sm text-text short:hidden">{t("run.chest.subtitle", { count: chest.rewards.length })}</p>
+      {/* Второй сундук клада: пометка — подпись под лентой, чтобы игрок не принял его за повтор первого. */}
+      {second ? <p className="-mt-1 mb-2 text-center font-display text-sm font-semibold text-text short:hidden">{t("run.chest.second")}</p> : null}
       <ul className="mt-2 grid gap-2 short:mt-1 short:gap-1 landscape:grid-cols-2">
         {chest.rewards.map((reward, index) => (
           <RewardRow
@@ -138,8 +158,25 @@ export function ChestOverlay(props: ChestOverlayProps): ReactNode {
         <Button track="take_chest" size="l" block glow onClick={guarded(ready, props.onTake)}>
           {t("run.chest.take")}
         </Button>
+        {/* Второй сундук — не главное действие: награда уже есть, «Забрать» остаётся главной кнопкой. */}
+        {props.adChest === undefined || adButton.kind === "hidden" ? null : <AdChestButton state={adButton} onWatch={guarded(ready, props.adChest.onWatch)} />}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * «Ещё сундук за ролик» (tasks/T-0328): вторая строка под «Забрать», на всю ширину, подпись в одну
+ * строку. Пока идёт ролик, кнопка в загрузке, а «Забрать» остаётся доступной. У VIP — без ролика.
+ */
+function AdChestButton(props: { state: Exclude<AdChestButtonState, { kind: "hidden" }>; onWatch(): void }): ReactNode {
+  const busy = props.state.kind === "busy";
+  const pass = props.state.kind === "ready" && props.state.pass;
+  return (
+    <Button track="ad_chest" variant="secondary" size="m" block loading={busy} onClick={props.onWatch}>
+      <Tv size={18} aria-hidden="true" className="shrink-0" />
+      <span className="min-w-0 leading-tight">{t(pass ? "run.chest.adChest.pass" : "run.chest.adChest")}</span>
+    </Button>
   );
 }
 

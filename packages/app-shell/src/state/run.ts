@@ -57,6 +57,10 @@ export interface OpenedChest {
   index: number;
   size: number;
   rewards: ChestReward[];
+  /** можно ли взять второй сундук за ролик — сундук открыт кладом, право не потрачено (T-0328) */
+  canAdChest: boolean;
+  /** второй сундук клада за ролик: награды вторым набором в том же окне; нет поля — не брали */
+  second?: { index: number; size: number; rewards: ChestReward[] };
 }
 
 /**
@@ -188,6 +192,8 @@ export interface RunStore {
   declineContinue(): void;
   /** Забрать награды сундука и закрыть окно: забег идёт дальше или открывается выбор уровня. */
   closeChest(): void;
+  /** второй сундук клада за ролик: зовётся только после того, как сервер записал показ (T-0328) */
+  openAdChest(): void;
   /** Выбрать благословение капища: движок применит его, и забег пойдёт дальше. */
   chooseBlessing(id: string): void;
   choose(optionId: string): void;
@@ -501,6 +507,12 @@ export const useRun = create<RunStore>((set, get) => ({
     session?.closeChest();
   },
 
+  openAdChest(): void {
+    if (get().phase !== "chest") return;
+    // Награды второго сундука придут событием `chestOpened` с `via: "clad_ad"`, окно остаётся тем же.
+    session?.openAdChest();
+  },
+
   chooseBlessing(id: string): void {
     if (get().phase !== "blessing") return;
     // Фазу дальше ведёт движок: `resumed` или следующее окно, если оно накопилось, — как у сундука.
@@ -758,7 +770,10 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       track("stalker_ended", { index, outcome, hits, pushes, relocations, lifeSec: Math.round(lifeSec), elapsedSec: Math.round(elapsedSec) });
     }),
 
-    created.on("chestOpened",({ index, size, rewards, fallbacks, elapsedSec }) => {
+    created.on("chestOpened",({ index, size, rewards, fallbacks, elapsedSec, via, canAdChest }) => {
+      const adChest = via === "clad_ad";
+      // Второй сундук клада не падал с врага, но «найден» для воронки сундуков: источник — `clad_ad` (T-0328).
+      if (adChest) track("chest_found", { index, size, source: "clad_ad", elapsedSec: Math.round(elapsedSec) });
       track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
       for (const reward of rewards) {
         if (reward.kind !== "weapon_evolve") continue;
@@ -766,7 +781,11 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
         track("evolution_unlocked", { evolution: reward.refId, weapon: recipe?.weaponId ?? "", passive: recipe?.passiveId ?? "", chest: index, level: get().level, elapsedSec: Math.round(elapsedSec) });
       }
       // Звук и отклик вскрытия — у сцены окна: она трясёт сундук перед ним.
-      set({ phase: "chest", chest: { index, size, rewards } });
+      const first = get().chest;
+      set({
+        phase: "chest",
+        chest: adChest && first !== null ? { ...first, canAdChest: false, second: { index, size, rewards } } : { index, size, rewards, canAdChest },
+      });
     }),
 
     // Баннеры рубежа: звук и вибрация уже есть — приход стража звучит как приход

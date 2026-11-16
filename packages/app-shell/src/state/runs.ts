@@ -71,6 +71,8 @@ const finishFields = {
   boosts: z.optional(z.array(z.string())),
   // Переброс за рекламу (T-0199): записи прошлых сборок его не знают — это забег без него.
   adRerolls: z.optional(z.number()),
+  // Второй сундук клада за рекламу (T-0328): записи прошлых сборок его не знают — это забег без него.
+  adChests: z.optional(z.number()),
   passives: z.optional(z.array(z.object({ id: z.string(), level: z.number() }))),
   stats: z.optional(
     z.object({
@@ -325,6 +327,8 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
     ...(result.boosts === undefined || result.boosts.length === 0 ? {} : { boosts: [...result.boosts] }),
     // Рекламный переброс карточек: сервер сверит число с книгой показов — без него забег отклонят.
     ...(result.adRerolls === undefined || result.adRerolls === 0 ? {} : { adRerolls: result.adRerolls }),
+    // Второй сундук клада за рекламу: то же — сервер сверит число с книгой показов (T-0328).
+    ...(result.adChests === undefined || result.adChests === 0 ? {} : { adChests: result.adChests }),
     passives: result.passives.map(({ id, level }) => ({ id, level })),
     stats: {
       damageTaken: Math.round(result.damageTaken),

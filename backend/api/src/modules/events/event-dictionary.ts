@@ -217,7 +217,8 @@ export const EVENT_DICTIONARY = {
   upgrade_chosen: { version: 1, payload: payload({ option: id, level: count }) },
   wave_reached: { version: 1, payload: payload({ wave: count, elapsedSec: seconds }) },
   // Сундук забега (docs/39-retention-mechanics.md Б1): выпал с элиты или босса
-  // и открыт касанием. `size` — сколько улучшений в нём (1, 3 или 5).
+  // и открыт касанием. `size` — сколько улучшений в нём (1, 3 или 5). `source` —
+  // `elite`, `boss` или `clad_ad`: второй сундук клада за ролик (tasks/T-0328, Р162).
   chest_found: { version: 1, payload: payload({ index: count, size: count, source: id, elapsedSec: seconds }) },
   chest_opened: {
     version: 1,
