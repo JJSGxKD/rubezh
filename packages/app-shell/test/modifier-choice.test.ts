@@ -181,7 +181,7 @@ describe("старт и итог несут модификатор", () => {
     const entry = { kind: "start" as const, runId: "run-00000001", difficultyId: "hard" as const, startingWeaponId: "spark", contentHash: "h", startedAtMs: 1000, modifierIds: ["hurry" as const] };
     const submission: RunStartSubmission = toStart(entry, 4000);
     expect(submission.modifierIds).toEqual(["hurry"]);
-    const { modifierIds: _dropped, ...without } = entry;
+    const without = { ...entry, modifierIds: undefined };
     expect(toStart(without, 4000)).not.toHaveProperty("modifierIds");
   });
 
