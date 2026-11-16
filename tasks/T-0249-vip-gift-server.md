@@ -41,7 +41,6 @@ shared:
   - backend/api/test/wipe-plan.test.ts
   - docs/07-monetization-and-ads.md
   - docs/21-diagrams.md
-  - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/37-accounting.md
 runner: any
