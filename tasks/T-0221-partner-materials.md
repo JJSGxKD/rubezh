@@ -3,8 +3,8 @@ id: T-0221
 title: Материалы для партнёров — баннеры, тексты постов и правила в кабинете
 epic: E14
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0219]
