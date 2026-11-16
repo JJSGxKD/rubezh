@@ -156,7 +156,7 @@ function CardSkeleton(): ReactNode {
   return (
     <div role="status" aria-busy="true" className="grid gap-3">
       <span className="sr-only">{t("playerCard.loading")}</span>
-      <div aria-hidden="true" className="surface-card h-44 animate-pulse rounded-lg short:h-28 landscape:h-28" />
+      <div aria-hidden="true" className="surface-card h-44 animate-pulse rounded-lg short:h-24 landscape:h-24" />
       <div aria-hidden="true" className="grid grid-cols-4 gap-1.5">
         {[0, 1, 2, 3].map((index) => (
           <div key={index} className="surface-card h-14 animate-pulse rounded-md" />
@@ -205,7 +205,7 @@ function Scene(props: { card: PlayerCardView; viewerArt: boolean }): ReactNode {
       <div className={`relative isolate flex justify-center overflow-hidden rounded-lg px-6 ring-2 ${toneOf(rarity).tile}`}>
         <RarityGlow rarity={rarity} seed={card.publicId} />
         {props.viewerArt ? (
-          <img src={appearanceCardUrl(card.appearance)} alt="" className="h-44 w-auto max-w-full py-2 short:h-28 landscape:h-28" />
+          <img src={appearanceCardUrl(card.appearance)} alt="" className="h-44 w-auto max-w-full py-2 short:h-24 landscape:h-24" />
         ) : (
           <div className="py-5 short:py-3 landscape:py-3">
             <Avatar name={card.name} url={card.photoUrl ?? null} size={96} appearance={card.appearance} avatarPhoto={card.avatarPhoto} />
@@ -227,11 +227,12 @@ export function PlayerCardBody(props: { card: PlayerCardView; viewerArt: boolean
   const more = moreEmblems(card.emblems.held, card.emblems.top.length);
   const favorites = favoritesShown(card.favorites);
   return (
-    <div className="grid gap-3">
+    // Одна колонка с нулевым минимумом: иначе дорожка раздувалась по самому широкому содержимому и лист уходил за край.
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <Scene card={card} viewerArt={props.viewerArt} />
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-display text-lg font-bold text-text">{card.name}</h3>
+          <h3 className="line-clamp-2 font-display text-lg font-bold break-words text-text">{card.name}</h3>
           {card.emblem === undefined ? null : (
             <div className="mt-1 flex min-w-0">
               <EmblemChip emblem={card.emblem} size="l" fit="full" />
