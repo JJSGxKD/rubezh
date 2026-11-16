@@ -121,7 +121,7 @@ describe("TeamEphemeral.tryReply", () => {
     const on = build();
     expect(await on.team.tryReply(textMessage("-100999", "supergroup"), "x")).toBe(false);
     expect(await on.team.tryReply(textMessage(ADMIN, "private"), "x")).toBe(false);
-    const { from: _from, ...anonymous } = textMessage(TEAM_CHAT, "supergroup");
+    const anonymous: NonNullable<TelegramUpdate["message"]> = { message_id: 1, date: 1, text: "/help", chat: { id: Number(TEAM_CHAT), type: "supergroup" } };
     expect(await on.team.tryReply(anonymous, "x")).toBe(false);
     const off = build({ "bot.formats.enabled": true, "bot.team-ephemeral.enabled": false });
     expect(await off.team.tryReply(textMessage(TEAM_CHAT, "supergroup"), "x")).toBe(false);
