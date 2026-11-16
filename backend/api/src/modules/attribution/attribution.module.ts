@@ -5,6 +5,8 @@ import { PartnersModule } from "../partners/partners.module.js";
 import { RedisSessionDedupe, SESSION_DEDUPE } from "./session-dedupe.js";
 import { SessionRecorder } from "./session-recorder.js";
 import { PrismaSessionsRepository, SESSIONS_REPOSITORY } from "./sessions.repository.js";
+import { TelegramAffiliateMarker } from "./telegram-affiliate.marker.js";
+import { PrismaTelegramAffiliateRepository, TELEGRAM_AFFILIATE_REPOSITORY } from "./telegram-affiliate.repository.js";
 
 /**
  * Сессии, первое и последнее касание (docs/34-stage3-plan.md, WP6;
@@ -25,15 +27,20 @@ import { PrismaSessionsRepository, SESSIONS_REPOSITORY } from "./sessions.reposi
  * рекордеру нужен `AutoSourcesService` из `LinksModule`, а тот модуль
  * атрибуции не импортирует — цикла нет. Параметр рекордера так же
  * необязателен, и подключение держит тот же тест.
+ *
+ * Метка партнёрки Telegram (Р97, T-0072) занимает слот источника: её ставит слушатель входа
+ * `TelegramAffiliateMarker`, читает карточка игрока.
  */
 @Module({
   imports: [AuthModule, PartnersModule, LinksModule],
   providers: [
     SessionRecorder,
+    TelegramAffiliateMarker,
     { provide: SESSIONS_REPOSITORY, useClass: PrismaSessionsRepository },
     { provide: SESSION_DEDUPE, useClass: RedisSessionDedupe },
+    { provide: TELEGRAM_AFFILIATE_REPOSITORY, useClass: PrismaTelegramAffiliateRepository },
   ],
-  // Касания аккаунта — карточке игрока в панели.
-  exports: [SESSIONS_REPOSITORY],
+  // Касания аккаунта и метка партнёрки Telegram — карточке игрока в панели.
+  exports: [SESSIONS_REPOSITORY, TELEGRAM_AFFILIATE_REPOSITORY],
 })
 export class AttributionModule {}

@@ -3,8 +3,8 @@ id: T-0072
 title: Метка партнёрки Telegram у игрока — слот источника занят, процент и срок программы в настройках
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead2-3
 size: M
 depends_on: [T-0053, T-0054, T-0191, T-0199]
@@ -38,6 +38,7 @@ shared:
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
   - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra

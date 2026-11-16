@@ -1,9 +1,11 @@
+import type { ReactNode } from "react";
 import type { PlayerCard } from "../../api/players";
 import { purchaseLabel, purchaseState } from "../../api/players";
 import { difficultyTitle } from "../../api/review";
 import { formatDateTime, formatDuration, formatNumber } from "../../format";
 import { HELP } from "../../ui/help";
 import { Badge, KeyValue, Panel } from "../../ui/kit";
+import { affiliateMarkText, touchText } from "./acquisition-text";
 import { MILESTONE_CHAIN, summaryNumbers, type CardTab } from "./card-rules";
 
 /** Дата вехи коротко — «21 сент.», в местном времени, как `formatDateTime`; полная — в `title`. */
@@ -92,22 +94,28 @@ function Milestones({ card }: { card: PlayerCard }) {
   );
 }
 
+/** Код ссылки до 59 знаков без пробелов: на узком экране значение переносится, а не растягивает карточку вбок. */
+function wrapped(text: string): ReactNode {
+  return <span className="wrap-anywhere">{text}</span>;
+}
+
 function Acquisition({ card }: { card: PlayerCard }) {
-  const { acquisition } = card;
-  const touch = (kind: string | null, ref: string | null) => (kind === null ? "—" : ref === null ? kind : `${kind}: ${ref}`);
+  const { acquisition, telegramAffiliate } = card;
+  // Метка партнёрки Telegram (Р97) живёт рядом с касаниями, а не вместо них: первое касание могло быть другим.
+  const items: [string, ReactNode][] = [];
+  if (acquisition !== null) {
+    items.push(
+      ["Первое касание", wrapped(`${formatDateTime(acquisition.firstAt)} — ${touchText(acquisition.firstStartKind, acquisition.firstStartRef)}`)],
+      ["Последнее касание", acquisition.lastTouchAt === null ? "—" : wrapped(`${formatDateTime(acquisition.lastTouchAt)} — ${touchText(acquisition.lastStartKind, acquisition.lastStartRef)}`)],
+      ["Последний заход", formatDateTime(acquisition.lastSeenAt)],
+    );
+  }
+  if (telegramAffiliate !== null && telegramAffiliate !== undefined) {
+    items.push(["Партнёрка Telegram", wrapped(affiliateMarkText(telegramAffiliate.ref, formatDateTime(telegramAffiliate.markedAt)))]);
+  }
   return (
     <Panel title="Откуда пришёл" help={HELP.players.origin}>
-      {acquisition === null ? (
-        <p className="text-sm text-text-muted">Касаний нет.</p>
-      ) : (
-        <KeyValue
-          items={[
-            ["Первое касание", `${formatDateTime(acquisition.firstAt)} — ${touch(acquisition.firstStartKind, acquisition.firstStartRef)}`],
-            ["Последнее касание", acquisition.lastTouchAt === null ? "—" : `${formatDateTime(acquisition.lastTouchAt)} — ${touch(acquisition.lastStartKind, acquisition.lastStartRef)}`],
-            ["Последний заход", formatDateTime(acquisition.lastSeenAt)],
-          ]}
-        />
-      )}
+      {items.length === 0 ? <p className="text-sm text-text-muted">Касаний нет.</p> : <KeyValue items={items} />}
     </Panel>
   );
 }

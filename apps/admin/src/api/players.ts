@@ -108,6 +108,8 @@ export const playerCardSchema = z.object({
   roles: z.array(z.string()),
   funnel: funnelSchema.nullable(),
   acquisition: acquisitionSchema.nullable(),
+  /** метка партнёрки Telegram (Р97); сервер старее панели поля не пришлёт */
+  telegramAffiliate: z.object({ startParam: z.string(), ref: z.string(), markedAt: iso }).nullable().optional(),
   messaging: z.object({ canMessage: z.boolean(), reason: z.string(), changedAt: iso }).nullable(),
   progress: z.object({ level: z.number(), xp: z.number(), xpIntoLevel: z.number(), xpForNext: z.number().nullable() }),
   runs: runsSchema,

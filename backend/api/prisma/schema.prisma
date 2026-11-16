@@ -277,6 +277,10 @@ model Account {
   sharesHeld       StakeholderShare[]   @relation("StakeholderShares")
   sharesSet        StakeholderShare[]   @relation("StakeholderSharesSet")
 
+  // Метка партнёрки Telegram (Р97, T-0072): третий источник слота рядом с `partnerBinding`;
+  // своим блоком, чтобы длинное имя не сдвигало выравнивание соседей
+  telegramAffiliateMark TelegramAffiliateMark?
+
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
   // Список игроков в панели (WP32): страница — отрезок индекса по ключу
@@ -3514,4 +3518,23 @@ model SecretFound {
 
   @@id([accountId, kind])
   @@map("secret_found")
+}
+
+// Метка партнёрки Telegram (docs/35-stage4-plan.md Р97, T-0072)
+
+/// Игрок пришёл по ссылке партнёрской программы Telegram (`_tgr_<id>`).
+/// Пишется один раз и навсегда; занимает слот источника наравне с
+/// `referral_binding` и `partner_binding`
+/// (docs/23-referral-and-partner-program.md §5).
+model TelegramAffiliateMark {
+  accountId  String   @id @map("account_id") @db.Uuid
+  /// параметр запуска целиком, как пришёл: `_tgr_<id>`
+  startParam String   @map("start_param") @db.VarChar(64)
+  /// идентификатор внутри параметра
+  ref        String   @db.VarChar(64)
+  markedAt   DateTime @map("marked_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("telegram_affiliate_mark")
 }
