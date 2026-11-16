@@ -40,7 +40,7 @@ import {
  * вместо него крупный аватар.
  */
 
-type Loaded = { status: "loading" } | { status: "failed"; reason: CardFailureReason } | { status: "ready"; card: PlayerCardView };
+export type PlayerCardState = { status: "loading" } | { status: "failed"; reason: CardFailureReason } | { status: "ready"; card: PlayerCardView };
 
 const cardApi = createPlayerCardApi();
 const friendsApi = createFriendsApi();
@@ -59,7 +59,7 @@ export function PlayerCardSheet(props: {
 }): ReactNode {
   const viewerArt = useViewerArt();
   const signedIn = friendsAvailable();
-  const [state, setState] = useState<Loaded>({ status: "loading" });
+  const [state, setState] = useState<PlayerCardState>({ status: "loading" });
   const [requesting, setRequesting] = useState(false);
   const [requestFailure, setRequestFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -93,20 +93,55 @@ export function PlayerCardSheet(props: {
     onChanged?.();
   }, [card, requesting, onChanged]);
 
-  const remove = onRemove === undefined ? undefined : () => {
-    onClose();
-    onRemove();
-  };
-  const actions =
-    card !== null && hasActions(card, signedIn, remove !== undefined) ? (
-      <PlayerCardActions card={card} signedIn={signedIn} requesting={requesting} requestFailure={requestFailure} onAction={() => void act()} {...(remove === undefined ? {} : { onRemove: remove })} />
-    ) : null;
-
   return (
-    <Modal title={t(props.from === "profile" ? "playerCard.self" : "playerCard.title")} placement="bottom" onDismiss={onClose} {...(actions === null ? {} : { pinFooter: true, footer: actions })}>
+    <PlayerCardSheetView
+      from={props.from}
+      state={state}
+      viewerArt={viewerArt}
+      signedIn={signedIn}
+      requesting={requesting}
+      requestFailure={requestFailure}
+      onClose={onClose}
+      onRetry={state.status === "failed" && RETRYABLE.has(state.reason) ? () => setAttempt((value) => value + 1) : undefined}
+      onAction={() => void act()}
+      {...(onRemove === undefined
+        ? {}
+        : {
+            onRemove: () => {
+              onClose();
+              onRemove();
+            },
+          })}
+    />
+  );
+}
+
+/** Сам лист по готовому состоянию: витрина компонентов рисует его без сети. */
+export function PlayerCardSheetView(props: {
+  from: CardFrom;
+  state: PlayerCardState;
+  viewerArt: boolean;
+  signedIn: boolean;
+  requesting: boolean;
+  /** ключ текста отказа заявки; `null` — отказа нет */
+  requestFailure: string | null;
+  onClose: () => void;
+  /** повторить загрузку; нет — отказ не повторяется */
+  onRetry?: (() => void) | undefined;
+  onAction: () => void;
+  onRemove?: () => void;
+}): ReactNode {
+  const { state } = props;
+  const card = state.status === "ready" ? state.card : null;
+  const actions =
+    card !== null && hasActions(card, props.signedIn, props.onRemove !== undefined) ? (
+      <PlayerCardActions card={card} signedIn={props.signedIn} requesting={props.requesting} requestFailure={props.requestFailure} onAction={props.onAction} {...(props.onRemove === undefined ? {} : { onRemove: props.onRemove })} />
+    ) : null;
+  return (
+    <Modal title={t(props.from === "profile" ? "playerCard.self" : "playerCard.title")} placement="bottom" onDismiss={props.onClose} {...(actions === null ? {} : { pinFooter: true, footer: actions })}>
       {state.status === "loading" ? <CardSkeleton /> : null}
-      {state.status === "failed" ? <CardFailure reason={state.reason} onRetry={RETRYABLE.has(state.reason) ? () => setAttempt((value) => value + 1) : undefined} /> : null}
-      {card === null ? null : <PlayerCardBody card={card} viewerArt={viewerArt} />}
+      {state.status === "failed" ? <CardFailure reason={state.reason} onRetry={props.onRetry} /> : null}
+      {card === null ? null : <PlayerCardBody card={card} viewerArt={props.viewerArt} />}
     </Modal>
   );
 }
