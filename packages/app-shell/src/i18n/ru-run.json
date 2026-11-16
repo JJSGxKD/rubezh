@@ -1,8 +1,11 @@
 {
   "run.boss.phase": "Фаза {phase}/{phases}",
+  "run.chest.adChest": "Ещё сундук за ролик",
+  "run.chest.adChest.pass": "Ещё сундук с VIP",
   "run.chest.announce": "Получено: {names}",
   "run.chest.open": "Открыть сундук",
   "run.chest.subtitle": "Улучшений: {count}",
+  "run.chest.subtitle.second": "Второй сундук. Улучшений: {count}",
   "run.chest.take": "Забрать",
   "run.chest.title.1": "Малый сундук",
   "run.chest.title.3": "Сундук",
