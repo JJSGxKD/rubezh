@@ -2,11 +2,13 @@ import {
   DIFFICULTY_IDS,
   ELEMENTS,
   RUN_MODES,
+  RUN_MODIFIER_IDS,
   type DifficultyId,
   type Leaderboard,
   type RunFinishResult,
   type RunFinishSubmission,
   type RunMode,
+  type RunModifierId,
   type RunProfile,
   type RunResult,
   type RunStartSubmission,
@@ -59,6 +61,8 @@ const finishFields = {
   startingWeaponId: z.string(),
   weapons: z.array(z.object({ id: z.string(), level: z.number(), damage: z.optional(z.number()) })),
   contentHash: z.string(),
+  // Модификатор забега (T-0123): записи прошлых сборок его не знают — это забег без него.
+  modifierIds: z.optional(z.array(z.enum(RUN_MODIFIER_IDS))),
   // Режим и итог пролога (T-0280): записи прошлых сборок их не знают — это бесконечный забег.
   mode: z.optional(z.enum(RUN_MODES)),
   prologue: z.optional(z.object({ won: z.boolean(), sec: z.number() })),
@@ -119,6 +123,7 @@ const startEntrySchema = z.object({
   /** когда забег начался по часам устройства: к отправке прибавится ожидание */
   startedAtMs: z.number(),
   mode: z.optional(z.enum(RUN_MODES)),
+  modifierIds: z.optional(z.array(z.enum(RUN_MODIFIER_IDS))),
 });
 
 const finishEntrySchema = z.object({ kind: z.literal("finish"), ...finishFields });
@@ -145,7 +150,7 @@ export interface RunsStore {
 
   hydrate(): void;
   /** поставить старт забега в очередь и попробовать отправить */
-  registerStart(start: { runId: string; difficultyId: DifficultyId; startingWeaponId: string; mode?: RunMode }): void;
+  registerStart(start: { runId: string; difficultyId: DifficultyId; startingWeaponId: string; mode?: RunMode; modifierIds?: RunModifierId[] }): void;
   /** поставить итог забега в очередь и попробовать отправить */
   submitRun(result: RunResult, countInRating?: boolean): void;
   /**
@@ -314,6 +319,7 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
     startingWeaponId: result.startingWeaponId,
     weapons: result.weapons.map(({ id, level, damage }) => ({ id, level, damage: Math.round(damage) })),
     contentHash: result.contentHash,
+    ...(result.modifierIds === undefined || result.modifierIds.length === 0 ? {} : { modifierIds: [...result.modifierIds] }),
     // Режим и итог пролога: без них сервер записал бы пролог обычным забегом и не выдал награду (T-0279).
     ...(result.mode === undefined ? {} : { mode: result.mode }),
     ...(result.prologue === undefined ? {} : { prologue: { won: result.prologue.won, sec: result.prologue.sec } }),
@@ -368,6 +374,7 @@ export function toStart(entry: z.infer<typeof startEntrySchema>, nowMs: number):
     contentHash: entry.contentHash,
     elapsedSec: Math.round(elapsedSec * 10) / 10,
     ...(entry.mode === undefined ? {} : { mode: entry.mode }),
+    ...(entry.modifierIds === undefined || entry.modifierIds.length === 0 ? {} : { modifierIds: entry.modifierIds }),
   };
 }
 

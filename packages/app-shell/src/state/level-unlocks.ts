@@ -11,6 +11,7 @@ import { t } from "../i18n";
 export type LevelUnlock =
   | { kind: "weapon"; id: string }
   | { kind: "passive"; id: string }
+  | { kind: "modifier"; id: string }
   | { kind: "weaponSlots"; count: number }
   | { kind: "passiveSlots"; category: PassiveCategory; count: number };
 
@@ -23,6 +24,7 @@ export function unlocksGainedAt(level: number): LevelUnlock[] {
   const gained: LevelUnlock[] = [
     ...(row.weapons ?? []).map((id): LevelUnlock => ({ kind: "weapon", id })),
     ...(row.passives ?? []).map((id): LevelUnlock => ({ kind: "passive", id })),
+    ...(row.modifiers ?? []).map((id): LevelUnlock => ({ kind: "modifier", id })),
   ];
   if (after.weapons > before.weapons) gained.push({ kind: "weaponSlots", count: after.weapons });
   for (const category of PASSIVE_CATEGORIES) {
@@ -89,6 +91,8 @@ export function unlockLabel(unlock: LevelUnlock): string {
       return t("level.unlock.passive", { name: t(`passive.${unlock.id}.name`) });
     case "weaponSlots":
       return t("level.unlock.weaponSlots", { count: unlock.count });
+    case "modifier":
+      return t("level.unlock.modifier", { name: t(`modifier.${unlock.id}.name`) });
     case "passiveSlots":
       return t("level.unlock.passiveSlots", { count: unlock.count, category: t(`passive.category.${unlock.category}`) });
   }

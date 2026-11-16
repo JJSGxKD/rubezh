@@ -1938,6 +1938,8 @@ export interface RunStartSubmission {
   elapsedSec: number;
   /** режим забега; нет поля — `endless` (T-0280, сервер T-0279) */
   mode?: RunMode;
+  /** модификатор забега (T-0123, сервер T-0122); нет поля — забег без него */
+  modifierIds?: RunModifierId[];
 }
 
 export interface RunFinishSubmission {
@@ -1952,6 +1954,8 @@ export interface RunFinishSubmission {
   /** урон оружия — для листа забега в профиле; забег из очереди прошлой сборки его не знает */
   weapons: { id: string; level: number; damage?: number }[];
   contentHash: string;
+  /** модификатор забега (T-0123, сервер T-0122); нет поля — забег без него */
+  modifierIds?: RunModifierId[];
   /**
    * id врага, нанёсшего смертельный урон; `null` — сдача. Для сводки «кто чаще
    * убивает». Необязательно: забег в очереди от прошлой сборки поля не знает.

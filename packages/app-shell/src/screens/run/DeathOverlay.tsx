@@ -7,6 +7,7 @@ import "../../i18n/run";
 // первой загрузкой.
 import "../../i18n/account";
 import { useMeta } from "../../state/meta";
+import { deathModifierLine, rewardMulMark } from "../../state/modifier-choice";
 import { currentScreen, useNavigation } from "../../state/navigation";
 import { useProgress, type RunRewardView } from "../../state/progress";
 import { awaitReward } from "../../state/progress-api";
@@ -66,6 +67,9 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
   const { result } = props;
   const stored = useProgress((state) => state.rewards[result.runId]);
   const reward = props.reward ?? (props.showReward === true ? stored : undefined);
+  // Модификатор забега (T-0123): строка из итога, пометка множителя — только у пришедшей награды.
+  const modifierLine = deathModifierLine(result.modifierIds);
+  const mulMark = rewardMulMark(result.modifierIds, reward?.status);
   const detailsOpen = useMeta((state) => state.deathDetailsOpen);
   // Награду считает сервер после ответа на итог — спрашиваем, как только итог
   // этого забега принят. Экран ушёл раньше — опрос доработает сам и обновит
@@ -170,6 +174,12 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
             <ResultsHero result={result} isNewRecord={props.isNewRecord} {...(props.rank === undefined ? {} : { rank: props.rank })} {...(props.cheatsCounted === undefined ? {} : { cheatsCounted: props.cheatsCounted })} />
             {score === undefined ? null : <RunScoreLink runId={result.runId} points={score.points} style={score.style} />}
             {/* Удвоение — только у настоящего итога: у витрины компонентов сети нет. */}
+            {modifierLine === null ? null : (
+              <p className="text-center text-xs text-text-muted">
+                {modifierLine}
+                {mulMark === null ? null : <b className="ml-1.5 font-display text-text tabular-nums">{mulMark}</b>}
+              </p>
+            )}
             {reward === undefined ? null : <RewardCard reward={reward} {...(props.showReward === true ? { doubleRunId: result.runId } : {})} />}
             {reward?.status === "granted" ? <LevelUpCard levelBefore={reward.levelBefore} levelAfter={reward.levelAfter} /> : null}
             <RubezhResult result={result} reward={reward} />
