@@ -27,6 +27,8 @@ import { devLoginSchema, refreshSchema, telegramLoginSchema } from "./dto/auth.d
 /** Что клиент знает об аккаунте: показать в профиле, и ничего больше. */
 export interface AccountView {
   accountId: string;
+  /** публичный id игрока (T-0247, Р47): свой id для карточки и ссылок; поля нет у подмен без хранилища */
+  publicId?: string;
   displayName: string;
   photoUrl: string | null;
   createdAt: string;
@@ -151,7 +153,7 @@ function view(result: {
   accessToken: string;
   expiresInSec: number;
   refreshToken: string;
-  account: { accountId: string; displayName: string; photoUrl: string | null; createdAt: Date; created: boolean; testerAt?: Date | null; supporterAt?: Date | null };
+  account: { accountId: string; publicId?: string; displayName: string; photoUrl: string | null; createdAt: Date; created: boolean; testerAt?: Date | null; supporterAt?: Date | null };
 }): SessionView {
   return {
     accessToken: result.accessToken,
@@ -159,6 +161,7 @@ function view(result: {
     refreshToken: result.refreshToken,
     account: {
       accountId: result.account.accountId,
+      ...(result.account.publicId === undefined ? {} : { publicId: result.account.publicId }),
       displayName: result.account.displayName,
       photoUrl: result.account.photoUrl,
       createdAt: result.account.createdAt.toISOString(),
