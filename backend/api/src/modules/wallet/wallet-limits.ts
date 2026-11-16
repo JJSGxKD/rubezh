@@ -38,7 +38,9 @@ export const WALLET_DAILY_CAPS: Record<EarnReason, Partial<Record<WalletResource
   // все ступени бонуса за друзей — 950 монет: даже забранные разом, они проходят
   friend_bonus: { coins: 1_000 },
   referral_reward: { coins: 20_000, gems: 100 },
-  ad_reward: { coins: 10_000 },
+  // Самоцветы по этой причине — только «Самоцветы за ролик» (T-0243): раз в игровые сутки и не больше
+  // верха ключа панели `ads.free-gems.amount` — 20. Удвоение награды за забег даёт одни монеты.
+  ad_reward: { coins: 10_000, gems: 20 },
   subscription_daily: { gems: 30 },
   season_reward: { coins: 50_000, gems: 500 },
   // Два самых щедрых промокода в сутки (`promo-codes/promo-code-rules.ts`):

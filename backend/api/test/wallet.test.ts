@@ -67,9 +67,9 @@ describe("кошелёк: что отсекается до базы", () => {
     expect(repository.calls).toBe(0);
   });
 
-  it("источник не начисляет то, что ему не разрешено: реклама — не самоцветы, покупка — не монеты", async () => {
+  it("источник не начисляет то, что ему не разрешено: реклама — не осколки, покупка — не монеты", async () => {
     const { wallet, repository } = setup();
-    await expect(wallet.grant(grant({ reason: "ad_reward", resource: "gems" }))).rejects.toThrow(/ad_reward не начисляет gems/);
+    await expect(wallet.grant(grant({ reason: "ad_reward", resource: "shard_common" }))).rejects.toThrow(/ad_reward не начисляет shard_common/);
     await expect(wallet.grant(grant({ reason: "purchase", resource: "coins" }))).rejects.toThrow(/purchase не даёт coins/);
     await expect(wallet.grant(grant({ reason: "salvage", resource: "gems" }))).rejects.toThrow(/salvage не даёт gems/);
     expect(repository.calls).toBe(0);

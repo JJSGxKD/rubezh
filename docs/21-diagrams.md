@@ -87,6 +87,8 @@ erDiagram
     ACCOUNT ||--o| ACCOUNT_SETTINGS : "настройки для всех устройств"
     ACCOUNT ||--o{ NOTIFICATION : "лента уведомлений"
     ACCOUNT ||--o| DAILY_REWARD : "награда дня"
+    ACCOUNT ||--o{ DAILY_DOUBLE : "удвоение награды дня за ролик: одно в сутки (T-0242)"
+    ACCOUNT ||--o{ FREE_GEMS_CLAIM : "самоцветы за ролик в магазине: одно взятие в сутки (T-0243)"
     ACCOUNT ||--o| CHANGELOG_SEEN : "открывал журнал обновлений"
     CHANGELOG_SOURCE |o--o| CHANGELOG_ENTRY : "строка пришла из PR"
     ACCOUNT ||--o{ RUN_REWARD : "награды за забеги"
@@ -399,6 +401,24 @@ erDiagram
         int claimed_days "сколько дней забрано всего: день недели и ступень — отсюда"
         date last_claim_day "игровые сутки по Москве последнего забора"
         datetime updated_at
+    }
+
+    DAILY_DOUBLE {
+        uuid account_id PK "каскад с аккаунтом; вместе с game_day"
+        date game_day PK "игровые сутки по Москве удвоения"
+        int day_number "номер удвоенного дня по порядку забора"
+        string session_id UK "сессия показа места daily_double; без FK — модуль рекламы"
+        int coins "начислено вторым разом"
+        int shards
+        datetime created_at
+    }
+
+    FREE_GEMS_CLAIM {
+        uuid account_id PK "каскад с аккаунтом; вместе с game_day"
+        date game_day PK "игровые сутки по Москве взятия"
+        string session_id UK "сессия показа места free_gems; без FK — модуль рекламы"
+        int gems "записано к начислению: число ключа ads.free-gems.amount на момент взятия"
+        datetime created_at
     }
 
     CHANGELOG_ENTRY {
@@ -845,7 +865,7 @@ erDiagram
     AD_BLOCK {
         uuid block_id PK
         string network_key FK
-        enum place "second_chance|wheel_spin|run_double|card_reroll|task|interstitial"
+        enum place "second_chance|wheel_spin|run_double|card_reroll|daily_double|free_gems|task|interstitial"
         string external_id "nullable: блок в кабинете сети; нет — показ по ключам сети"
         enum success "view|click|cpa — условие успеха"
         boolean active
@@ -1611,6 +1631,32 @@ erDiagram
   выводятся из `claimed_days`, а не хранятся рядом, — им нечем разойтись.
   Отметка дня — условным `UPDATE` по числу дней и суткам, монеты и осколки
   кладёт кошелёк ключом дня, поэтому под гонкой день даёт награду однажды.
+- **`DAILY_DOUBLE` — удвоение награды дня за ролик** (`35-stage4-plan.md` Р155,
+  T-0242): одна строка на игрока и игровые сутки — «в эти сутки награду дня уже
+  удвоили»; в `DAILY_REWARD` строка одна на игрока, отдельной строки забора дня
+  нет. Хозяин места `daily_double` — модуль награды дня: проверяет, что
+  сегодняшняя награда забрана и не удвоена, забирает сессию показа и пишет
+  строку. Ключ `(account_id, game_day)` и уникальная `session_id` дают «один раз
+  в сутки» и «одна сессия — одно удвоение»; запись — `INSERT … ON CONFLICT DO
+  NOTHING`, два параллельных забора дают одну строку. Монеты и осколки — столько
+  же, сколько дал забор дня (`dailyReward(день, уровень)`), причина кошелька
+  `daily_reward`, источник `daily:<день>:double`, ключ
+  `daily:<аккаунт>:<день>:double`; повтор той же сессией дожимает начисление
+  тем же ключом. Кап роликов (T-0241) считает место сам: оно наградное и не
+  задание. Вайп стирает таблицу вместе с `DAILY_REWARD`.
+- **`FREE_GEMS_CLAIM` — самоцветы за ролик в магазине** (`35-stage4-plan.md`
+  Р155, T-0243): одна строка на игрока и игровые сутки — «в эти сутки самоцветы
+  за ролик уже взяты». Хозяин места `free_gems` — магазин: проверяет, что сутки
+  не заняты, забирает сессию показа и пишет строку. Ключ `(account_id,
+  game_day)` и уникальная `session_id` дают «один раз в сутки» и «одна сессия —
+  одно взятие»; запись — `INSERT … ON CONFLICT DO NOTHING`, два параллельных
+  запроса дают одну строку. Сколько самоцветов — ключ панели
+  `ads.free-gems.amount` (5 по умолчанию, от 1 до 20): число записывается в
+  строку, и повтор после обрыва берёт его оттуда, а не из ключа. Причина
+  кошелька `ad_reward`, источник `free_gems:<сутки>`, ключ
+  `free_gems:<аккаунт>:<сутки>`; потолок причины по самоцветам — 20, верх ключа.
+  Кап роликов (T-0241) считает место сам: оно наградное и не задание. VIP берёт
+  без ролика. Вайп стирает таблицу вместе с кошельком.
 - **`CHANGELOG_ENTRY`, `CHANGELOG_RELEASE`, `CHANGELOG_SEEN` — журнал
   обновлений** (`35-stage4-plan.md`, Р61, WP31): строка — одно изменение с
   версией, видом и площадками; черновик игрок не видит. Опубликованные строки
@@ -2972,6 +3018,9 @@ flowchart LR
     SHOP -- "счёт на товар" --> PAY
     PAY -. "выдача оплаченного: регистр выдачи" .-> SHOP
     SHOP -- "состав товара ключом покупки" --> WALLET
+    SHOP -. "самоцветы за ролик: забор сессии места free_gems" .-> ADS
+    SHOP -- "free_gems_claim, сутки по Москве" --> PG
+    SHOP -. "самоцветы ключом суток, причина ad_reward" .-> WALLET
     CADDY -- "/api/v1/vip" --> VIP
     VIP -- "счёт с периодом, отмена продления" --> PAY
     PAY -. "период за оплату, продление на площадке" .-> VIP
@@ -2993,6 +3042,7 @@ flowchart LR
     OUTBOUND -. "taddy.api, taddy.exchange" .-> TADDYAPI
     ADMINAPI -. "сети, блоки, воронка показов" .-> ADS
     WHEEL -. "забор сессии места wheel_spin" .-> ADS
+    DAILY -. "забор сессии места daily_double: награда дня ×2" .-> ADS
     REF --> PG
     CONTENT --> PG
     CONTENT --> CDN
@@ -3181,7 +3231,7 @@ flowchart LR
     BADGES -. непрочитанное .-> NOTIF
     CADDY -- "/api/v1/me/history" --> HISTORY
     CADDY -- "/api/v1/daily" --> DAILY
-    DAILY -- "daily_reward, сутки по Москве" --> PG
+    DAILY -- "daily_reward, daily_double, сутки по Москве" --> PG
     DAILY -. "монеты и осколки ключом дня" .-> WALLET
     DAILY -. "уровень аккаунта" .-> PROG
     BADGES -. "награда ждёт" .-> DAILY
