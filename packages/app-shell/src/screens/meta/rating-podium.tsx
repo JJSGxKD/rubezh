@@ -5,6 +5,8 @@ import { Avatar, staggerStyle } from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
 import "../../i18n/season";
 import { EmblemChip } from "./emblem-chip";
+import { PlayerCardOpener } from "./player-card-link";
+import type { CardFrom } from "./player-card-rules";
 import { podiumSteps, scoreOf, type Scoring } from "./rating-rules";
 import { RowOpener, entryRunId } from "./run-card-link";
 
@@ -14,6 +16,10 @@ import { RowOpener, entryRunId } from "./run-card-link";
  * нынешний аватар крупно (Р184). Слева направо 2 · 1 · 3, высота ступени — по
  * месту; имя и главное число под аватаром, номер места — на ступени. Игроков
  * меньше трёх — столько ступеней, сколько есть.
+ *
+ * Тап по ступени открывает карточку игрока (T-0248); карточка его лучшего забега
+ * (T-0297) остаётся за нижней половиной ступени — очками и номером места.
+ * Ступень без публичного id (старый сервер) целиком открывает забег, как раньше.
  */
 
 /** Ступень каждого места: высота из шкалы отступов, тон кромки и номера — места на стандартной марке рейтинга. */
@@ -25,7 +31,7 @@ const STEP_LOOK = {
 
 const COLUMNS: Readonly<Record<number, string>> = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3" };
 
-export function Podium(props: { entries: readonly LeaderboardEntry[]; scoring: Scoring }): ReactNode {
+export function Podium(props: { entries: readonly LeaderboardEntry[]; scoring: Scoring; from?: CardFrom }): ReactNode {
   const steps = podiumSteps(props.entries);
   if (steps.length === 0) return null;
 
@@ -35,9 +41,11 @@ export function Podium(props: { entries: readonly LeaderboardEntry[]; scoring: S
         const look = STEP_LOOK[step.place];
         const score = scoreOf(step.entry, props.scoring);
         const runId = entryRunId(step.entry);
+        const card = step.entry.publicId !== undefined;
         return (
           <li key={step.place} data-place={step.place} className="relative flex min-w-0 animate-rise-in flex-col items-center" style={staggerStyle(index)}>
-            {runId === null ? null : <RowOpener runId={runId} name={step.entry.name} />}
+            <PlayerCardOpener publicId={step.entry.publicId} name={step.entry.name} from={props.from ?? "rating"} />
+            {card || runId === null ? null : <RowOpener runId={runId} name={step.entry.name} />}
             {step.place === 1 ? <Crown size={18} aria-hidden="true" className="mb-1 text-elite" /> : null}
             <Avatar name={step.entry.name} url={step.entry.photoUrl} size={look.avatar} appearance={step.entry.appearance} avatarPhoto={step.entry.avatarPhoto} />
             <span className={`mt-1.5 max-w-full truncate font-display text-sm font-bold ${step.entry.isMe ? "text-accent" : "text-text"}`}>{step.entry.name}</span>
@@ -47,11 +55,15 @@ export function Podium(props: { entries: readonly LeaderboardEntry[]; scoring: S
                 <EmblemChip emblem={step.entry.emblem} fit="glyph" />
               </span>
             )}
-            <span className="font-display text-sm tabular-nums text-text-muted">
-              <span aria-hidden={score.kind === "points" ? "true" : undefined}>{score.kind === "points" ? formatNumber(score.value) : formatDuration(score.value)}</span>
-              {score.kind === "points" ? <span className="sr-only">{t("rating.points.sr", { points: formatNumber(score.value) })}</span> : null}
-            </span>
-            <span className={`mt-2 flex w-full items-start justify-center rounded-t-lg border-t-2 bg-surface-raised pt-1 font-display text-xl font-bold ${look.block}`}>{step.place}</span>
+            {/* Нижняя половина ступени — своя нажимаемая область, если открываются обе карточки. */}
+            <div className={`flex w-full flex-col items-center ${card && runId !== null ? "relative" : ""}`}>
+              {card && runId !== null ? <RowOpener runId={runId} name={step.entry.name} /> : null}
+              <span className="font-display text-sm tabular-nums text-text-muted">
+                <span aria-hidden={score.kind === "points" ? "true" : undefined}>{score.kind === "points" ? formatNumber(score.value) : formatDuration(score.value)}</span>
+                {score.kind === "points" ? <span className="sr-only">{t("rating.points.sr", { points: formatNumber(score.value) })}</span> : null}
+              </span>
+              <span className={`mt-2 flex w-full items-start justify-center rounded-t-lg border-t-2 bg-surface-raised pt-1 font-display text-xl font-bold ${look.block}`}>{step.place}</span>
+            </div>
           </li>
         );
       })}

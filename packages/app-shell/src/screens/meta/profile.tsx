@@ -34,6 +34,7 @@ import { RestrictionsSection } from "./restricted-plaque";
 import { DonateBlock } from "./donate-block";
 import { EmblemChip } from "./emblem-chip";
 import { heldCount } from "./emblem-rules";
+import { PlayerCardHost, openPlayerCard } from "./player-card-link";
 import { RunDetailSheet } from "./run-detail";
 import { SupporterBadge } from "./supporter-badge";
 
@@ -74,6 +75,8 @@ export function ProfileScreen(): ReactNode {
   const art = useViewerArt();
   useLoadOwnAppearance(art && account !== null);
   const ownAppearance = useOwnAppearance((state) => state.own);
+  // Своя карточка — как её видят другие (T-0248): публичный id приходит с входом; сервер до публичных id его не отдаёт.
+  const ownPublicId = account?.publicId;
 
   const load = async (): Promise<void> => {
     setFailure(null);
@@ -143,6 +146,13 @@ export function ProfileScreen(): ReactNode {
               ) : null}
             </div>
           )}
+          {ownPublicId === undefined ? null : (
+            <div className="mt-3">
+              <Button track="open_player_card" variant="secondary" block onClick={() => openPlayerCard(ownPublicId, "profile")}>
+                {t("playerCard.self")}
+              </Button>
+            </div>
+          )}
           {progress === null ? null : (
             <>
               <AccountLevel progress={progress} />
@@ -209,6 +219,7 @@ export function ProfileScreen(): ReactNode {
         <StubNotice text={t("profile.soon")} />
       </ContentColumn>
       {openRun === null ? null : <RunDetailSheet runId={openRun} onClose={() => setOpenRun(null)} />}
+      <PlayerCardHost />
     </Screen>
   );
 }

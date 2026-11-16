@@ -344,6 +344,8 @@ export function PeerRow(props: {
   photoUrl: string | null;
   children: ReactNode;
   onPress?: () => void;
+  /** имя нажимаемой области для диктора; по умолчанию — «Удалить {name} из друзей» */
+  pressLabel?: string;
   badge?: ReactNode;
   emblem?: ReactNode;
   appearance?: string;
@@ -357,7 +359,7 @@ export function PeerRow(props: {
           disabled={props.onPress === undefined}
           onClick={props.onPress}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
-          aria-label={props.onPress === undefined ? props.name : t("friends.remove.title", { name: props.name })}
+          aria-label={props.onPress === undefined ? props.name : (props.pressLabel ?? t("friends.remove.title", { name: props.name }))}
         >
           <span className="shrink-0">
             <Avatar name={props.name} url={props.photoUrl} size={36} appearance={props.appearance} avatarPhoto={props.avatarPhoto} />
