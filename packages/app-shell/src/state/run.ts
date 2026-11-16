@@ -1,4 +1,4 @@
-import { ELEMENTS, type BlessingDef, type CardTools, type ChestReward, type DifficultyId, type RunMode, type RunPressureResult, type RunPressureStart, type RunResult, type UpgradeOption } from "@bh/shared-types";
+import { ELEMENTS, type BlessingDef, type CardTools, type ChestReward, type DifficultyId, type RunMode, type RunModifierId, type RunPressureResult, type RunPressureStart, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
   describeEvolution,
   loadRunEngine,
@@ -21,6 +21,7 @@ import { haptic, hapticForCues } from "./haptics";
 import { useDiagnostics } from "./diagnostics";
 import { runGraphics } from "./graphics";
 import { useMeta } from "./meta";
+import { modifierEventFields, resolveModifierChoice } from "./modifier-choice";
 import { useRuns } from "./runs";
 import { useSavedRun } from "./run-save";
 import { clearDownedRun, saveDownedRun, takeDownedRun } from "./downed-run";
@@ -86,7 +87,7 @@ export type ContinueSource = "dev" | "premium" | "gems" | "ad" | "pass";
  * сохранённый. Намерение нужно именно потому, что экран монтируется и сам —
  * и тогда его нет вовсе (docs/27-design-system-and-app-shell.md §7).
  */
-export type RunIntent = { kind: "new"; boosts?: BoughtBoosts; mode?: RunMode } | { kind: "resume"; snapshot: RunSnapshot };
+export type RunIntent = { kind: "new"; boosts?: BoughtBoosts; mode?: RunMode; modifierIds?: RunModifierId[] } | { kind: "resume"; snapshot: RunSnapshot };
 
 /**
  * Бусты, купленные на новый забег до «В бой» (docs/35-stage4-plan.md §3.5):
@@ -121,6 +122,8 @@ export interface RunStartOptions {
   resume?: RunSnapshot;
   /** бусты, купленные на этот забег; у продолженного — свои из снимка */
   boosts?: BoughtBoosts;
+  /** модификатор нового забега из листа «Перед забегом» (T-0123); у продолженного — свой из снимка */
+  modifierIds?: RunModifierId[];
   /** межстраничная перед «Играть» и «Ещё раз»; нет — забег без неё */
   beforeNewRun?: BeforeNewRun;
 }
@@ -228,6 +231,8 @@ let session: RunSession | null = null;
 let continueSource: ContinueSource = "premium";
 let unsubscribes: (() => void)[] = [];
 let startOptions: RunStartOptions | null = null;
+/** Модификатор идущего забега: событие `started` движка его не несёт, а старт и аналитике он нужен. */
+let activeModifierIds: RunModifierId[] = [];
 
 /**
  * Номер попытки запуска. Загрузка движка асинхронная, а экран забега за это
@@ -321,8 +326,14 @@ export const useRun = create<RunStore>((set, get) => ({
     const resume =
       intent?.kind === "resume" ? intent.snapshot : intent === null ? (saved ?? undefined) : undefined;
     const boosts = intent?.kind === "new" ? intent.boosts : undefined;
+    const modifierIds = intent?.kind === "new" ? intent.modifierIds : undefined;
 
-    await get().start({ ...options, ...(resume === undefined ? {} : { resume }), ...(boosts === undefined ? {} : { boosts }) });
+    await get().start({
+      ...options,
+      ...(resume === undefined ? {} : { resume }),
+      ...(boosts === undefined ? {} : { boosts }),
+      ...(modifierIds === undefined ? {} : { modifierIds }),
+    });
   },
 
   async start(options: RunStartOptions): Promise<void> {
@@ -399,6 +410,11 @@ export const useRun = create<RunStore>((set, get) => ({
       // Забегу разработчика открыто всё: он проверяет контент, а не путь
       // новичка.
       const accountLevel = devRun ? undefined : (loadouts?.runLevelOf(signed) ?? 1);
+      // Модификатор: новому забегу — выбор листа, не закрытый уровнем (сервер сверит ещё раз);
+      // продолженный несёт свой в снимке, движок берёт его оттуда.
+      const requestedModifiers = resume === undefined ? (options.modifierIds ?? []) : [];
+      const modifierIds = requestedModifiers.filter((id) => accountLevel === undefined || resolveModifierChoice(id, accountLevel) !== null);
+      activeModifierIds = resume === undefined ? modifierIds : (resume.modifierIds ?? []);
       const created = engine.start({
         container: options.container,
         seed,
@@ -406,6 +422,7 @@ export const useRun = create<RunStore>((set, get) => ({
         mapId: options.mapId,
         difficultyId: options.difficultyId,
         startingWeaponId: options.startingWeaponId,
+        ...(modifierIds.length === 0 ? {} : { modifierIds }),
         diagnostics: {
           recordRun: diagnostics.enabled && diagnostics.recordRuns,
           fpsOverlay: diagnostics.enabled && diagnostics.fpsOverlay,
@@ -636,7 +653,11 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
     created.on("started", (started) => {
       set({ runId: started.runId });
       bindLoadout?.(started.runId);
-      useRuns.getState().registerStart({ ...started, ...(get().mode === "prologue" ? { mode: "prologue" as const } : {}) });
+      useRuns.getState().registerStart({
+        ...started,
+        ...(get().mode === "prologue" ? { mode: "prologue" as const } : {}),
+        ...(activeModifierIds.length === 0 ? {} : { modifierIds: [...activeModifierIds] }),
+      });
       if (get().mode === "prologue") usePrologue.getState().step("start", 0);
       // Одно место для первого забега и для «Ещё раз»: сцена шлёт `started` в обоих случаях.
       track("run_started", {
@@ -647,6 +668,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
         screenMode: screenModeNow(),
         orientation: orientationNow(),
         devMode: get().devRun,
+        ...modifierEventFields(activeModifierIds),
         ...pressureStartFields(started.pressure),
       });
     }),
@@ -962,6 +984,7 @@ function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, 
     contentHash: result.contentHash,
     isNewRecord,
     cheats: result.cheats,
+    ...modifierEventFields(result.modifierIds),
     continues: result.continues.length,
     ...elementDamageFields(result.damageByElement),
     ...pressureResultFields(result.pressure),
