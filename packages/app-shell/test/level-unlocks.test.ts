@@ -98,6 +98,20 @@ describe("что откроется дальше", () => {
   });
 });
 
+describe("модификаторы забега как открытие уровня (T-0123)", () => {
+  it("девятый уровень открывает «Спешку», двенадцатый — «Инверсию»", () => {
+    expect(unlocksGainedAt(9)).toContainEqual({ kind: "modifier", id: "hurry" });
+    expect(unlocksGainedAt(12)).toContainEqual({ kind: "modifier", id: "inverse" });
+  });
+
+  it("`nextUnlockAfter(8)` называет «Спешку» открытием 9-го уровня", () => {
+    const next = nextUnlockAfter(8);
+    expect(next?.level).toBe(9);
+    expect(next?.unlocks).toContainEqual({ kind: "modifier", id: "hurry" });
+    if (next !== null) expect(nextUnlockLabel(next)).toContain("«Спешка»");
+  });
+});
+
 describe("коллекция на экране уровня", () => {
   it("всё оружие и все навыки контента — каждый со своим уровнем открытия", () => {
     const { weapons, passives } = collectionByLevel();

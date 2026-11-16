@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { BOOSTS, CONTENT_SNAPSHOT, DROPS, ENEMIES, ENEMY_LOOKS, ENEMY_STAGES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, RUBEZH, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { BOOSTS, CONTENT_SNAPSHOT, RUN_MODIFIERS, DROPS, ENEMIES, ENEMY_LOOKS, ENEMY_STAGES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, RUBEZH, WEAPON_EVOLUTIONS } from "@bh/core-game";
 import { RUBEZH_REWARD_MUL } from "@bh/shared-types";
 import { formatDuration, hasTranslation, t } from "../src/i18n";
 // Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
@@ -12,6 +12,7 @@ import {
   enemyResists,
   enemyTrailKey,
   guideBoosts,
+  guideModifiers,
   passiveCategories,
   passiveRange,
   regularEnemies,
@@ -29,6 +30,20 @@ import { EnemyScene, PickupIcon, WorldShape } from "../src/screens/guide/scenes"
 // Гайдбук собирается из контента (docs/27-design-system-and-app-shell.md §6):
 // враг или оружие, добавленные данными, обязаны получить в нём текст, а не
 // ключ перевода на экране.
+
+describe("гайдбук: модификаторы забега (T-0123)", () => {
+  it("раздел читает контент сам и называет оба модификатора", () => {
+    expect(guideModifiers().map((modifier) => modifier.id)).toEqual(RUN_MODIFIERS.map((modifier) => modifier.id));
+    expect(guideModifiers().map((modifier) => t(modifier.nameKey))).toEqual(["Спешка", "Инверсия"]);
+  });
+
+  it("модификатор без ключа имени или описания роняет тест", () => {
+    for (const modifier of guideModifiers()) {
+      expect(hasTranslation(modifier.nameKey), modifier.id).toBe(true);
+      expect(hasTranslation(modifier.descriptionKey), modifier.id).toBe(true);
+    }
+  });
+});
 
 describe("гайдбук", () => {
   it("знает имя каждого врага и объясняет каждое поведение", () => {
