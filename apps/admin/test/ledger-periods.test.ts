@@ -260,8 +260,8 @@ describe("закрытие месяца", () => {
     const render = (patch: Partial<PeriodReportView>, allowed = true) =>
       html(createElement(PeriodActions, { view: view(patch), payouts: null, now: new Date("2026-12-02T10:00:00Z"), canClose: allowed, onReview: () => undefined, onClose: () => undefined, onReopen: () => undefined }));
 
-    expect(render({ checklist: [BLOCKER], canClose: false })).toMatch(/<button[^>]*disabled[^>]*>Закрыть месяц</);
-    expect(render({})).not.toMatch(/<button[^>]*disabled[^>]*>Закрыть месяц</);
+    expect(render({ checklist: [BLOCKER], canClose: false })).toMatch(/<button[^>]* disabled=""[^>]*>Закрыть месяц</);
+    expect(render({})).not.toMatch(/<button[^>]* disabled=""[^>]*>Закрыть месяц</);
     expect(render({})).toContain("Закрыть месяц");
     expect(render({}, false)).not.toContain("Закрыть месяц");
   });

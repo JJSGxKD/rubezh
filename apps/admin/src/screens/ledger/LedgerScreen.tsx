@@ -12,11 +12,12 @@ import { BalancesView } from "./BalancesView";
 import { ChartTab, TemplatesTab } from "./chart/ChartTabs";
 import { JournalView } from "./JournalView";
 import { OperationsTab } from "./operations/OperationsTab";
+import { PeriodsTab } from "./periods/PeriodsTab";
 
 /**
  * Раздел «Бухгалтерия» (docs/29-admin-panel.md §6.7, Р219, tasks/T-0459): вкладки «Остатки», «Журнал», «Операции»
- * (Р220, tasks/T-0464), «Места и статьи» и «Шаблоны» (tasks/T-0465). Адреса: `#/ledger`, `#/ledger/journal`,
- * `#/ledger/operations`, `#/ledger/chart`, `#/ledger/templates`. Видит `ledger.view`; операции вносит
+ * (Р220, tasks/T-0464), «Месяцы» (Р222, tasks/T-0470), «Места и статьи» и «Шаблоны» (tasks/T-0465). Адреса: `#/ledger`,
+ * `#/ledger/journal`, `#/ledger/operations`, `#/ledger/periods`, `#/ledger/chart`, `#/ledger/templates`. Видит `ledger.view`; операции вносит
  * `finance.entry.create`, решает по ним владелец (`finance.operation.approve`); места, статьи и шаблоны правит
  * `finance.entry.create`.
  */
@@ -24,6 +25,7 @@ const TABS = [
   { id: "balances", title: "Остатки" },
   { id: "journal", title: "Журнал" },
   { id: "operations", title: "Операции" },
+  { id: "periods", title: "Месяцы" },
   { id: "chart", title: "Места и статьи" },
   { id: "templates", title: "Шаблоны" },
 ] as const;
@@ -35,7 +37,7 @@ export function LedgerScreen({ id }: { id: string | null }) {
   return (
     <div className="flex flex-col gap-4">
       <TabBar label="Бухгалтерия" tabs={TABS} active={tab} onSelect={(next) => navigate({ section: "ledger", id: next === "balances" ? null : next })} />
-      {tab === "balances" ? <BalancesTab /> : tab === "journal" ? <JournalTab /> : tab === "operations" ? <OperationsTab /> : tab === "chart" ? <ChartTab /> : <TemplatesTab />}
+      {tab === "balances" ? <BalancesTab /> : tab === "journal" ? <JournalTab /> : tab === "operations" ? <OperationsTab /> : tab === "periods" ? <PeriodsTab /> : tab === "chart" ? <ChartTab /> : <TemplatesTab />}
     </div>
   );
 }
