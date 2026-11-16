@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import { methodFor, priceIn } from "../payments/payment-methods.js";
 import { PaymentsUnsupportedError } from "../payments/payments-errors.js";
@@ -16,6 +16,8 @@ import { WalletBonuses } from "../wallet/wallet-bonus.js";
 import type { GrantReason } from "../wallet/wallet-types.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { VipActiveError, VipInactiveError, VipResumeUnavailableError } from "./vip-errors.js";
+import { vipActiveAt, vipUntilAt, type GiftWindow } from "./vip-gift-rules.js";
+import { VIP_GIFT_REPOSITORY, type VipGiftRepository } from "./vip-gift.repository.js";
 import { VIP_DAILY_GEMS, VIP_PERIOD_SEC, VIP_PLAN, VIP_REWARD_MUL, vipProduct, vipRewardMul } from "./vip-plan.js";
 import { VIP_REPOSITORY, type VipCanceller, type VipRenewal, type VipRepository, type VipState, type VipSubscriptionRow } from "./vip.repository.js";
 
@@ -30,13 +32,16 @@ import { VIP_REPOSITORY, type VipCanceller, type VipRenewal, type VipRepository,
  * раз в игровые сутки, увеличенные награды — надбавкой в начислении
  * кошелька (Р44) — и рекламу без ролика: пропуском в модуле рекламы, который
  * выдаёт награду места сразу и не показывает межстраничную (§3.6).
+ *
+ * VIP идёт, пока идёт подписка или подаренный срок (Р155, T-0249): подарок живёт в своей таблице
+ * рядом с периодами и подписку не трогает, а решает «идёт ли» одно правило — `vipActiveAt`.
  */
 
 const DB_TIMEOUT_MS = 3_000;
 
 export interface VipView {
   active: boolean;
-  /** конец VIP; `null` — VIP не было */
+  /** конец VIP — подписки или подаренного срока, цепочкой; `null` — VIP не было */
   until: Date | null;
   /** продление: `on` — площадка спишет следующий период; `null` — подписок не было */
   renewal: VipRenewal | null;
@@ -81,6 +86,8 @@ export class VipService implements OnModuleInit {
     // Реестр нужен модулю, а не каждому тесту VIP: без него отзыв регистрируется в своём, пустом.
     private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
     private readonly restrictions: AccountRestrictions,
+    // Подарков нет в составе без модуля подарков (тесты подписки): VIP идёт только по подписке.
+    @Optional() @Inject(VIP_GIFT_REPOSITORY) private readonly gifts?: Pick<VipGiftRepository, "windows">,
   ) {}
 
   onModuleInit(): void {
@@ -102,14 +109,19 @@ export class VipService implements OnModuleInit {
     return (await this.activeAt(accountId, at)) ? mul : 1;
   }
 
-  /** Идёт ли VIP в момент `at` — один запрос по индексу журнала периодов. */
+  /**
+   * Идёт ли VIP в момент `at`: один запрос по индексу журнала периодов, а подаренные сроки читаются
+   * только когда подписка не идёт, — у платящего подписчика второго запроса нет.
+   */
   async activeAt(accountId: string, at: Date): Promise<boolean> {
     const until = await withTimeout(this.repository.until(accountId), DB_TIMEOUT_MS, "VIP");
-    return until !== null && until.getTime() > at.getTime();
+    const gifts = until !== null && until.getTime() > at.getTime() ? [] : await this.giftWindows(accountId, at);
+    return vipActiveAt(until, gifts, at);
   }
 
   async view(account: AccountRef, at = new Date()): Promise<VipView> {
-    return viewOf(await this.state(account.accountId, at), account, at, this.payments);
+    const [state, gifts] = await Promise.all([this.state(account.accountId, at), this.giftWindows(account.accountId, null)]);
+    return viewOf(state, account, at, this.payments, gifts);
   }
 
   async order(account: AccountRef, at = new Date()): Promise<ShopInvoice> {
@@ -174,9 +186,9 @@ export class VipService implements OnModuleInit {
    * начисленное, но не отмеченное после сбоя кошелёк узнает по ключу.
    */
   async claimDaily(account: AccountRef, at = new Date()): Promise<VipDailyResult> {
-    const state = await this.state(account.accountId, at);
-    if (!isActive(state, at)) throw new VipInactiveError();
-    if (state.dailyClaimedToday) return { claimed: false, gems: 0, view: viewOf(state, account, at, this.payments) };
+    const [state, gifts] = await Promise.all([this.state(account.accountId, at), this.giftWindows(account.accountId, null)]);
+    if (!vipActiveAt(state.until, gifts, at)) throw new VipInactiveError();
+    if (state.dailyClaimedToday) return { claimed: false, gems: 0, view: viewOf(state, account, at, this.payments, gifts) };
 
     const grant = await this.wallet.grant({
       accountId: account.accountId,
@@ -189,7 +201,7 @@ export class VipService implements OnModuleInit {
     });
     const claimed = await withTimeout(this.repository.claimDaily(account.accountId, state.today, at), DB_TIMEOUT_MS, "самоцветы VIP");
     if (claimed) this.log("vip_daily_claimed", { accountId: account.accountId, day: state.today, gems: grant.credited });
-    return { claimed, gems: claimed ? grant.credited : 0, view: viewOf({ ...state, dailyClaimedToday: true }, account, at, this.payments) };
+    return { claimed, gems: claimed ? grant.credited : 0, view: viewOf({ ...state, dailyClaimedToday: true }, account, at, this.payments, gifts) };
   }
 
   /** Оплаченный период — в журнал. Повтор выдачи ничего не продлевает: период один на оплату. */
@@ -332,6 +344,11 @@ export class VipService implements OnModuleInit {
     return await withTimeout(this.repository.state(accountId, at), DB_TIMEOUT_MS, "VIP");
   }
 
+  /** Подаренные сроки получателя; `since` — только те, что кончаются позже; без модуля подарков — пусто. */
+  private async giftWindows(accountId: string, since: Date | null): Promise<GiftWindow[]> {
+    return this.gifts === undefined ? [] : await withTimeout(this.gifts.windows(accountId, since), DB_TIMEOUT_MS, "подарки VIP");
+  }
+
   private log(event: string, fields: Record<string, unknown>): void {
     this.logger.log(JSON.stringify({ module: "vip", event, ...fields }));
   }
@@ -358,10 +375,6 @@ function utcMinute(date: Date): string {
   return date.toISOString().slice(0, 16).replace("T", " ");
 }
 
-function isActive(state: Pick<VipState, "until">, at: Date): boolean {
-  return state.until !== null && state.until.getTime() > at.getTime();
-}
-
 /** Вернуть продление можем только отменённое нами и пока оплаченный период подписки идёт. */
 function isResumable(subscription: VipSubscriptionRow, at: Date): boolean {
   return subscription.renewal === "cancelled" && subscription.cancelledBy === "game" && subscription.until !== null && subscription.until.getTime() > at.getTime();
@@ -381,14 +394,14 @@ function laterSubscription(a: VipSubscriptionRow, b: VipSubscriptionRow): VipSub
 /** Режим оплаты и сколько спишется за цену — правило модуля оплаты. */
 type Pricing = Pick<PaymentsService, "mode" | "charge">;
 
-export function viewOf(state: VipState, account: AccountRef, at: Date, pricing: Pricing): VipView {
-  const active = isActive(state, at);
+export function viewOf(state: VipState, account: AccountRef, at: Date, pricing: Pricing, gifts: readonly GiftWindow[] = []): VipView {
+  const active = vipActiveAt(state.until, gifts, at);
   const renewing = state.subscriptions.some((item) => item.renewal === "on");
   const method = methodFor(account.platform);
   const stars = method === undefined ? null : priceIn(vipProduct(), method);
   return {
     active,
-    until: state.until,
+    until: vipUntilAt(state.until, gifts, at),
     renewal: renewing ? "on" : (state.subscriptions[0]?.renewal ?? null),
     canResume: active && !renewing && state.subscriptions.some((item) => isResumable(item, at)),
     canOrder: !(active && renewing),

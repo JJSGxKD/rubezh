@@ -151,7 +151,7 @@ export class EmblemsService {
   private async standings(accountIds: readonly string[], catalog: ReadonlyMap<string, CatalogDef>, at: Date, withMerit: boolean): Promise<Map<string, Standing>> {
     const [statuses, vip, seasons, merit] = await Promise.all([
       this.db(this.repository.statuses(accountIds)),
-      this.db(this.repository.vipUntil(accountIds)),
+      this.db(this.repository.vipUntil(accountIds, at)),
       this.db(this.repository.standings(accountIds)),
       withMerit ? this.db(this.repository.merit(accountIds)) : Promise.resolve(new Map<string, Set<string>>()),
     ]);
