@@ -3,8 +3,8 @@ id: T-0262
 title: Серия дней — сервер: +5 % к награде дня за каждый день подряд до +50 %, пропуск — минус две ступени
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0242]
