@@ -1,4 +1,6 @@
+import { randomBytes } from "node:crypto";
 import { Injectable, Logger, Module } from "@nestjs/common";
+import { z } from "zod";
 import { withTimeout } from "./with-timeout.js";
 
 /**
@@ -8,9 +10,29 @@ import { withTimeout } from "./with-timeout.js";
  * одним вызовом на весь список и о том, откуда он, не знают: источники подключают модули
  * достижений (знак) и обликов сами, как престиж забегов (`runs/run-prestige.ts`).
  *
+ * Публичный id игрока (Р47, tasks/T-0247) идёт в той же метке: строка списка знает игрока
+ * только по нему, внутренний `accountId` наружу не уходит.
+ *
  * Бэкенд пакеты клиента не импортирует, поэтому формы — зеркало `PublicEmblem` и
  * `PublicMark` из `packages/shared-types`: держать равными.
  */
+
+/** Публичный id: двенадцать строчных шестнадцатеричных знаков. */
+export const PUBLIC_ID_PATTERN = /^[0-9a-f]{12}$/;
+
+/** Граница API: публичный id в пути и теле запроса. */
+export const publicIdSchema = z.string().regex(PUBLIC_ID_PATTERN);
+
+/**
+ * Новый публичный id: 48 случайных бит из системного генератора. Не счётчик и не кусок uuid
+ * аккаунта: по соседнему id соседа не найти, по внутреннему — публичный не вывести.
+ */
+export function newPublicId(): string {
+  return randomBytes(6).toString("hex");
+}
+
+/** Источник новых id репозитория аккаунтов; подмена нужна тесту коллизии. */
+export const PUBLIC_ID_FACTORY = Symbol("PUBLIC_ID_FACTORY");
 
 /** Потолок ожидания источника: списки открывают часто, и ждать ради знака они не должны. */
 export const PUBLIC_IDENTITY_TIMEOUT_MS = 1_000;
@@ -26,6 +48,8 @@ export interface PublicEmblem {
 }
 
 export interface PublicMark {
+  /** публичный id игрока (Р47); нет — источник не подключён или недоступен */
+  publicId?: string;
   emblem?: PublicEmblem;
   /** действующий облик: выбранный, а если игрок им больше не владеет, — Хранитель */
   appearance?: string;
@@ -34,7 +58,7 @@ export interface PublicMark {
 }
 
 /** Имена источников порта: повторное подключение под тем же именем заменяет источник. */
-export const IDENTITY_SOURCES = { emblem: "emblem", appearance: "appearance" } as const;
+export const IDENTITY_SOURCES = { emblem: "emblem", appearance: "appearance", publicId: "publicId" } as const;
 
 /** Метки пачки аккаунтов одним запросом; кого источник не назвал, у того меток нет. */
 export interface PublicIdentitySource {
@@ -103,6 +127,7 @@ export class PublicIdentityModule {}
 export function markOf(mark: PublicMark | undefined): PublicMark {
   if (mark === undefined) return {};
   return {
+    ...(mark.publicId === undefined ? {} : { publicId: mark.publicId }),
     ...(mark.emblem === undefined ? {} : { emblem: mark.emblem }),
     ...(mark.appearance === undefined ? {} : { appearance: mark.appearance }),
     ...(mark.avatarPhoto === undefined ? {} : { avatarPhoto: mark.avatarPhoto }),
@@ -117,6 +142,7 @@ function cleanMark(mark: PublicMark | undefined): PublicMark | null {
   if (mark === undefined) return null;
   const emblem = cleanEmblem(mark.emblem);
   return {
+    ...(typeof mark.publicId === "string" && PUBLIC_ID_PATTERN.test(mark.publicId) ? { publicId: mark.publicId } : {}),
     ...(emblem === null ? {} : { emblem }),
     ...(typeof mark.appearance === "string" && mark.appearance !== "" ? { appearance: mark.appearance } : {}),
     ...(mark.avatarPhoto === true ? { avatarPhoto: true as const } : {}),

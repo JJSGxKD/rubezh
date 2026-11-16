@@ -177,6 +177,31 @@ export class SeasonsViewService {
     return boardViewSchema.parse({ seasonKey: season.key, difficulty, scoring, total: standing.total, entries, ...(standing.friendCount === null ? {} : { friendCount: standing.friendCount }), me });
   }
 
+  /**
+   * Место игрока на доске сезона глазами смотрящего (карточка игрока, T-0247): лучшее из мест
+   * на рейтинговых сложностях по той доске, которую читает смотрящий. Игрок отдельной доски на
+   * общей доске места не имеет — его карточку до сюда не пускают; себе игрок под молчаливым
+   * ограничением виден из тени, как на своей таблице. `null` — сезона нет или игрока в таблице нет.
+   */
+  async placeOf(accountId: string, viewerId: string, at = new Date()): Promise<number | null> {
+    const season = this.schedule.current(at);
+    if (season === null) return null;
+    const boardKey = this.schedule.boardSeason(season).key;
+    const scoring = this.schedule.scoringOf(season);
+    const board = await withTimeout(this.rating.boardOf(viewerId, at), DB_TIMEOUT_MS, "seasons: доска зрителя");
+    const hold = accountId === viewerId ? await this.restrictionOf(accountId, at) : null;
+    const shadow = hold !== null && !hold.notify;
+    const places = await Promise.all(
+      DIFFICULTIES.filter((difficulty) => isRatedDifficulty(difficulty)).map(async (difficulty): Promise<number | null> => {
+        if (!shadow) return await withTimeout(this.store.rank(boardKey, difficulty, accountId, board), REDIS_TIMEOUT_MS, "seasons: таблица недели");
+        const mine = await withTimeout(this.repository.bestRun(accountId, difficulty, season, true, this.schedule.ratingSince(), scoring), DB_TIMEOUT_MS, "seasons: лучший забег недели");
+        return mine === null ? null : (await withTimeout(this.store.countAbove(boardKey, difficulty, mine.score, board), REDIS_TIMEOUT_MS, "seasons: таблица недели")) + 1;
+      }),
+    );
+    const held = places.filter((place): place is number => place !== null);
+    return held.length === 0 ? null : Math.min(...held);
+  }
+
   /** Строка «меня»: место и счёт из таблицы, время и стиль — из лучшего забега игрока. */
   private meOf(standing: { rank: number; score: number } | null, row: BestRunRow | undefined, scoring: Scoring, division: Division | null) {
     if (standing === null) return null;

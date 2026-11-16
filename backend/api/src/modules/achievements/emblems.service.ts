@@ -15,6 +15,7 @@ import {
   publicEmblemOf,
   shownEmblem,
   type EmblemsView,
+  type PublicEmblem,
   type PublicMark,
 } from "./emblem-rules.js";
 import { ACHIEVEMENTS_REPOSITORY, type AchievementsRepository } from "./achievements.repository.js";
@@ -112,6 +113,18 @@ export class EmblemsService {
     if (changed) this.logger.log(JSON.stringify({ module: "emblems", event: "emblem_shown_set", accountId, emblem: emblemId ?? "auto" }));
     const next = { ...standing, chosen: emblemId };
     return { shown: shownEmblem(next.chosen, next.held), auto: !isChosenHeld(next) };
+  }
+
+  /**
+   * Все знаки, которые аккаунт держит сейчас, включая заслуги, — для карточки игрока (T-0247).
+   * Названия — из каталога, у сезонного знака — номер сезона. Порядок каталога; отбор лучших по
+   * редкости — дело карточки. Четыре запроса, как у `of`.
+   */
+  async heldList(accountId: string, at = new Date()): Promise<PublicEmblem[]> {
+    const catalog = await this.catalog();
+    const standing = (await this.standings([accountId], catalog, at, true)).get(accountId);
+    if (standing === undefined) return [];
+    return [...catalog.values()].filter((def) => standing.held.has(def.taskId)).map((def) => publicEmblemOf(def, standing.seasons.get(def.taskId) ?? null));
   }
 
   /**
