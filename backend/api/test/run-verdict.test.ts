@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
-import { judgeRun, trustedStartMs, type VerdictInput } from "../src/modules/runs/run-verdict.js";
+import { judgeRun, MODIFIER_UNLOCK_LEVEL, MODIFIER_VERDICT_MUL, RUN_MODIFIER_IDS, trustedStartMs, unlockedModifiers, type VerdictInput } from "../src/modules/runs/run-verdict.js";
 
 /**
  * Антифрод забега, фаза 1 (docs/34-stage3-plan.md, WP4). Каждое правило — на
@@ -241,5 +241,100 @@ describe("победа над стражем рубежа (T-0121)", () => {
 
   it("причина не лечит отказной забег", () => {
     expect(judgeRun(run({ ...long, weaponCount: 5, rubezh: claim(true, 599) }), limits).verdict).toBe("rejected");
+  });
+});
+
+describe("модификатор забега в вердикте (tasks/T-0122)", () => {
+  const BOTH = ["hurry", "inverse"] as const;
+
+  it("закрытый на сервере модификатор — отказ: честный клиент неоткрытого не выберет", () => {
+    expect(judgeRun(run({ modifierId: "hurry", unlockedModifiers: [], startModifierId: "hurry" }), limits)).toEqual({ verdict: "rejected", reasons: ["modifier_locked"] });
+    // «Спешка» открыта, «Инверсия» — нет: смотрится именно заявленный.
+    expect(judgeRun(run({ modifierId: "inverse", unlockedModifiers: ["hurry"] }), limits)).toEqual({ verdict: "rejected", reasons: ["modifier_locked"] });
+  });
+
+  it("список открытых не передан — заявленный модификатор закрыт: молчание не открывает", () => {
+    expect(judgeRun(run({ modifierId: "hurry" }), limits)).toMatchObject({ verdict: "rejected", reasons: ["modifier_locked"] });
+  });
+
+  it("открытый модификатор, совпавший со стартом, — честный забег", () => {
+    expect(judgeRun(run({ modifierId: "hurry", unlockedModifiers: BOTH, startModifierId: "hurry" }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run({ modifierId: "inverse", unlockedModifiers: BOTH, startModifierId: "inverse" }), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+
+  it("старт назвал одно, итог другое — подозрение: забег сохранён, множителя не будет", () => {
+    expect(judgeRun(run({ modifierId: "inverse", unlockedModifiers: BOTH, startModifierId: "hurry" }), limits)).toEqual({ verdict: "suspicious", reasons: ["modifier_mismatch"] });
+  });
+
+  it("старт без модификатора, а итог с ним — и наоборот — тоже расхождение", () => {
+    expect(judgeRun(run({ modifierId: "hurry", unlockedModifiers: BOTH, startModifierId: null }), limits)).toEqual({ verdict: "suspicious", reasons: ["modifier_mismatch"] });
+    expect(judgeRun(run({ modifierId: null, unlockedModifiers: BOTH, startModifierId: "hurry" }), limits)).toEqual({ verdict: "suspicious", reasons: ["modifier_mismatch"] });
+  });
+
+  it("старт не дошёл — не причина, как unverified_time", () => {
+    expect(judgeRun(run({ modifierId: "hurry", unlockedModifiers: BOTH }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run({ modifierId: "hurry", unlockedModifiers: BOTH, startModifierId: undefined, startedAtMs: null }), limits)).toEqual({ verdict: "ok", reasons: ["unverified_time"] });
+  });
+
+  it("забег без модификатора ни старта, ни итога причин не получает", () => {
+    expect(judgeRun(run({ modifierId: null, startModifierId: null }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run(), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+
+  it("закрытый и расходящийся одновременно — отказ сильнее, обе причины остаются", () => {
+    const verdict = judgeRun(run({ modifierId: "inverse", unlockedModifiers: [], startModifierId: "hurry" }), limits);
+    expect(verdict.verdict).toBe("rejected");
+    expect(verdict.reasons).toEqual(expect.arrayContaining(["modifier_locked", "modifier_mismatch"]));
+  });
+
+  describe("пределы убийств и уровней шире на таблицу модификатора", () => {
+    const hurry = (patch: Partial<VerdictInput>) => run({ modifierId: "hurry", unlockedModifiers: BOTH, startModifierId: "hurry", ...patch });
+    const inverse = (patch: Partial<VerdictInput>) => run({ modifierId: "inverse", unlockedModifiers: BOTH, startModifierId: "inverse", ...patch });
+
+    it("«Спешка»: убийства ×1,5 — ровно на пределе честно, чуть выше — подозрение", () => {
+      // База 10 убийств в секунду, на «Спешке» 15: за 300 секунд 4500.
+      expect(judgeRun(hurry({ enemiesKilled: 4500 }), limits)).toEqual({ verdict: "ok", reasons: [] });
+      expect(judgeRun(hurry({ enemiesKilled: 4501 }), limits)).toMatchObject({ verdict: "suspicious", reasons: ["kill_rate"] });
+      // Тот же забег без модификатора уезжает в подозрение уже на 3001.
+      expect(judgeRun(run({ enemiesKilled: 4500 }), limits)).toMatchObject({ verdict: "suspicious", reasons: ["kill_rate"] });
+    });
+
+    it("«Спешка»: уровни ×1,6 — 5 уровней в минуту становятся 8", () => {
+      expect(judgeRun(hurry({ level: 40 }), limits)).toEqual({ verdict: "ok", reasons: [] });
+      expect(judgeRun(hurry({ level: 41 }), limits)).toMatchObject({ verdict: "suspicious", reasons: ["level_rate"] });
+      expect(judgeRun(run({ level: 40 }), limits)).toMatchObject({ verdict: "suspicious", reasons: ["level_rate"] });
+    });
+
+    it("«Инверсия»: убийства ×1,0 — предел прежний, уровни ×1,6", () => {
+      expect(judgeRun(inverse({ enemiesKilled: 3000 }), limits)).toEqual({ verdict: "ok", reasons: [] });
+      expect(judgeRun(inverse({ enemiesKilled: 3001 }), limits)).toMatchObject({ verdict: "suspicious", reasons: ["kill_rate"] });
+      expect(judgeRun(inverse({ level: 40 }), limits)).toEqual({ verdict: "ok", reasons: [] });
+      expect(judgeRun(inverse({ level: 41 }), limits)).toMatchObject({ verdict: "suspicious", reasons: ["level_rate"] });
+    });
+
+    it("расширение не открывает чужое: закрытый модификатор остаётся отказом, а не «окей»", () => {
+      expect(judgeRun(run({ modifierId: "hurry", unlockedModifiers: [], enemiesKilled: 4500 }), limits).verdict).toBe("rejected");
+    });
+  });
+
+  it("лестница открытия: «Спешка» с 9-го уровня, «Инверсия» с 12-го", () => {
+    expect(MODIFIER_UNLOCK_LEVEL).toEqual({ hurry: 9, inverse: 12 });
+    expect(unlockedModifiers(1)).toEqual([]);
+    expect(unlockedModifiers(8)).toEqual([]);
+    expect(unlockedModifiers(9)).toEqual(["hurry"]);
+    expect(unlockedModifiers(11)).toEqual(["hurry"]);
+    expect(unlockedModifiers(12)).toEqual(["hurry", "inverse"]);
+    expect(unlockedModifiers(100)).toEqual(["hurry", "inverse"]);
+  });
+
+  it("таблицы полны: у каждого модификатора есть предел вердикта и уровень открытия", () => {
+    for (const id of RUN_MODIFIER_IDS) {
+      expect(MODIFIER_VERDICT_MUL[id], `нет предела вердикта для ${id}: поправьте MODIFIER_VERDICT_MUL в run-verdict.ts`).toBeDefined();
+      expect(MODIFIER_VERDICT_MUL[id].kills).toBeGreaterThanOrEqual(1);
+      expect(MODIFIER_VERDICT_MUL[id].levels).toBeGreaterThanOrEqual(1);
+      expect(MODIFIER_UNLOCK_LEVEL[id], `нет уровня открытия для ${id}`).toBeGreaterThanOrEqual(1);
+    }
+    expect(Object.keys(MODIFIER_VERDICT_MUL).sort()).toEqual([...RUN_MODIFIER_IDS].sort());
+    expect(MODIFIER_VERDICT_MUL).toEqual({ hurry: { kills: 1.5, levels: 1.6 }, inverse: { kills: 1, levels: 1.6 } });
   });
 });

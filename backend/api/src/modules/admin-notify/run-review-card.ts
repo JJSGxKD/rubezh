@@ -53,6 +53,8 @@ const REASON_LABELS: Record<VerdictReason, string> = {
   loadout_stale: "снаряжение сменилось после выдачи снимка",
   loadout_level_ahead: "уровень снимка выше уровня аккаунта",
   boost_unpaid: "буст не куплен на этот забег",
+  modifier_locked: "модификатор забега не открыт на уровне аккаунта",
+  modifier_mismatch: "старт и итог назвали разные модификаторы забега",
   counters_implausible: "счётчики забега не сходятся с ходом боя",
   rubezh_implausible: "победа над стражем рубежа невозможна по времени",
   axis_out_of_range: "индекс оси очков эффективности выше допустимого",

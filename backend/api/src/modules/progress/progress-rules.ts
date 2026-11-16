@@ -1,4 +1,5 @@
 import type { Difficulty } from "../runs/run-rules.js";
+import { isRunModifierId, type RunModifierId } from "../runs/run-verdict.js";
 
 /**
  * Награда за забег и уровень аккаунта (docs/35-stage4-plan.md, WP4).
@@ -44,6 +45,15 @@ export const DIFFICULTY_REWARD_MUL: Record<Difficulty, number> = { easy: 1, norm
  */
 export const RUBEZH_REWARD_MUL = 2;
 
+/**
+ * Модификатор забега платит больше (T-0122, Р105): множитель ложится поверх
+ * сложности, а не заменяет её. Сервер `shared-types` не импортирует, поэтому
+ * числа здесь, а равенство с `RUN_MODIFIER_REWARD_MUL` и полноту по всем
+ * модификаторам держит `progress.test.ts`. Числа стартовые, калибрует
+ * геймдизайнер.
+ */
+export const RUN_MODIFIER_REWARD_MUL: Readonly<Record<RunModifierId, number>> = { hurry: 1.25, inverse: 1.25 };
+
 /** Порог и потолки награды за забег: читаются из настроек на каждом начислении. */
 export interface RunRewardLimits {
   minSec: number;
@@ -65,6 +75,19 @@ export interface RewardableRun {
   verdict: "ok" | "suspicious" | "rejected";
   /** победа над стражем заявлена и правдоподобна (`RecordedRun.rubezhCleared`); поля нет — победы нет */
   rubezhCleared?: boolean;
+  /** модификатор записи забега (T-0122); поля или `null` нет — забег без него. Не число клиента: сервер знает его из вердикта */
+  modifierId?: string | null | undefined;
+}
+
+/**
+ * Множитель модификатора: платится только за забег с известным модификатором,
+ * честным вердиктом `ok` и без читов. Подозрение (в том числе расхождение
+ * старта и итога) и отказ множителя не получают; читы и отказ не получают и
+ * саму награду (`runReward`).
+ */
+export function modifierRewardMul(run: Pick<RewardableRun, "modifierId" | "verdict" | "cheats">): number {
+  if (run.verdict !== "ok" || run.cheats || !isRunModifierId(run.modifierId)) return 1;
+  return RUN_MODIFIER_REWARD_MUL[run.modifierId];
 }
 
 /**
@@ -90,7 +113,10 @@ export function runReward(run: RewardableRun, limits: RunRewardLimits = DEFAULT_
 
   const minutes = run.survivalSec / 60;
   // Множители складываются до округления, потолки — после них.
-  const mul = DIFFICULTY_REWARD_MUL[run.difficulty] * (rubezhPaid({ cleared: run.rubezhCleared === true, verdict: run.verdict, cheats: run.cheats, skipped: null }) ? RUBEZH_REWARD_MUL : 1);
+  const mul =
+    DIFFICULTY_REWARD_MUL[run.difficulty] *
+    (rubezhPaid({ cleared: run.rubezhCleared === true, verdict: run.verdict, cheats: run.cheats, skipped: null }) ? RUBEZH_REWARD_MUL : 1) *
+    modifierRewardMul(run);
   const coins = Math.round((COINS_PER_MINUTE * minutes + (COINS_PER_100_KILLS * run.enemiesKilled) / 100) * mul);
   const xp = Math.round((XP_PER_MINUTE * minutes + XP_PER_RUN_LEVEL * Math.max(0, run.level - 1)) * mul);
   return { coins: Math.min(coins, limits.maxCoins), xp: Math.min(xp, limits.maxXp), skipped: null };
