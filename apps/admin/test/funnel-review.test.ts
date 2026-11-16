@@ -52,6 +52,11 @@ describe("воронка", () => {
     expect(platformTitle("все")).toBe("все");
   });
 
+  it("партнёрка Telegram называется так же, как в карточке игрока и списках; уточнение — код программы (T-0072)", () => {
+    expect(touchOf({ ...ROW, startKind: "telegram_affiliate", startRef: "x9Y-z" })).toEqual({ title: "Партнёрка Telegram", detail: "x9Y-z" });
+    expect(touchOf({ ...ROW, startKind: "telegram_affiliate", startRef: null })).toEqual({ title: "Партнёрка Telegram", detail: null });
+  });
+
   it("период уходит в запросе, отчёт разбирается схемой", async () => {
     const { fetch, calls } = fakeFetch(json(200, { data: { from: "2026-09-01T00:00:00.000Z", to: "2026-09-26T00:00:00.000Z", rows: [ROW] } }));
     const result = await fetchFunnel(new AdminApi(fetch), { from: "2026-09-01T00:00:00.000Z" });
