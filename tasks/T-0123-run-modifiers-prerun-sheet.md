@@ -23,6 +23,11 @@ shared:
   - packages/app-shell/src/i18n/ru-account.json
   - docs/27-design-system-and-app-shell.md
   - packages/app-shell/src/state/analytics.ts
+  - packages/shared-types/src/index.ts
+  - packages/app-shell/src/state/runs.ts
+  - packages/app-shell/src/screens/guide/GuideScreen.tsx
+  - packages/app-shell/src/i18n/ru-guide.json
+  - packages/app-shell/src/screens/run/DeathOverlay.tsx
 runner: any
 executor: sonnet-5.5
 effort: medium
