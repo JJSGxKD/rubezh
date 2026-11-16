@@ -1469,6 +1469,8 @@ model DailyReward {
   claimedDays  Int      @map("claimed_days")
   /// игровые сутки (по Москве) последнего забора
   lastClaimDay DateTime @map("last_claim_day") @db.Date
+  /// ступень серии дней 0…10 (Р154): +5 % к награде дня за каждую, пропуск снимает две
+  streak       Int      @default(0) @db.SmallInt
   updatedAt    DateTime @map("updated_at") @db.Timestamptz(3)
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
