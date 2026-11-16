@@ -13,12 +13,18 @@ import { useShell } from "./shell";
 
 const peer = {
   accountId: z.string(),
+  /** публичный id игрока (T-0247): по нему открывается карточка; нет поля — сервер до публичных id, строка не нажимается */
+  publicId: z.optional(z.string()),
   displayName: z.string(),
   photoUrl: z.nullable(z.string()),
   /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
   tester: z.optional(z.literal(true)),
   /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен: рисуется метка `tester` */
   emblem: z.optional(publicEmblemSchema),
+  /** действующий облик героя (T-0237); нет поля — сервер до обликов или источник недоступен: кружок рисует фото */
+  appearance: z.optional(z.string()),
+  /** в кружке фото площадки, а не голова облика (T-0237) */
+  avatarPhoto: z.optional(z.literal(true)),
 };
 
 const friendSchema = z.object({ ...peer, since: z.string(), source: z.string() });
@@ -37,6 +43,8 @@ const viewSchema = z.object({
   }),
 });
 
+/** `requested` — заявка ушла, `friends` — встречная заявка принята или вы уже друзья. */
+const requestResultSchema = z.object({ status: z.string() });
 const claimSchema = z.object({ claimed: z.number(), coins: z.number() });
 const linkSchema = z.object({ code: z.string(), startParam: z.string() });
 const inviteMessageSchema = z.object({ messageId: z.string(), expiresAt: z.nullable(z.string()) });
@@ -51,6 +59,8 @@ export interface FriendsApi {
   link(): Promise<ApiResult<{ code: string; startParam: string }>>;
   /** сообщение с кнопкой в игру, подготовленное ботом площадки (Р63) */
   inviteMessage(): Promise<ApiResult<{ messageId: string; expiresAt: string | null }>>;
+  /** позвать в друзья по публичному id (карточка игрока, T-0248); встречная заявка принимается тем же вызовом */
+  request(publicId: string): Promise<ApiResult<{ status: string }>>;
   accept(accountId: string): Promise<ApiResult<unknown>>;
   decline(accountId: string): Promise<ApiResult<unknown>>;
   cancel(accountId: string): Promise<ApiResult<unknown>>;
@@ -73,6 +83,7 @@ export function createFriendsApi(request: ApiRequest = apiRequest): FriendsApi {
     view: () => request("/api/v1/friends", viewSchema, { method: "GET" }),
     link: () => post("/link", linkSchema),
     inviteMessage: () => post("/invite-message", inviteMessageSchema),
+    request: (publicId) => request("/api/v1/friends/requests", requestResultSchema, { method: "POST", body: { publicId } }),
     accept: (accountId) => post(`/requests/${id(accountId)}/accept`, anything),
     decline: (accountId) => post(`/requests/${id(accountId)}/decline`, anything),
     cancel: (accountId) => remove(`/requests/${id(accountId)}`),

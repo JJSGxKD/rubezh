@@ -64,6 +64,8 @@ export interface LeaderboardView {
     tester?: true;
     /** знак «Меценат» (Р109); поля нет — не поддержал */
     supporter?: true;
+    /** публичный id игрока (T-0247, Р47): по нему открывается карточка; поля нет — источник id недоступен */
+    publicId?: string;
     /** знак у имени (T-0240): выбранный игроком или по умолчанию; поля нет — знака нет или источник знаков недоступен */
     emblem?: PublicEmblem;
     /** действующий облик героя (T-0237); поля нет — источник обликов недоступен */
@@ -289,6 +291,21 @@ export class RunsViewService {
         at: run.finishedAt.getTime(),
       })),
     };
+  }
+
+  /**
+   * Числа карточки игрока (T-0247): забеги и убийства — как есть, лучшее время — лучшего забега на
+   * той доске, которую читает смотрящий, а не владелец карточки: то, что смотрящий видит в своём
+   * рейтинге. Себе игрок под молчаливым ограничением виден из тени, как в своём профиле.
+   */
+  async cardStats(accountId: string, viewerId: string): Promise<{ runs: number; totalKills: number; bestSurvivalSec: number }> {
+    const board = await this.rating.boardOf(viewerId);
+    const shadow = accountId === viewerId && (await this.rating.hold(accountId)) === "silent";
+    const [stats, ...bests] = await Promise.all([
+      this.runs.stats(accountId),
+      ...DIFFICULTIES.map(async (difficulty) => (shadow ? await this.shadowBest(accountId, difficulty, board) : await this.boardBest(accountId, difficulty, board))),
+    ]);
+    return { runs: stats.runs, totalKills: stats.totalKills, bestSurvivalSec: Math.max(0, ...bests.map((best) => best?.survivalSec ?? 0)) };
   }
 
   /** Сколько игроков в доске глазами игрока: в тени он видит в ней и себя. */

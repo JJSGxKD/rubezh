@@ -55,6 +55,8 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/wheel",
       "/api/v1/tasks",
       "/api/v1/achievements",
+      "/api/v1/appearance",
+      "/api/v1/players",
       "/api/v1/codex",
       "/api/v1/seasons",
       "/api/v1/rating",

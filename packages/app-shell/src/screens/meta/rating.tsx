@@ -29,6 +29,8 @@ import { RestrictedPlaque } from "./restricted-plaque";
 import { RowOpener, entryRunId } from "./run-card-link";
 import { SessionNotice, useSessionNotice } from "./session-notice";
 import { RankMark, SyncProblem } from "./sync-ui";
+import { PlayerCardHost, PlayerCardOpener } from "./player-card-link";
+import type { CardFrom } from "./player-card-rules";
 import { EmblemChip } from "./emblem-chip";
 import type { EmblemFit } from "./emblem-rules";
 import { SupporterBadge } from "./supporter-badge";
@@ -124,7 +126,7 @@ export function RatingScreen(): ReactNode {
               reload={reload}
               restriction={RATING_RESTRICTION}
               board={week}
-              list={(view) => <RatingList {...view} />}
+              list={(view) => <RatingList {...view} from="season" />}
               onInvite={() => navigation.resetTo("friends")}
             />
           </div>
@@ -150,7 +152,7 @@ export function RatingScreen(): ReactNode {
                   {board.entries.length === 0 ? (
                     <p className="surface-sunken rounded-lg p-4 text-center text-sm text-text-muted">{t("rating.empty")}</p>
                   ) : (
-                    <RatingList entries={board.entries} scoring={boardScoring(board.entries, board.me)} podium />
+                    <RatingList entries={board.entries} scoring={boardScoring(board.entries, board.me)} podium from="rating" />
                   )}
                 </>
               )}
@@ -169,16 +171,17 @@ export function RatingScreen(): ReactNode {
           </>
         ) : null}
       </ContentColumn>
+      <PlayerCardHost />
     </Screen>
   );
 }
 
-/** Таблица: пьедестал первых трёх и строки с четвёртой; без пьедестала — все строки подряд. */
-function RatingList(props: BoardListView): ReactNode {
+/** Таблица: пьедестал первых трёх и строки с четвёртой; без пьедестала — все строки подряд. `from` — откуда открывается карточка игрока. */
+function RatingList(props: BoardListView & { from: CardFrom }): ReactNode {
   const rows = props.podium ? props.entries.slice(3) : props.entries;
   return (
     <div className="grid grid-cols-1 gap-2">
-      {props.podium ? <Podium entries={props.entries} scoring={props.scoring} /> : null}
+      {props.podium ? <Podium entries={props.entries} scoring={props.scoring} from={props.from} /> : null}
       {rows.length === 0 ? null : (
         <ol className="grid grid-cols-1 gap-2">
           {rows.map((entry, index) => (
@@ -187,6 +190,7 @@ function RatingList(props: BoardListView): ReactNode {
               entry={entry}
               index={index}
               scoring={props.scoring}
+              from={props.from}
               {...(props.placeOf === undefined ? {} : { place: props.placeOf(entry) })}
             />
           ))}
@@ -248,12 +252,15 @@ export function YouStrip(props: { me: LeaderboardMe | null; entries: readonly Le
  * забега при очках — подписью. `place` — место на экране, если оно не место на
  * доске (внутри дивизиона).
  */
-export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; scoring?: Scoring; place?: number; emblemFit?: EmblemFit }): ReactNode {
+export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; scoring?: Scoring; place?: number; emblemFit?: EmblemFit; from?: CardFrom }): ReactNode {
   const { entry } = props;
   const place = props.place ?? entry.rank;
   const score = scoreOf(entry, props.scoring ?? "points");
   const style = styleAxis(entry.style);
   const runId = entryRunId(entry);
+  // Тап по строке открывает карточку игрока (T-0248). Лучший забег остаётся открываемым с очков: карточка забега
+  // (T-0297) делит строку с карточкой игрока. Строка без публичного id — как до карточек: на всю ширину открывает забег.
+  const card = entry.publicId !== undefined;
 
   return (
     <li
@@ -265,8 +272,9 @@ export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; 
       // две секунды, выглядит как тормоза.
       style={staggerStyle(Math.min(props.index, 8))}
     >
+      <PlayerCardOpener publicId={entry.publicId} name={entry.name} from={props.from ?? "rating"} />
       <RankMark rank={place} />
-      <Avatar name={entry.name} url={entry.photoUrl} size={36} />
+      <Avatar name={entry.name} url={entry.photoUrl} size={36} appearance={entry.appearance} avatarPhoto={entry.avatarPhoto} />
       <div className="min-w-0 flex-1">
         {/* Метки не сжимаются, поэтому на узком экране уходят на вторую строку, а не выдавливают имя и не наезжают на время. */}
         <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm font-semibold text-text">
@@ -293,8 +301,15 @@ export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; 
           <RatingMeta weaponId={entry.startingWeaponId} level={entry.level} kills={entry.enemiesKilled} />
         </div>
       </div>
-      <ScoreCell score={score} />
-      {runId === null ? null : <RowOpener runId={runId} name={entry.name} />}
+      {card && runId !== null ? (
+        <div className="relative flex shrink-0 items-center self-stretch">
+          <ScoreCell score={score} />
+          <RowOpener runId={runId} name={entry.name} />
+        </div>
+      ) : (
+        <ScoreCell score={score} />
+      )}
+      {card || runId === null ? null : <RowOpener runId={runId} name={entry.name} />}
     </li>
   );
 }
