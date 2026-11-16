@@ -50,7 +50,7 @@ export function cursorOf(stream: PostingStream, candidate: PostingCandidate): St
 const rowsSchema = z.array(
   z.object({
     purchaseId: z.string().min(1),
-    product: z.enum(["continue_run", "shop_item", "vip", "donation"]),
+    product: z.enum(["continue_run", "shop_item", "vip", "donation", "vip_gift"]),
     stars: z.number().int(),
     paidAt: z.coerce.date(),
     refundedAt: z.coerce.date().nullable(),
