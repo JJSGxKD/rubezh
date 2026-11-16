@@ -3,8 +3,8 @@ id: T-0249
 title: VIP в подарок другу — сервер: заказ за звёзды, срок подарка, уведомление, возврат
 epic: E1
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0247]
