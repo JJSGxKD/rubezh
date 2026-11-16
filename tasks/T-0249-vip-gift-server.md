@@ -3,7 +3,7 @@ id: T-0249
 title: VIP в подарок другу — сервер: заказ за звёзды, срок подарка, уведомление, возврат
 epic: E1
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -30,8 +30,19 @@ shared:
   - backend/api/src/modules/notifications/notification-kinds.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/src/modules/achievements/emblems.repository.ts
+  - backend/api/src/modules/achievements/emblems.service.ts
+  - backend/api/src/modules/appearance/appearance.service.ts
+  - backend/api/src/modules/ledger/payment-postings.ts
+  - backend/api/src/modules/ledger/payment-postings.repository.ts
+  - backend/api/src/modules/stakeholders/project-month.ts
+  - backend/api/src/modules/stakeholders/project-month.repository.ts
+  - backend/api/test/vip.test.ts
+  - backend/api/test/wipe-plan.test.ts
   - docs/07-monetization-and-ads.md
   - docs/21-diagrams.md
+  - docs/22-analytics-and-metrics.md
+  - docs/30-configuration-map.md
   - docs/37-accounting.md
 runner: any
 executor: sonnet-5.5
