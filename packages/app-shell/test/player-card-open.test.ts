@@ -25,7 +25,7 @@ const ROW: LeaderboardEntry = {
   enemiesKilled: 900,
   isMe: false,
 };
-const row = (entry: LeaderboardEntry, props: Record<string, unknown> = {}): string =>
+const row = (entry: LeaderboardEntry & { runId?: string }, props: Record<string, unknown> = {}): string =>
   renderToStaticMarkup(createElement("ol", null, createElement(LeaderboardRow, { entry, index: 0, scoring: "points", ...props } as never)));
 
 describe("строка рейтинга открывает карточку", () => {
