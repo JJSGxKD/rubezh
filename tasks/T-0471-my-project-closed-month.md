@@ -3,8 +3,8 @@ id: T-0471
 title: «Мой проект» — отчёт закрытого месяца и подтверждение участником
 epic: E15
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0469, T-0455]

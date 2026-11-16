@@ -30,11 +30,12 @@ const DECIMAL = /^\d{1,18}(\.\d{1,18})?$/u;
 
 /**
  * Ждёт ли операция владельца. Неизвестное — не мелочь: нет оценки или она не разбирается — ждёт; исправление меняет
- * уже проведённое, поэтому ждёт всегда; остальное — от порога включительно.
+ * уже проведённое, поэтому ждёт всегда; выплата за месяц — решение владельца при любой сумме (Р222, T-0469);
+ * остальное — от порога включительно.
  */
 export function needsApproval(check: ApprovalCheck): boolean {
   if (check.actorCanApprove) return false;
-  if (check.kind === "reversal") return true;
+  if (check.kind === "reversal" || check.kind === "payout") return true;
   if (check.amountUsd === null || !DECIMAL.test(check.amountUsd)) return true;
   return Number(check.amountUsd) >= check.thresholdUsd;
 }
