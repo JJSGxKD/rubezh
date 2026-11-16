@@ -3,8 +3,8 @@ id: T-0243
 title: Самоцветы за ролик раз в день — новое место рекламы free_gems в магазине, сервер
 epic: E1
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0242]
