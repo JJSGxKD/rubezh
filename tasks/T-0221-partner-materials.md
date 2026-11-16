@@ -33,6 +33,7 @@ shared:
   - apps/admin/src/api/audit.ts
   - apps/admin/test/partner-materials.test.ts
   - backend/api/src/modules/partners/partners.module.ts
+  - backend/api/src/modules/partners/partner-cabinet-slug.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
