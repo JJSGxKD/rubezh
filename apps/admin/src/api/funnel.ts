@@ -129,7 +129,7 @@ export function touchOf(row: FunnelRow): { title: string; detail: string | null 
     case "friend":
       return { title: "Ссылка дружбы", detail: "открыл ссылку игрока — стал его другом" };
     case "telegram_affiliate":
-      return { title: "Партнёрская программа Telegram", detail: row.startRef };
+      return { title: "Партнёрка Telegram", detail: row.startRef };
     case "notification":
       return { title: "Кнопка уведомления в боте", detail: row.startRef };
     case "tagged":
