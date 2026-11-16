@@ -29,6 +29,10 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - backend/api/test/ads.test.ts
   - backend/api/test/ads-catalog.test.ts
+  - backend/api/test/wallet.test.ts
+  - backend/api/test/run-double.test.ts
+  - backend/api/test/shop.test.ts
+  - backend/api/test/showcase.test.ts
   - apps/admin/src/api/ads.ts
   - apps/admin/src/ui/help.ts
   - apps/admin/test/ads.test.ts
