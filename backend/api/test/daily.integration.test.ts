@@ -42,32 +42,32 @@ describe.skipIf(DATABASE_URL === "")("награда дня на живом Post
     const afterMidnight = new Date(Date.UTC(2026, 8, 30, 21, 1));
     const nextLateEvening = new Date(Date.UTC(2026, 9, 1, 20, 59));
 
-    expect(await repository.state(me, lateEvening)).toEqual({ claimedDays: 0, claimedToday: false });
-    expect(await repository.advance(me, 0, lateEvening)).toBe(true);
-    expect(await repository.state(me, lateEvening)).toEqual({ claimedDays: 1, claimedToday: true });
+    expect(await repository.state(me, lateEvening)).toEqual({ claimedDays: 0, claimedToday: false, streak: 0, lastClaimDay: null, today: "2026-09-30" });
+    expect(await repository.advance(me, 0, lateEvening, 1)).toBe(true);
+    expect(await repository.state(me, lateEvening)).toEqual({ claimedDays: 1, claimedToday: true, streak: 1, lastClaimDay: "2026-09-30", today: "2026-09-30" });
 
-    expect(await repository.state(me, afterMidnight)).toEqual({ claimedDays: 1, claimedToday: false });
-    expect(await repository.advance(me, 1, afterMidnight)).toBe(true);
-    expect(await repository.advance(me, 2, nextLateEvening)).toBe(false);
+    expect(await repository.state(me, afterMidnight)).toEqual({ claimedDays: 1, claimedToday: false, streak: 1, lastClaimDay: "2026-09-30", today: "2026-10-01" });
+    expect(await repository.advance(me, 1, afterMidnight, 2)).toBe(true);
+    expect(await repository.advance(me, 2, nextLateEvening, 3)).toBe(false);
   });
 
   it("под гонкой день отмечается один раз — и первый, и следующий", async () => {
     const me = await account();
     const day = new Date(Date.UTC(2026, 8, 30, 9));
-    const first = await Promise.all(Array.from({ length: 6 }, () => repository.advance(me, 0, day)));
+    const first = await Promise.all(Array.from({ length: 6 }, () => repository.advance(me, 0, day, 1)));
     expect(first.filter(Boolean)).toHaveLength(1);
 
     const next = new Date(day.getTime() + 24 * 3_600_000);
-    const second = await Promise.all(Array.from({ length: 6 }, () => repository.advance(me, 1, next)));
+    const second = await Promise.all(Array.from({ length: 6 }, () => repository.advance(me, 1, next, 2)));
     expect(second.filter(Boolean)).toHaveLength(1);
-    expect(await repository.state(me, next)).toEqual({ claimedDays: 2, claimedToday: true });
+    expect(await repository.state(me, next)).toEqual({ claimedDays: 2, claimedToday: true, streak: 2, lastClaimDay: "2026-10-01", today: "2026-10-01" });
   });
 
   it("отметка с устаревшим числом дней не проходит", async () => {
     const me = await account();
     const day = new Date(Date.UTC(2026, 8, 30, 9));
-    await repository.advance(me, 0, day);
-    expect(await repository.advance(me, 0, new Date(day.getTime() + 24 * 3_600_000))).toBe(false);
-    expect(await repository.advance(me, 5, new Date(day.getTime() + 24 * 3_600_000))).toBe(false);
+    await repository.advance(me, 0, day, 1);
+    expect(await repository.advance(me, 0, new Date(day.getTime() + 24 * 3_600_000), 2)).toBe(false);
+    expect(await repository.advance(me, 5, new Date(day.getTime() + 24 * 3_600_000), 2)).toBe(false);
   });
 });
