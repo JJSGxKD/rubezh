@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { Prisma, type PrismaClient } from "../../../generated/prisma/client.js";
 import { PRISMA } from "../../../infra/database.js";
 import type { JournalCursor } from "../ledger-cursor.js";
+import type { PayoutColumns } from "../payouts/payout-columns.js";
 import type { BuiltLoan, ServiceAccount } from "./builders.js";
 import type { OperationKind, OperationStatus, StoredFields } from "./operation-input.js";
 
@@ -44,6 +45,8 @@ export interface NewOperation {
   createdBy: string;
   templateId: string | null;
   templatePeriod: string | null;
+  /** колонки выплаты (T-0469); у остальных видов нет */
+  payout?: PayoutColumns | undefined;
 }
 
 /** Что меняется у черновика при правке; автор, шаблон и время создания остаются. */
@@ -54,6 +57,7 @@ export interface DraftPatch {
   link: string | null;
   receiptImage: string | null;
   amountUsd: string | null;
+  payout?: PayoutColumns | undefined;
 }
 
 /** Решение владельца по операции на подтверждении: кто решил и что написал (при отказе причина обязательна). */
@@ -184,6 +188,9 @@ export class PrismaOperationsRepository implements OperationsRepository {
           createdBy: operation.createdBy,
           templateId: operation.templateId,
           templatePeriod: operation.templatePeriod,
+          payee: operation.payout?.payee ?? null,
+          payoutPeriod: operation.payout?.period ?? null,
+          overrideReason: operation.payout?.overrideReason ?? null,
         },
       });
       return "inserted";
@@ -202,7 +209,17 @@ export class PrismaOperationsRepository implements OperationsRepository {
   async updateDraft(operationId: string, patch: DraftPatch): Promise<boolean> {
     const result = await this.prisma.ledgerOperation.updateMany({
       where: { operationId, status: "draft" },
-      data: { kind: patch.kind, input: toJson(patch.input), note: patch.note, link: patch.link, receiptImage: patch.receiptImage, amountUsd: patch.amountUsd },
+      data: {
+        kind: patch.kind,
+        input: toJson(patch.input),
+        note: patch.note,
+        link: patch.link,
+        receiptImage: patch.receiptImage,
+        amountUsd: patch.amountUsd,
+        payee: patch.payout?.payee ?? null,
+        payoutPeriod: patch.payout?.period ?? null,
+        overrideReason: patch.payout?.overrideReason ?? null,
+      },
     });
     return result.count > 0;
   }

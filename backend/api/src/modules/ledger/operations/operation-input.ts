@@ -1,5 +1,6 @@
 import { isCurrencyCode } from "@bh/fx";
 import { z } from "zod";
+import { payoutFields } from "../payouts/payout-input.js";
 
 /**
  * Ручные операции учёта: что вводит человек (docs/37-accounting.md §4, §6, §12, Р220, Р221, tasks/T-0461).
@@ -8,7 +9,7 @@ import { z } from "zod";
  * это опечатка клиента, а не повод молча его проигнорировать.
  */
 
-export const OPERATION_KINDS = ["transfer", "exchange", "expense", "income", "loan", "reversal"] as const;
+export const OPERATION_KINDS = ["transfer", "exchange", "expense", "income", "loan", "reversal", "payout"] as const;
 export type OperationKind = (typeof OPERATION_KINDS)[number];
 
 export const OPERATION_STATUSES = ["draft", "pending", "posted", "rejected"] as const;
@@ -98,6 +99,8 @@ export const operationInputSchema = z.discriminatedUnion("kind", [
     repaymentBp: z.number().int().min(0).max(10_000),
   }),
   z.strictObject({ kind: z.literal("reversal"), ...common, sourceKey: z.string().trim().min(1).max(128) }),
+  // Выплата за закрытый месяц (Р222, T-0469): поля — в `payouts/payout-input.ts`, правила — в сборщике.
+  z.strictObject({ kind: z.literal("payout"), ...common, ...payoutFields }),
 ]);
 
 export type OperationInput = z.infer<typeof operationInputSchema>;
