@@ -3,8 +3,8 @@ id: T-0464
 title: «Бухгалтерия → Операции» в панели — формы операций и подтверждение владельцем
 epic: E15
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0461, T-0462, T-0459]

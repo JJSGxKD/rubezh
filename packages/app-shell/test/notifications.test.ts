@@ -390,3 +390,32 @@ describe("пасс месяца закрыт: строка ленты (T-0312)",
     expect(() => row({ month: null, rewards: {} })).not.toThrow();
   });
 });
+
+describe("отчёт месяца и выплата участнику проекта (T-0469)", () => {
+  const row = (kind: string, data: Record<string, unknown>) => describeNotification({ id: "n10", kind, data, createdAt: "2026-12-02T10:00:00.000Z", read: false });
+
+  it("отчёт готов: тот же текст, что в боте, чтобы колокольчик не показал «1» над пустой лентой; никуда не ведёт", () => {
+    const described = row("finance_report", { period: "2026-11", state: "ready", amountRub: "15980.40", reason: null });
+
+    expect(described?.text).toBe("Отчёт за ноябрь готов: твоя часть — 15 980,40 ₽. Подтверди в панели — без подтверждения выплата ждёт.");
+    expect(described?.target).toBeNull();
+    expect(described?.icon).toBeDefined();
+  });
+
+  it("отчёт отозван: с причиной, без второй точки в конце", () => {
+    expect(row("finance_report", { period: "2026-03", state: "recalled", amountRub: null, reason: "Ошибка в курсе рубля." })?.text).toBe("Отчёт за март отозван на пересчёт: Ошибка в курсе рубля.");
+  });
+
+  it("выплачено: сумма с разрядами и запятой, месяц по номеру", () => {
+    expect(row("finance_payout", { period: "2027-12", amountRub: "1234567.89" })?.text).toBe("Выплачено 1 234 567,89 ₽ за декабрь.");
+    expect(row("finance_payout", { period: "2026-11", amountRub: "950.00" })?.text).toBe("Выплачено 950,00 ₽ за ноябрь.");
+  });
+
+  it("данные не по виду — строки нет: сервер новее клиента", () => {
+    expect(row("finance_payout", { period: "2026-13", amountRub: "1.00" })).toBeNull();
+    expect(row("finance_payout", { period: "2026-11", amountRub: "много" })).toBeNull();
+    expect(row("finance_report", { period: "2026-11", state: "ready", amountRub: null, reason: null })).toBeNull();
+    expect(row("finance_report", { period: "2026-11", state: "recalled", amountRub: null, reason: null })).toBeNull();
+    expect(row("finance_report", { period: "2026-11", state: "unknown", amountRub: "1.00", reason: null })).toBeNull();
+  });
+});

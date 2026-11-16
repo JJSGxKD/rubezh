@@ -16,6 +16,8 @@ import { NOTE_MAX, NOTE_MIN, OPERATION_KINDS, OPERATION_STATUSES, operationInput
 import type { OperationPage, OperationView } from "../ledger/operations/operation-view.js";
 import type { OperationFilter } from "../ledger/operations/operations.repository.js";
 import { OperationsService } from "../ledger/operations/operations.service.js";
+import { PayoutsService } from "../ledger/payouts/payouts.service.js";
+import type { PayoutStatusView } from "../ledger/payouts/payout-view.js";
 import type { PeriodListItem, PeriodReportView } from "../ledger/periods/period-view.js";
 import { PeriodsService } from "../ledger/periods/periods.service.js";
 import { createTemplateSchema, draftPeriodSchema, updateTemplateSchema, type CreateTemplateInput, type UpdateTemplateInput } from "../ledger/templates/template-input.js";
@@ -139,6 +141,10 @@ function parseOperation(body: unknown): OperationInput {
  * Месяцы учёта (Р222, tasks/T-0468): список и отчёт месяца — `ledger.view`; поставить на сверку, закрыть и снять
  * закрытие — `finance.period.close`, право только у владельца. Правила состояний, расчёт и аудит — `PeriodsService`.
  *
+ * Выплаты (Р222, tasks/T-0469): статус выплат закрытого месяца — `ledger.view`; сама выплата — операция вида `payout`
+ * (`finance.entry.create`, у финансов ждёт владельца). Подтверждает отчёт участник — в кабинете «Мой проект»
+ * (`admin-my-project.controller.ts`).
+ *
  * Шаблоны повторяющихся расходов (Р220, tasks/T-0463): список — `ledger.view`, заведение, правка, архив и «Расходы
  * месяца» — `finance.entry.create`. «Расходы месяца» создаёт черновики операций, а не проводки.
  */
@@ -150,6 +156,7 @@ export class AdminLedgerController {
     private readonly chart: LedgerChartService,
     private readonly operations: OperationsService,
     private readonly periods: PeriodsService,
+    private readonly payouts: PayoutsService,
     private readonly templates: TemplatesService,
     private readonly limiter: RateLimiter,
     private readonly fx: FxService,
@@ -338,6 +345,13 @@ export class AdminLedgerController {
   @RequirePermission("ledger.view")
   async period(@Param("period") period: string): Promise<{ data: { period: PeriodReportView } }> {
     return { data: { period: await this.periods.report(parse(() => periodSchema.parse(period), PERIOD_PROBLEM)) } };
+  }
+
+  /** Выплаты закрытого месяца: по участнику — долг, решение, выплачено, можно ли платить и почему нет. */
+  @Get("periods/:period/payouts")
+  @RequirePermission("ledger.view")
+  async periodPayouts(@Param("period") period: string): Promise<{ data: { status: PayoutStatusView } }> {
+    return { data: { status: await this.payouts.status(parse(() => periodSchema.parse(period), PERIOD_PROBLEM)) } };
   }
 
   @Post("periods/:period/review")

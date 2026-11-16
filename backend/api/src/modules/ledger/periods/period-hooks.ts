@@ -1,24 +1,21 @@
-import { Injectable } from "@nestjs/common";
-
 /**
- * Что месяцу учёта нужно от выплат и подтверждений (Р222, tasks/T-0468; их строит T-0469): снять закрытие можно,
- * пока по месяцу не было ни одной выплаты, а снятие сбрасывает подтверждения участников. Пока выплат нет вовсе,
- * хуки по умолчанию ничего не знают и ничего не делают — закрытие снимается всегда.
+ * Что месяцу учёта нужно от выплат и подтверждений (Р222, tasks/T-0468; строит T-0469, `payouts/payout-hooks.ts`):
+ * снять закрытие можно, пока по месяцу не было ни одной выплаты, а снятие сбрасывает подтверждения участников и
+ * отзывает отчёт сообщением. Закрытие сообщает участникам, что отчёт готов. Выплата и снятие закрытия берут один
+ * замок месяца (`exclusive`), чтобы деньги не ушли в месяц, который тут же открыли заново.
+ *
+ * Необязательные члены — для сборок без выплат (тесты месяцев): нет `closed` — никому не пишем, нет `exclusive` — работа
+ * идёт без замка.
  */
 export interface PeriodHooks {
   /** по месяцу была хотя бы одна выплата: закрытие снять нельзя */
   hasPayouts(period: string): Promise<boolean>;
-  /** закрытие снято: подтверждения участников месяца недействительны */
-  resetConfirmations(period: string): Promise<void>;
+  /** закрытие снято: подтверждения участников месяца недействительны; `recall` — раз закрытия и причина для сообщения «отчёт отозван» */
+  resetConfirmations(period: string, recall?: { round: number; reason: string }): Promise<void>;
+  /** месяц закрыт: участникам с долгом — «отчёт готов»; `round` — сколько раз закрытие снимали до этого */
+  closed?(period: string, round: number): Promise<void>;
+  /** выполнить работу под замком месяца: выплата и снятие закрытия не идут одновременно */
+  exclusive?<T>(period: string, work: () => Promise<T>): Promise<T>;
 }
 
 export const PERIOD_HOOKS = Symbol("PERIOD_HOOKS");
-
-@Injectable()
-export class NoPeriodHooks implements PeriodHooks {
-  async hasPayouts(): Promise<boolean> {
-    return false;
-  }
-
-  async resetConfirmations(): Promise<void> {}
-}
