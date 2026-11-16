@@ -32,6 +32,8 @@ shared:
   - packages/app-shell/src/state/ads-api.ts
   - packages/app-shell/src/i18n/ru-run.json
   - packages/app-shell/src/screens/gallery.tsx
+  - packages/app-shell/src/screens/run/RunScreen.tsx
+  - packages/app-shell/src/i18n/ru-gallery.json
   - packages/app-shell/test/**
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
