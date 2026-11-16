@@ -1,11 +1,11 @@
-import { createElement } from "react";
+import { createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { LeaderboardEntry } from "@bh/shared-types";
 import { t } from "../src/i18n";
 import "../src/i18n/player-card";
 import { appearanceCardUrl } from "../src/screens/meta/appearance-art";
-import { PlayerCardBody } from "../src/screens/meta/player-card";
+import { PlayerCardActions, PlayerCardBody } from "../src/screens/meta/player-card";
 import { closePlayerCard, openPlayerCard, usePlayerCardTarget } from "../src/screens/meta/player-card-link";
 import { LeaderboardRow } from "../src/screens/meta/rating";
 import type { PlayerCardView } from "../src/state/player-card-api";
@@ -86,10 +86,11 @@ const CARD: PlayerCardView = {
   favorites: [{ id: "ach_boss", title: "Гроза боссов", category: "boss" }],
   relation: "none",
 };
-const body = (card: Partial<PlayerCardView>, props: Record<string, unknown> = {}): string =>
-  renderToStaticMarkup(
-    createElement(PlayerCardBody, { card: { ...CARD, ...card }, viewerArt: true, signedIn: true, requesting: false, requestFailed: false, onAction: () => undefined, ...props } as never),
-  );
+const body = (card: Partial<PlayerCardView>, props: Record<string, unknown> = {}): string => {
+  const shared = { card: { ...CARD, ...card }, viewerArt: true, signedIn: true, requesting: false, requestFailure: null, onAction: () => undefined, ...props } as never;
+  // Тело листа и подвал с действием — две части одного листа: подвал закреплён под прокруткой.
+  return renderToStaticMarkup(createElement(Fragment, null, createElement(PlayerCardBody, shared), createElement(PlayerCardActions, shared)));
+};
 
 describe("карточка игрока", () => {
   it("сцена — карточка облика игрока; имя, знак и уровень под ней", () => {
@@ -105,7 +106,7 @@ describe("карточка игрока", () => {
     const html = body({}, { viewerArt: false });
 
     expect(html).not.toContain(appearanceCardUrl("navi"));
-    expect(html).toContain(">ВЕ<");
+    expect(html).toContain(">В<");
   });
 
   it("четыре числа: лучший забег, место, забеги, мощь", () => {
@@ -180,7 +181,7 @@ describe("карточка игрока", () => {
   });
 
   it("заявка не ушла — строка ошибки с role=alert", () => {
-    const html = body({ relation: "none" }, { requestFailed: true });
+    const html = body({ relation: "none" }, { requestFailure: "playerCard.requestFailed" });
 
     expect(html).toContain('role="alert"');
     expect(html).toContain(t("playerCard.requestFailed"));
