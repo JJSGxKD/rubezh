@@ -19,6 +19,9 @@ shared:
   - backend/api/src/modules/daily/daily.service.ts
   - backend/api/src/modules/daily/daily.repository.ts
   - backend/api/src/modules/daily/daily-double.service.ts
+  - backend/api/test/daily.test.ts
+  - backend/api/test/daily.integration.test.ts
+  - backend/api/test/helpers/memory-daily.ts
   - backend/api/src/modules/wallet/wallet-limits.ts
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
