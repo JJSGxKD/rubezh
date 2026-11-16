@@ -82,7 +82,7 @@ describe("кап роликов — числа и правило", () => {
   it("под капом — места с наградой, кроме задания сети; межстраничная и задание не входят", () => {
     expect(CAPPED_PLACES).not.toContain("task");
     expect(CAPPED_PLACES).not.toContain("interstitial");
-    expect([...CAPPED_PLACES].sort()).toEqual(["card_reroll", "run_double", "second_chance", "wheel_spin"]);
+    expect([...CAPPED_PLACES].sort()).toEqual(["card_reroll", "daily_double", "run_double", "second_chance", "wheel_spin"]);
   });
 
   it("место под капом — любое будущее с наградой, кроме задания: список выводится из правил, а не пишется отдельно", () => {
