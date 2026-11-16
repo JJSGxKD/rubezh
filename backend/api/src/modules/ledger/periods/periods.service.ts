@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { isCurrencyCode } from "@bh/fx";
 import { periodOf } from "@bh/ledger";
 import { ValidationError } from "../../../common/domain-error.js";
@@ -58,6 +58,8 @@ function previousPeriod(period: string): string {
 
 @Injectable()
 export class PeriodsService {
+  private readonly logger = new Logger("ledger-periods");
+
   constructor(
     @Inject(PERIODS_REPOSITORY) private readonly repository: PeriodsRepository,
     private readonly fx: FxService,
@@ -156,11 +158,13 @@ export class PeriodsService {
       target: period,
       after: { period, round: row.reopenedCount, netProfitUsdCents: snapshot.waterfall.netProfit, taxRubMinor: snapshot.rub.taxMinor, payouts: snapshot.rub.payouts.length, entries: snapshot.entries },
     });
+    // Месяц уже закрыт и записан: участникам — «отчёт готов» (T-0469). Сбой сообщения закрытие не отменяет.
+    await this.tolerate("closed", period, () => this.hooks.closed?.(period, row.reopenedCount));
   }
 
   /**
    * Снять закрытие: причина обязательна; по месяцу не должно быть выплат (хук T-0469). Проводки закрытия этого раза
-   * сторнируются, месяц возвращается на сверку, а подтверждения участников сбрасываются.
+   * сторнируются, месяц возвращается на сверку, подтверждения участников сбрасываются, а отчёт отзывается сообщением.
    */
   async reopen(actor: PeriodActor, period: string, reason: string, now: Date = new Date()): Promise<void> {
     assertPeriod(period);
@@ -169,14 +173,29 @@ export class PeriodsService {
     const row = await this.db(this.repository.row(period));
     const status: PeriodStatus = row?.status ?? "open";
     if (row === null || status !== "closed") throw new LedgerPeriodStatusError(period, status, "closed");
-    if (await this.db(this.hooks.hasPayouts(period))) throw new LedgerPeriodHasPayoutsError(period);
+    // Проверка выплат и снятие — под замком месяца: выплата, проведённая между ними, оставила бы деньги ушедшими в месяц,
+    // который открыли заново. Без хука замка (сборки без выплат) работа идёт как есть.
+    const work = async (): Promise<void> => {
+      if (await this.db(this.hooks.hasPayouts(period))) throw new LedgerPeriodHasPayoutsError(period);
+      const outcome = await withTimeout(this.repository.commitReopen({ period, round: row.reopenedCount, at: now, by: actor.accountId, reason: trimmed }), COMMIT_TIMEOUT_MS, "снятие закрытия месяца");
+      if (outcome.outcome === "not_closed") throw new LedgerPeriodStatusError(period, outcome.status, "closed");
+      if (outcome.outcome === "changed") throw new LedgerPeriodChangedError(period);
+      await this.roles.audit({ actorAccountId: actor.accountId, action: "ledger.period.reopen", target: period, after: { period, round: row.reopenedCount, reason: trimmed, reversed: outcome.reversed } });
+      // Закрытие снято и записано: подтверждения участников недействительны, отчёт отозван сообщением. Сбой сброса снятие
+      // не отменяет — устаревшее подтверждение выплаты не пропустят (оно старше следующего закрытия).
+      await this.tolerate("reset", period, () => this.hooks.resetConfirmations(period, { round: row.reopenedCount, reason: trimmed }));
+    };
+    if (this.hooks.exclusive === undefined) await work();
+    else await this.hooks.exclusive(period, work);
+  }
 
-    const outcome = await withTimeout(this.repository.commitReopen({ period, round: row.reopenedCount, at: now, by: actor.accountId, reason: trimmed }), COMMIT_TIMEOUT_MS, "снятие закрытия месяца");
-    if (outcome.outcome === "not_closed") throw new LedgerPeriodStatusError(period, outcome.status, "closed");
-    if (outcome.outcome === "changed") throw new LedgerPeriodChangedError(period);
-
-    await this.db(this.hooks.resetConfirmations(period));
-    await this.roles.audit({ actorAccountId: actor.accountId, action: "ledger.period.reopen", target: period, after: { period, round: row.reopenedCount, reason: trimmed, reversed: outcome.reversed } });
+  /** Побочное действие после записанного решения: сообщение или сброс. Его сбой — предупреждение в логе, а не отказ запроса. */
+  private async tolerate(event: string, period: string, action: () => Promise<void> | undefined): Promise<void> {
+    try {
+      await this.db(Promise.resolve(action()));
+    } catch (error: unknown) {
+      this.logger.warn(JSON.stringify({ module: "ledger-periods", event: `${event}_failed`, period, reason: error instanceof Error ? error.message : "unknown" }));
+    }
   }
 
   private periodSettings(): PeriodSettings {
