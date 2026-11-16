@@ -133,9 +133,9 @@ export function ChestOverlay(props: ChestOverlayProps): ReactNode {
       {/* На невысоком экране подпись уходит: каждая строка на счету.
           Основным текстом: верх реликвии подсвечен тоном яруса, и серый у
           большого сундука падал до 3,5:1. */}
-      <p className="mt-1.5 mb-2 text-center text-sm text-text short:hidden">
-        {t(second ? "run.chest.subtitle.second" : "run.chest.subtitle", { count: chest.rewards.length })}
-      </p>
+      <p className="mt-1.5 mb-2 text-center text-sm text-text short:hidden">{t("run.chest.subtitle", { count: chest.rewards.length })}</p>
+      {/* Второй сундук клада: пометка — подпись под лентой, чтобы игрок не принял его за повтор первого. */}
+      {second ? <p className="-mt-1 mb-2 text-center font-display text-sm font-semibold text-text short:hidden">{t("run.chest.second")}</p> : null}
       <ul className="mt-2 grid gap-2 short:mt-1 short:gap-1 landscape:grid-cols-2">
         {chest.rewards.map((reward, index) => (
           <RewardRow
