@@ -127,6 +127,8 @@ erDiagram
     ACCOUNT ||--o{ RUN_AD_CONTINUE : "рекламные продолжения за сутки"
     RUN ||--o| RUN_AD_REROLL : "переброс карточек за рекламу: один на забег (T-0199)"
     ACCOUNT ||--o{ RUN_AD_REROLL : "рекламные перебросы карточек"
+    RUN ||--o| RUN_AD_CHEST : "второй сундук клада за рекламу: один на забег (T-0327)"
+    ACCOUNT ||--o{ RUN_AD_CHEST : "рекламные вторые сундуки клада"
     RUN ||--o{ RUN_GEM_CONTINUE : "продолжен за самоцветы"
     RUN ||--o| RUN_PROOF : "запись для проверки (T-0317)"
     ACCOUNT ||--o{ RUN_GEM_CONTINUE : "продолжения за самоцветы"
@@ -845,7 +847,7 @@ erDiagram
     AD_BLOCK {
         uuid block_id PK
         string network_key FK
-        enum place "second_chance|wheel_spin|run_double|card_reroll|task|interstitial"
+        enum place "second_chance|wheel_spin|run_double|card_reroll|clad_chest|task|interstitial"
         string external_id "nullable: блок в кабинете сети; нет — показ по ключам сети"
         enum success "view|click|cpa — условие успеха"
         boolean active
@@ -890,6 +892,14 @@ erDiagram
         string run_id PK "FK на run (каскад): рекламный переброс один на забег"
         uuid account_id FK "каскад с аккаунтом"
         string session_id UK "сессия показа места card_reroll; без FK — модуль рекламы"
+        string network_key "сеть показа; у пропуска VIP — его имя"
+        datetime granted_at
+    }
+
+    RUN_AD_CHEST {
+        string run_id PK "FK на run (каскад): второй сундук клада за рекламу один на забег"
+        uuid account_id FK "каскад с аккаунтом"
+        string session_id UK "сессия показа места clad_chest; без FK — модуль рекламы"
         string network_key "сеть показа; у пропуска VIP — его имя"
         datetime granted_at
     }
@@ -1931,6 +1941,17 @@ erDiagram
   NOTHING`, два параллельных забора дают одну строку. Итог забега с заявленным
   `adRerolls: 1` без строки отклоняется (`unpaid_ad_reroll`). Суточного потолка нет
   — награда не валюта. Вайп стирает таблицу своим шагом до забега.
+- **`RUN_AD_CHEST` — второй сундук клада за рекламу** (`35-stage4-plan.md`
+  Р162, T-0327): книга показов места `clad_chest`, по образцу
+  `RUN_AD_REROLL`. Хозяин места — модуль забегов: забирает сессию показа и
+  записывает сундук. Первичный ключ — `run_id`: второй сундук один на забег,
+  вторая сессия на тот же забег не записывается; уникальная `session_id` не
+  даёт потратить одну сессию на два забега. Запись — `INSERT … ON CONFLICT DO
+  NOTHING`, два параллельных забора дают одну строку. Был ли в забеге клад,
+  сервер не знает: за показ он ручается, а клад проверит повтор забега.
+  Итог забега с заявленным `adChests: 1` без строки отклоняется
+  (`unpaid_ad_chest`). Показ входит в общий дневной кап роликов (Р155), у VIP —
+  пропуск без ролика. Вайп стирает таблицу своим шагом до забега.
 - **`RUN_GEM_CONTINUE` — второй шанс за самоцветы** (`35-stage4-plan.md` Р162,
   T-0324): третья книга продолжений забега рядом с `PURCHASE` (звёзды) и
   `RUN_AD_CONTINUE` (реклама). Цена в самоцветах — цена в звёздах от начатых
