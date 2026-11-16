@@ -22,14 +22,19 @@ const DAY_MS = 86_400_000;
 const HOLD_ACCOUNT = "stars.bot.hold";
 const AVAILABLE_ACCOUNT = "stars.bot.available";
 
-export type PaymentProduct = "continue_run" | "shop_item" | "vip" | "donation";
+export type PaymentProduct = "continue_run" | "shop_item" | "vip" | "donation" | "vip_gift";
 export type PostingKind = "paid" | "release" | "refund";
 
-/** Статья выручки — по виду покупки, а не по `sku`: донат не часть «Магазина» (docs/37 §3). Площадка пока одна — Telegram. */
+/**
+ * Статья выручки — по виду покупки, а не по `sku`: донат не часть «Магазина» (docs/37 §3). VIP в подарок (Р155,
+ * T-0249) — выручка VIP: платил дарящий, получатель денег не вносил, а своей статьи у подарка нет. Площадка пока
+ * одна — Telegram.
+ */
 const REVENUE_ACCOUNT: Readonly<Record<PaymentProduct, string>> = {
   shop_item: "revenue.shop.telegram",
   continue_run: "revenue.continue.telegram",
   vip: "revenue.vip.telegram",
+  vip_gift: "revenue.vip.telegram",
   donation: "revenue.donation.telegram",
 };
 
@@ -37,6 +42,7 @@ const PRODUCT_LABEL: Readonly<Record<PaymentProduct, string>> = {
   shop_item: "магазин",
   continue_run: "второй шанс",
   vip: "VIP",
+  vip_gift: "VIP в подарок",
   donation: "донат",
 };
 

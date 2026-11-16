@@ -36,9 +36,9 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 93 модели, стирается 30", () => {
+  it("остаётся 95 моделей, стирается 30", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(93);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(95);
     expect(actions.filter((action) => action === "wipe")).toHaveLength(30);
   });
 
@@ -145,7 +145,7 @@ describe("план вайпа: порядок стирания", () => {
 
 describe("план вайпа: то, что остаётся по решению Р87", () => {
   // смена любой из этих строк — изменение Р87, а не правка плана
-  it.each(["Purchase", "Account", "Friendship", "ReferralBinding", "VipPeriod", "AccountRestriction", "AnalyticsEvent"])("%s остаётся", (model) => {
+  it.each(["Purchase", "Account", "Friendship", "ReferralBinding", "VipPeriod", "VipGift", "VipGiftOrder", "AccountRestriction", "AnalyticsEvent"])("%s остаётся", (model) => {
     expect(plan[model]?.action).toBe("keep");
   });
 });

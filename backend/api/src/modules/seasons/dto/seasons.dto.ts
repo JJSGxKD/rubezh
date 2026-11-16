@@ -90,6 +90,8 @@ const boardEntry = z.object({
   tester: z.literal(true).optional(),
   /** знак «Меценат» (Р109); поля нет — не поддержал */
   supporter: z.literal(true).optional(),
+  /** публичный id игрока (T-0247, Р47): по нему открывается карточка; поля нет — источник id недоступен */
+  publicId: z.string().regex(/^[0-9a-f]{12}$/).optional(),
   /** знак у имени (T-0240): выбранный игроком или по умолчанию; поля нет — знака нет или источник знаков недоступен */
   emblem: z
     .object({

@@ -15,6 +15,7 @@ import {
   publicEmblemOf,
   shownEmblem,
   type EmblemsView,
+  type PublicEmblem,
   type PublicMark,
 } from "./emblem-rules.js";
 import { ACHIEVEMENTS_REPOSITORY, type AchievementsRepository } from "./achievements.repository.js";
@@ -115,6 +116,18 @@ export class EmblemsService {
   }
 
   /**
+   * Все знаки, которые аккаунт держит сейчас, включая заслуги, — для карточки игрока (T-0247).
+   * Названия — из каталога, у сезонного знака — номер сезона. Порядок каталога; отбор лучших по
+   * редкости — дело карточки. Четыре запроса, как у `of`.
+   */
+  async heldList(accountId: string, at = new Date()): Promise<PublicEmblem[]> {
+    const catalog = await this.catalog();
+    const standing = (await this.standings([accountId], catalog, at, true)).get(accountId);
+    if (standing === undefined) return [];
+    return [...catalog.values()].filter((def) => standing.held.has(def.taskId)).map((def) => publicEmblemOf(def, standing.seasons.get(def.taskId) ?? null));
+  }
+
+  /**
    * Статусные и сезонные знаки, которые аккаунт держит сейчас, — без достижений: витрина и «любимые»
    * знают выполненные достижения сами. Три запроса.
    */
@@ -138,7 +151,7 @@ export class EmblemsService {
   private async standings(accountIds: readonly string[], catalog: ReadonlyMap<string, CatalogDef>, at: Date, withMerit: boolean): Promise<Map<string, Standing>> {
     const [statuses, vip, seasons, merit] = await Promise.all([
       this.db(this.repository.statuses(accountIds)),
-      this.db(this.repository.vipUntil(accountIds)),
+      this.db(this.repository.vipUntil(accountIds, at)),
       this.db(this.repository.standings(accountIds)),
       withMerit ? this.db(this.repository.merit(accountIds)) : Promise.resolve(new Map<string, Set<string>>()),
     ]);

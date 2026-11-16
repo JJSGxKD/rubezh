@@ -9,10 +9,11 @@ export type PaymentMode = (typeof PAYMENT_MODES)[number];
 export type PurchaseStatus = "pending" | "paid" | "refunded";
 export type RefundReason = "test_mode" | "unused" | "external" | "undeliverable" | "manual";
 /**
- * Что продаётся: второй шанс в забеге, товар каталога магазина, VIP (WP10) или
- * донат проекту (Р109) — добровольная сумма без игровых ценностей.
+ * Что продаётся: второй шанс в забеге, товар каталога магазина, VIP (WP10), донат
+ * проекту (Р109) — добровольная сумма без игровых ценностей — или VIP в подарок
+ * другу (Р155): разовая покупка, не подписка.
  */
-export const PURCHASE_PRODUCTS = ["continue_run", "shop_item", "vip", "donation"] as const;
+export const PURCHASE_PRODUCTS = ["continue_run", "shop_item", "vip", "donation", "vip_gift"] as const;
 export type PurchaseProduct = (typeof PURCHASE_PRODUCTS)[number];
 
 /** Донат — поддержка, а не покупка (Р109): отчёты, цели сетей и разрезы считают покупки как `product <> DONATION_PRODUCT`. */

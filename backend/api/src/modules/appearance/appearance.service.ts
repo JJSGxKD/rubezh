@@ -109,7 +109,7 @@ export class AppearanceService {
       this.db(this.repository.accounts(accountIds)),
       this.db(this.repository.completed(accountIds, OWNERSHIP_ACHIEVEMENTS)),
       this.db(this.repository.weeklyClaimed(accountIds, TOP_WEEKLY_POINTS)),
-      this.db(this.emblems.vipUntil(accountIds)),
+      this.db(this.emblems.vipUntil(accountIds, at)),
       this.db(this.emblems.standings(accountIds)),
     ]);
     const result = new Map<string, Standing>();

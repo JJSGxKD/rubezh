@@ -1,19 +1,23 @@
-import { Controller, Get, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
-import { RateLimitedError } from "../../common/domain-error.js";
+import { Body, Controller, Get, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
+import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import type { ShopInvoice } from "../payments/payments.service.js";
+import { giftOrderBodySchema } from "./vip-gift-rules.js";
+import { VipGiftService } from "./vip-gift.service.js";
 import { VipService, type VipDailyResult, type VipView } from "./vip.service.js";
 
 /**
  * VIP (`/api/v1/vip`, docs/35-stage4-plan.md WP10): состояние, счёт на
- * подписку, отмена и возврат продления, самоцветы дня. **Цены в запросе нет**:
- * сколько стоит период, решает сервер. Состояние покупки клиент опрашивает
+ * подписку, счёт на подарок другу (Р155), отмена и возврат продления, самоцветы
+ * дня. **Цены в запросе нет**: сколько стоит период, решает сервер. Состояние покупки клиент опрашивает
  * там же, где у магазина, — `GET /api/v1/payments/:purchaseId`.
  */
 const VIEW_LIMIT: RateLimit = { scope: "vip:view", limit: 600, windowSec: 3600 };
 /** Счёт — только по нажатию «Оформить»: как у магазина. */
 const ORDER_LIMIT: RateLimit = { scope: "vip:order", limit: 60, windowSec: 3600 };
+/** Счёт на подарок — по нажатию «Подарить», как покупки; суточный потолок заказов держит сервис подарков. */
+const GIFT_LIMIT: RateLimit = { scope: "vip:gift", limit: 60, windowSec: 3600 };
 /** Отмена и возврат продления ходят в площадку — реже всего остального. */
 const RENEWAL_LIMIT: RateLimit = { scope: "vip:renewal", limit: 30, windowSec: 3600 };
 const DAILY_LIMIT: RateLimit = { scope: "vip:daily", limit: 60, windowSec: 3600 };
@@ -23,6 +27,7 @@ const DAILY_LIMIT: RateLimit = { scope: "vip:daily", limit: 60, windowSec: 3600 
 export class VipController {
   constructor(
     private readonly vip: VipService,
+    private readonly gifts: VipGiftService,
     private readonly limiter: RateLimiter,
   ) {}
 
@@ -39,6 +44,17 @@ export class VipController {
     const account = accountOf(request);
     await this.limit(ORDER_LIMIT, account.accountId);
     return { data: await this.vip.order(account) };
+  }
+
+  /** Счёт на 30 дней VIP другу. Получателя называет только публичный id; дружба и блокировка проверяются на сервере. */
+  @Post("gift")
+  @HttpCode(200)
+  async gift(@Req() request: unknown, @Body() body: unknown): Promise<{ data: ShopInvoice }> {
+    const account = accountOf(request);
+    await this.limit(GIFT_LIMIT, account.accountId);
+    const parsed = giftOrderBodySchema.safeParse(body);
+    if (!parsed.success) throw new ValidationError("Некорректный получатель подарка");
+    return { data: await this.gifts.order(account, parsed.data.publicId) };
   }
 
   @Post("cancel")

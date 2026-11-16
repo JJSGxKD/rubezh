@@ -25,7 +25,7 @@ const purchaseSchema = z.array(
     stars: z.coerce.number().int().nonnegative(),
     paidAt: z.coerce.date(),
     refundedAt: z.coerce.date().nullable(),
-    product: z.enum(["continue_run", "shop_item", "vip", "donation"]),
+    product: z.enum(["continue_run", "shop_item", "vip", "donation", "vip_gift"]),
     platform: z.enum(["telegram", "max", "vk", "web"]),
   }),
 );
