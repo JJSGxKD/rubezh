@@ -135,6 +135,11 @@ erDiagram
     PURCHASE ||--o| VIP_SUBSCRIPTION : "первая покупка — id подписки"
     VIP_SUBSCRIPTION ||--o{ VIP_PERIOD : "оплаченные периоды"
     PURCHASE ||--o| VIP_PERIOD : "период за оплату"
+    PURCHASE ||--o| VIP_GIFT_ORDER : "кому дарит покупка подарка (Р155, T-0249)"
+    PURCHASE ||--o| VIP_GIFT : "подаренный срок за оплату"
+    ACCOUNT ||--o{ VIP_GIFT : "дарящий (giver)"
+    ACCOUNT ||--o{ VIP_GIFT : "получатель (recipient): срок подарка отдельно от подписки"
+    ACCOUNT ||--o{ VIP_GIFT_ORDER : "получатель в заказе"
     PURCHASE ||--o| PURCHASE_COMPENSATION : "компенсация за сбой оплаты — одна на покупку (Р209)"
     ACCOUNT ||--o| VIP_DAILY : "самоцветы VIP дня"
     ACCOUNT ||--o{ SHOWCASE_OFFER : "витрина снаряжения на сутки"
@@ -458,7 +463,7 @@ erDiagram
     PURCHASE {
         uuid purchase_id PK "он же payload счёта"
         uuid account_id FK "Restrict: деньги не уходят вместе с аккаунтом"
-        enum product "continue_run|shop_item|vip|donation"
+        enum product "continue_run|shop_item|vip|donation|vip_gift"
         string run_id FK "nullable: только у второго шанса; SetNull — вайп стирает забеги, покупка остаётся; UK вместе с continue_no"
         int continue_no "nullable: какое продолжение забега, с единицы"
         float elapsed_sec "nullable: секунда забега, по которой посчитана цена"
@@ -934,6 +939,22 @@ erDiagram
         uuid account_id PK,FK
         date last_day "московские сутки последнего забора"
         datetime updated_at
+    }
+
+    VIP_GIFT {
+        uuid purchase_id PK,FK "одна оплата подарка — один срок; повтор выдачи ничего не меняет"
+        uuid giver_account_id FK "кто заплатил"
+        uuid recipient_account_id FK "кому подарено; индекс (recipient_account_id, ends_at)"
+        datetime starts_at "позже «сейчас» и конца последнего неотозванного подарка и подписки получателя"
+        datetime ends_at "позже starts_at (CHECK): ровно 30 суток от начала"
+        datetime revoked_at "nullable: возврат звёзд; не начавшийся срок пропадает, идущий обрывается, следующие подарки не сдвигаются"
+        datetime created_at
+    }
+
+    VIP_GIFT_ORDER {
+        uuid purchase_id PK,FK "счёт на подарок: ключ — покупка дарящего"
+        uuid recipient_account_id FK "кому: пишет сервер при выставлении счёта, из клиента подтверждение оплаты его не берёт"
+        datetime created_at
     }
 
     SHOWCASE_OFFER {
