@@ -81,6 +81,8 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     ...(world.boosts.ids.length === 0 ? {} : { boosts: [...world.boosts.ids] }),
     // Переброс за рекламу: сервер сверит число с книгой показов (T-0199); без него поля нет.
     ...(world.progression.adRerolls === 0 ? {} : { adRerolls: world.progression.adRerolls }),
+    // Второй сундук клада за рекламу: так же сверяется с книгой показов (T-0328).
+    ...(world.progression.adChests === 0 ? {} : { adChests: world.progression.adChests }),
     ...(pressure === undefined ? {} : { pressure }),
     huntLog: world.hunt.log.map((entry) => ({ ...entry })),
     buildScore: buildScore(world),

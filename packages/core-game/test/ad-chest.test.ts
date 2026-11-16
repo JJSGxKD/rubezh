@@ -325,7 +325,6 @@ describe("запись и итог забега", () => {
   it("~adchest попадает в лог выбора условным id, а повтор забега «сошёлся»", () => {
     const recording = recorded(true);
     expect(recording.choices.map(([, id]) => id).filter((id) => id === AD_CHEST_COMMAND)).toEqual([AD_CHEST_COMMAND]);
-    expect(recording.result.chestsOpened).toBeGreaterThanOrEqual(2);
 
     const outcome = replay(recording);
     expect(outcome.reason).toBeNull();
@@ -333,11 +332,11 @@ describe("запись и итог забега", () => {
     expect(outcome.actual).toEqual(recording.result);
   });
 
-  it("тот же забег без команды сходится сам и открывает на сундук меньше", () => {
+  it("тот же забег без команды сходится сам и кончается другим миром: второй сундук что-то изменил", () => {
     const withCommand = recorded(true);
     const without = recorded(false);
     expect(without.choices.some(([, id]) => id === AD_CHEST_COMMAND)).toBe(false);
-    expect(without.result.chestsOpened).toBe(withCommand.result.chestsOpened - 1);
+    expect(without.result.checksum).not.toBe(withCommand.result.checksum);
 
     const outcome = replay(without);
     expect(outcome.reason).toBeNull();

@@ -3,6 +3,7 @@ import type { RunProofDraft } from "../../run-api";
 import { decodeInputLog, INPUT_LOG_ENCODING, InputLogError } from "../diagnostics/input-log";
 import { captureHunt, MAX_HUNT_ENTRIES, type HuntSnapshot } from "./hunt-log";
 import { MAX_AD_REROLLS, MAX_CARD_TOOLS } from "../progression/card-tools";
+import { MAX_AD_CHESTS } from "../sim/chests";
 import { CORDON_SOURCES, createCordonState, type CordonSource, type CordonState } from "../sim/cordon";
 import { RUBEZH_PHASES, type RubezhPhase } from "../sim/rubezh";
 import { createHazardState } from "../sim/hazards";
@@ -32,7 +33,7 @@ import { TICK_HZ, type World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 19;
+export const WORLD_SNAPSHOT_VERSION = 20;
 
 export class SnapshotError extends Error {
   constructor(message: string) {
@@ -249,6 +250,8 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   world.chests.opened = asNumber(chest.opened, "chest.opened");
   world.chests.founds = [];
   world.chests.openings = [];
+  // Окно второго сундука не переживает снимок: сундук, открытый до него, продолженный забег уже не предложит.
+  world.chests.adWindow = null;
   restoreCordon(world, snapshot.cordon);
   restoreRubezh(world, snapshot.rubezh);
   restorePrologue(world, snapshot.prologue);
@@ -792,6 +795,7 @@ function restoreProgression(input: unknown, limitCount: number): World["progress
     toolsTotal: restoreCardTools(progression.toolsTotal, "progression.toolsTotal"),
     banished: asArray(progression.banished, "progression.banished").map((key, i) => asString(key, `progression.banished[${i}]`)),
     adRerolls: restoreAdRerolls(progression.adRerolls),
+    adChests: restoreAdChests(progression.adChests),
     limitStacks: restoreLimitStacks(progression.limitStacks, limitCount),
   };
 }
@@ -825,6 +829,15 @@ function restoreAdRerolls(input: unknown): number {
   const count = asNumber(input, "progression.adRerolls");
   if (!Number.isInteger(count) || count < 0 || count > MAX_AD_REROLLS) {
     throw new SnapshotError(`progression.adRerolls: целое от 0 до ${MAX_AD_REROLLS}, а не ${count}`);
+  }
+  return count;
+}
+
+/** Потраченное право на второй сундук клада за рекламу: те же правила, что у рекламного переброса. */
+function restoreAdChests(input: unknown): number {
+  const count = asNumber(input, "progression.adChests");
+  if (!Number.isInteger(count) || count < 0 || count > MAX_AD_CHESTS) {
+    throw new SnapshotError(`progression.adChests: целое от 0 до ${MAX_AD_CHESTS}, а не ${count}`);
   }
   return count;
 }

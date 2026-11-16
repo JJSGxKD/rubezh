@@ -3,6 +3,7 @@ import { CONTENT_HASH } from "../../content/hash";
 import type { ContentSnapshot } from "../../content/snapshot";
 import type { RunRecording, RunRecordingResult, RunReplayBlocker } from "../../run-api";
 import { applyCardTool, isCardToolCommand } from "../progression/card-tools";
+import { AD_CHEST_COMMAND, applyAdChest } from "../sim/chests";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
 import { buildRunResult } from "../run/run-result";
 import { createRunWorld } from "../run-world";
@@ -161,9 +162,12 @@ export function* replaySteps(recording: ReplaySource, contentHash: string = CONT
     while (choiceIndex < recording.choices.length && recording.choices[choiceIndex][0] === world.stats.tick) {
       const [tick, optionId] = recording.choices[choiceIndex++];
       // Переброс, пропуск и изгнание идут в лог теми же выборами с условными id, благословение — с приставкой.
+      // Второй сундук клада за ролик берётся в окне сундука, а не на выборе улучшения (tasks/T-0328).
       const applied = optionId.startsWith(BLESSING_PREFIX)
         ? chooseBlessing(world, optionId.slice(BLESSING_PREFIX.length))
-        : isAwaitingChoice(world) && (isCardToolCommand(optionId) ? applyCardTool(world, optionId) !== null : chooseUpgrade(world, optionId));
+        : optionId === AD_CHEST_COMMAND
+          ? applyAdChest(world)
+          : isAwaitingChoice(world) && (isCardToolCommand(optionId) ? applyCardTool(world, optionId) !== null : chooseUpgrade(world, optionId));
       if (!applied) return `выбор «${optionId}» на тике ${tick} не ложится на забег`;
       matchCheckpoints();
     }
