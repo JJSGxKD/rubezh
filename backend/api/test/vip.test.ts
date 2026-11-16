@@ -25,6 +25,7 @@ import { SubscriptionRenewal } from "../src/modules/payments/subscription-renewa
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { TITLE_MAX } from "../src/modules/shop/shop-catalog.js";
+import { VipGiftService } from "../src/modules/vip/vip-gift.service.js";
 import { VIP_DAILY_GEMS, VIP_PERIOD_SEC, VIP_PLAN, VIP_REWARD_MUL } from "../src/modules/vip/vip-plan.js";
 import { VipController } from "../src/modules/vip/vip.controller.js";
 import { VipService } from "../src/modules/vip/vip.service.js";
@@ -978,6 +979,8 @@ describe("VIP по HTTP", () => {
         { provide: APP_CONFIG, useValue: config() },
         { provide: REDIS, useValue: unavailableRedis },
         { provide: VipService, useValue: ctx.vip },
+        // Подарок — свой модуль выдачи (vip-gift.integration.test.ts); контроллеру он нужен для конструктора.
+        { provide: VipGiftService, useValue: {} },
         RateLimiter,
         AuthGuard,
       ],
