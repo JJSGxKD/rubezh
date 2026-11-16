@@ -4,6 +4,9 @@ import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { lockSourceSlot } from "../src/modules/attribution/source-slot.js";
 import { PrismaTelegramAffiliateRepository } from "../src/modules/attribution/telegram-affiliate.repository.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { newLinkCode } from "../src/modules/links/link-code.js";
+import { PrismaLinksRepository } from "../src/modules/links/links.repository.js";
+import { PartnerLinkBinder } from "../src/modules/partners/partner-links.js";
 import { PrismaPartnersRepository } from "../src/modules/partners/partners.repository.js";
 import { codeKey } from "../src/modules/promo-codes/promo-code-rules.js";
 import { PrismaPromoCodesRepository, type NewPromoCampaign } from "../src/modules/promo-codes/promo-codes.repository.js";
@@ -28,6 +31,9 @@ describe.skipIf(DATABASE_URL === "")("метка партнёрки Telegram н�
   let marks: PrismaTelegramAffiliateRepository;
   let referrals: PrismaReferralsRepository;
   let promos: PrismaPromoCodesRepository;
+  let partners: PrismaPartnersRepository;
+  let links: PrismaLinksRepository;
+  let linkBinder: PartnerLinkBinder;
 
   const player = async () => (await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Игрок", username: null, photoUrl: null }, NOW.getTime())).accountId;
   const markOf = (accountId: string, ref = "x9Y-z") => marks.mark({ accountId, startParam: `_tgr_${ref}`, ref, at: NOW });
@@ -37,7 +43,7 @@ describe.skipIf(DATABASE_URL === "")("метка партнёрки Telegram н�
   /** Партнёр с общим кодом, который гасится с привязкой: так игрок занимает слот партнёром. */
   async function partnerCode(): Promise<{ partnerId: string; campaignId: string; code: string }> {
     const partnerId = randomUUID();
-    await new PrismaPartnersRepository(prisma).create({ partnerId, name: "Блогер", contact: null, note: null, createdBy: randomUUID(), createdAt: NOW, updatedAt: NOW });
+    await partners.create({ partnerId, name: "Блогер", contact: null, note: null, createdBy: randomUUID(), createdAt: NOW, updatedAt: NOW });
     const display = uniqueCode();
     const campaign: NewPromoCampaign = {
       campaignId: randomUUID(),
@@ -66,6 +72,9 @@ describe.skipIf(DATABASE_URL === "")("метка партнёрки Telegram н�
     marks = new PrismaTelegramAffiliateRepository(prisma);
     referrals = new PrismaReferralsRepository(prisma);
     promos = new PrismaPromoCodesRepository(prisma);
+    partners = new PrismaPartnersRepository(prisma);
+    links = new PrismaLinksRepository(prisma);
+    linkBinder = new PartnerLinkBinder(prisma);
   });
 
   afterAll(async () => {
@@ -128,6 +137,21 @@ describe.skipIf(DATABASE_URL === "")("метка партнёрки Telegram н�
     expect(await promos.redeem({ campaignId, accountId, code, batch: false, partnerId, at: NOW })).toEqual({ status: "redeemed", bound: false });
     expect(await prisma.partnerBinding.findUnique({ where: { accountId } })).toBeNull();
     expect(await marks.byAccount(accountId)).toMatchObject({ ref: "x9Y-z" });
+  });
+
+  it("помеченного игрока не привязывает и ссылка партнёра (T-0067): решение «слот занят», привязки нет", async () => {
+    const partnerId = randomUUID();
+    await partners.create({ partnerId, name: "Канал", contact: null, note: null, createdBy: randomUUID(), createdAt: NOW, updatedAt: NOW });
+    const code = newLinkCode();
+    await links.create({ code, platform: "telegram", campaign: "channel-post", source: null, medium: null, note: null, createdBy: null, network: null, registrationOn: "first_run", partnerId });
+    const marked = await player();
+    const free = await player();
+    await markOf(marked);
+
+    expect(await linkBinder.bindFromTouch({ accountId: marked, startKind: "link", startRef: code, at: NOW })).toBe("slot_taken");
+    expect(await prisma.partnerBinding.findUnique({ where: { accountId: marked } })).toBeNull();
+    // Контроль: тот же вход свободного игрока привязывается, так что отказ — от метки, а не от ссылки.
+    expect(await linkBinder.bindFromTouch({ accountId: free, startKind: "link", startRef: code, at: NOW })).toBe("bind");
   });
 
   it("гонка метки и привязки реферала: в каждом раунде ровно один победитель, оба вместе — никогда", async () => {

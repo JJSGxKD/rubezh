@@ -54,6 +54,17 @@ function captureLog(): Record<string, unknown>[] {
   return lines;
 }
 
+/** Журнал модуля — для проверки строк и чтобы тестовые прогоны не засоряли вывод. */
+let lines: Record<string, unknown>[] = [];
+
+beforeEach(() => {
+  lines = captureLog();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("метка ставится при входе по ссылке партнёрки Telegram", () => {
   it("Mini App, слот свободен: метка с параметром как пришёл, идентификатором и временем входа", async () => {
     const { marks, marker } = setup();
@@ -151,16 +162,6 @@ describe("метка не ставится", () => {
 });
 
 describe("слушатель входа", () => {
-  let lines: Record<string, unknown>[];
-
-  beforeEach(() => {
-    lines = captureLog();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it("после onModuleInit вход, объявленный через AuthHooks, доходит до репозитория", async () => {
     const { marks, hooks, marker } = setup();
     marker.onModuleInit();
