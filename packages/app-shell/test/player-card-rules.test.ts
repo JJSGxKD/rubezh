@@ -10,6 +10,8 @@ import {
   favoritesShown,
   isPublicId,
   moreEmblems,
+  relationAfterRequest,
+  requestFailureKey,
   statCells,
   type CardNumbers,
 } from "../src/screens/meta/player-card-rules";
@@ -141,9 +143,35 @@ describe("текст отказа", () => {
     expect(failureTextKey("too_often")).toBe("playerCard.tooOften");
   });
 
-  it("остальное — общий текст связи экранов меты", () => {
+  it("про связь и вход — общий текст экранов меты", () => {
     expect(failureTextKey("offline")).toBe("sync.failure.offline");
     expect(failureTextKey("unauthorized")).toBe("sync.failure.unauthorized");
-    expect(failureTextKey("unavailable")).toBe("sync.failure.unavailable");
+    expect(failureTextKey("no_identity")).toBe("sync.failure.no_identity");
+  });
+
+  it("остальное — «не получилось», а не «рейтинг выключен»", () => {
+    expect(failureTextKey("unavailable")).toBe("playerCard.failed");
+    expect(failureTextKey("disabled")).toBe("playerCard.failed");
+    expect(failureTextKey("rejected")).toBe("playerCard.failed");
+  });
+});
+
+describe("заявка в друзья: отказ и исход", () => {
+  it("отказы сервера — каждый свой текст", () => {
+    expect(requestFailureKey("friend_not_found")).toBe("playerCard.notFound");
+    expect(requestFailureKey("rate_limited")).toBe("playerCard.tooOften");
+    expect(requestFailureKey("friend_limit")).toBe("playerCard.requestLimit");
+  });
+
+  it("себе, без кода, незнакомый код — «заявка не ушла»", () => {
+    expect(requestFailureKey("validation_failed")).toBe("playerCard.requestFailed");
+    expect(requestFailureKey(undefined)).toBe("playerCard.requestFailed");
+    expect(requestFailureKey("something_new")).toBe("playerCard.requestFailed");
+  });
+
+  it("встречная заявка принята — друзья; иначе заявка ждёт ответа", () => {
+    expect(relationAfterRequest("friends")).toBe("friend");
+    expect(relationAfterRequest("requested")).toBe("outgoing");
+    expect(relationAfterRequest("повтор")).toBe("outgoing");
   });
 });
