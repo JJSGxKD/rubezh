@@ -1,18 +1,23 @@
+import "reflect-metadata";
 import { randomUUID } from "node:crypto";
-import { Logger } from "@nestjs/common";
+import { Logger, Module } from "@nestjs/common";
+import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
+import { APP_CONFIG, loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { DomainError } from "../src/common/domain-error.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
-import { closeRedis, createRedis } from "../src/infra/redis.js";
+import { createHttpApp } from "../src/http-app.js";
+import { REDIS, closeRedis, createRedis } from "../src/infra/redis.js";
 import { PrismaAchievementsRepository } from "../src/modules/achievements/achievements.repository.js";
 import { EMBLEM_IDS } from "../src/modules/achievements/emblem-rules.js";
 import { PrismaEmblemsRepository, emblemHoldersSql } from "../src/modules/achievements/emblems.repository.js";
 import { EmblemsService } from "../src/modules/achievements/emblems.service.js";
 import { PrismaAppearanceRepository } from "../src/modules/appearance/appearance.repository.js";
 import { AppearanceService } from "../src/modules/appearance/appearance.service.js";
+import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { PrismaFriendsRepository } from "../src/modules/friends/friends.repository.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
@@ -35,6 +40,8 @@ import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
 import { VIP_GIFT_DAY_LIMIT } from "../src/modules/vip/vip-gift-rules.js";
+import { VipGiftBlockedError, VipGiftNotFriendError, VipGiftSelfError } from "../src/modules/vip/vip-errors.js";
+import { VipController } from "../src/modules/vip/vip.controller.js";
 import { PrismaVipGiftRepository } from "../src/modules/vip/vip-gift.repository.js";
 import { VipGiftService } from "../src/modules/vip/vip-gift.service.js";
 import { VIP_GIFT_SKU, VIP_PERIOD_SEC } from "../src/modules/vip/vip-plan.js";
@@ -748,12 +755,13 @@ describe.skipIf(DATABASE_URL === "")("VIP в подарок на живых Post
 
         await Promise.all([ctx.gifts.revoke(one, at(5)), ctx.gifts.fulfill(two, NOW)]);
 
-        const windows = await windowsOf(friend.accountId);
-        expect(windows).toHaveLength(2);
-        expect(windows[0]).toEqual({ startsAt: NOW.getTime(), endsAt: at(30).getTime(), revokedAt: at(5).getTime() });
+        const revoked = await prisma.vipGift.findUniqueOrThrow({ where: { purchaseId: one.purchaseId } });
+        const queued = await prisma.vipGift.findUniqueOrThrow({ where: { purchaseId: two.purchaseId } });
+        expect([revoked.startsAt.getTime(), revoked.endsAt.getTime(), revoked.revokedAt?.getTime()]).toEqual([NOW.getTime(), at(30).getTime(), at(5).getTime()]);
         // Второй встал либо за первым, пока тот не был отозван, либо с момента выдачи: в обоих случаях ровно 30 суток.
-        expect((windows[1]?.endsAt ?? 0) - (windows[1]?.startsAt ?? 0)).toBe(30 * DAY);
-        expect(windows[1]?.revokedAt).toBeNull();
+        expect(queued.endsAt.getTime() - queued.startsAt.getTime()).toBe(30 * DAY);
+        expect([NOW.getTime(), at(30).getTime()]).toContain(queued.startsAt.getTime());
+        expect(queued.revokedAt).toBeNull();
       }
     }, 60_000);
   });
@@ -862,5 +870,104 @@ describe.skipIf(DATABASE_URL === "")("VIP в подарок на живых Post
 
       expect(holders === undefined ? [] : [...holders]).toEqual([friend.accountId]);
     });
+  });
+});
+
+/**
+ * Маршрут подарка по HTTP (без базы): токен, тело только из публичного id, коды отказов и лимит
+ * запросов. Сервис подарка подменён — он проверен выше на настоящих таблицах.
+ */
+describe("POST /api/v1/vip/gift по HTTP", () => {
+  const PUBLIC_ID = "0123456789ab";
+  const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
+  let app: NestFastifyApplication | null = null;
+  const order = vi.fn();
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+    order.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  async function start(): Promise<{ headers: { authorization: string }; accountId: string }> {
+    const settings = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, TELEGRAM_BOT_UPDATES: "polling", PAYMENTS_ENABLED: "true" } as NodeJS.ProcessEnv);
+    @Module({
+      controllers: [VipController],
+      providers: [
+        { provide: APP_CONFIG, useValue: settings },
+        { provide: REDIS, useValue: unavailableRedis },
+        { provide: VipService, useValue: {} },
+        { provide: VipGiftService, useValue: { order } },
+        RateLimiter,
+        AuthGuard,
+      ],
+    })
+    class TestModule {}
+    app = await createHttpApp(TestModule, { logger: false });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+    const accountId = randomUUID();
+    const token = await signAccessToken({ accountId, platform: "telegram", platformUserId: "555000444" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now() + 1e12);
+    return { headers: { authorization: `Bearer ${token}` }, accountId };
+  }
+
+  const post = (payload: unknown, headers?: { authorization: string }) => {
+    if (app === null) throw new Error("приложение не запущено");
+    return app.inject({ method: "POST", url: "/api/v1/vip/gift", payload: payload as Record<string, unknown>, ...(headers === undefined ? {} : { headers }) });
+  };
+
+  it("без токена — 401, сервис не зван", async () => {
+    await start();
+    expect((await post({ publicId: PUBLIC_ID })).statusCode).toBe(401);
+    expect(order).not.toHaveBeenCalled();
+  });
+
+  it("тело не по схеме — 400 validation_failed: чужие поля, внутренний id и неверный публичный id не принимаются", async () => {
+    const { headers } = await start();
+    for (const payload of [{}, { publicId: "ABCDEF012345" }, { publicId: "0123456789a" }, { publicId: PUBLIC_ID, accountId: randomUUID() }, { accountId: randomUUID() }, { publicId: 42 }]) {
+      const answer = await post(payload, headers);
+      expect(answer.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(answer.json<{ error: { code: string } }>().error.code).toBe("validation_failed");
+    }
+    expect(order).not.toHaveBeenCalled();
+  });
+
+  it("публичный id и аккаунт из токена — в сервис, счёт — в ответ", async () => {
+    const { headers, accountId } = await start();
+    order.mockResolvedValue({ purchaseId: randomUUID(), sku: "vip_gift", status: "pending", invoiceUrl: "https://t.me/$invoice-1", priceStars: PRICE, chargedStars: PRICE, mode: "live" });
+
+    const answer = await post({ publicId: PUBLIC_ID }, headers);
+
+    expect(answer.statusCode).toBe(200);
+    expect(answer.json<{ data: { sku: string; priceStars: number } }>().data).toMatchObject({ sku: "vip_gift", priceStars: PRICE });
+    expect(order).toHaveBeenCalledTimes(1);
+    expect(order.mock.calls[0]?.[0]).toMatchObject({ accountId, platform: "telegram" });
+    expect(order.mock.calls[0]?.[1]).toBe(PUBLIC_ID);
+  });
+
+  it("отказы сервиса доходят кодами: не друг, себе и заблокированному — 409", async () => {
+    const { headers } = await start();
+    for (const [error, code] of [
+      [new VipGiftNotFriendError(), "vip_gift_not_friend"],
+      [new VipGiftSelfError(), "vip_gift_self"],
+      [new VipGiftBlockedError(), "vip_gift_blocked"],
+    ] as const) {
+      order.mockRejectedValueOnce(error);
+      const answer = await post({ publicId: PUBLIC_ID }, headers);
+      expect(answer.statusCode).toBe(409);
+      expect(answer.json<{ error: { code: string } }>().error.code).toBe(code);
+    }
+  });
+
+  it("лимит запросов — как у покупок: 60 в час, дальше 429", async () => {
+    const { headers } = await start();
+    order.mockResolvedValue({ purchaseId: randomUUID(), sku: "vip_gift", status: "pending", invoiceUrl: null, priceStars: PRICE, chargedStars: PRICE, mode: "live" });
+    for (let index = 0; index < 60; index += 1) expect((await post({ publicId: PUBLIC_ID }, headers)).statusCode).toBe(200);
+
+    const answer = await post({ publicId: PUBLIC_ID }, headers);
+
+    expect(answer.statusCode).toBe(429);
+    expect(answer.json<{ error: { code: string } }>().error.code).toBe("rate_limited");
   });
 });
