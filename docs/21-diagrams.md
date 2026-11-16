@@ -117,6 +117,7 @@ erDiagram
     ACCOUNT ||--o{ TASK_PARTICIPANT : "переходы и выполнения партнёрских целей"
     MEDIA_IMAGE |o--o{ TASK_DEF : "картинка 1:1 партнёрской цели"
     MEDIA_IMAGE |o--o{ HOME_SLIDE : "картинка 1:1 слайда команды"
+    MEDIA_IMAGE |o--o{ PARTNER_MATERIAL : "картинка баннера для партнёров"
     ACCOUNT ||--o{ TASK_RUN : "забеги, засчитанные заданиям"
     ACCOUNT ||--o| TEST_NOTICE : "принял предупреждение о тесте"
     AD_NETWORK ||--o{ AD_BLOCK : "блоки мест в кабинете сети"
@@ -165,6 +166,7 @@ erDiagram
     ACCOUNT ||--o| PARTNER_BINDING : "приведён партнёром"
     PROMO_CAMPAIGN ||--o{ PARTNER_BINDING : "чем привязан"
     PARTNER |o--o{ LINK : "ссылки партнёра: владелец задаётся при создании"
+    PARTNER |o--o{ PARTNER_MATERIAL : "материалы команды для одного партнёра; пусто — для всех"
     LINK |o--o{ PARTNER_BINDING : "по какой ссылке; ссылка удалена — код пуст"
     ACCOUNT ||--o{ ACCOUNT_RESTRICTION : "ограничения игрока"
     ACCOUNT |o--o{ ACCOUNT_RESTRICTION : "наложил и снял — команда"
@@ -1002,6 +1004,20 @@ erDiagram
         datetime postback_since "nullable: с какого времени по кликам действует адрес; CHECK: задан тогда и только тогда, когда задан адрес"
         string_array postback_events "по умолчанию registration; CHECK: только четыре известных события"
         uuid account_id FK "nullable, UK: игровой аккаунт партнёра (T-0217, Р136); пишется только из карточки, остаётся после закрытия кабинета; аккаунт удалён — пусто"
+    }
+
+    PARTNER_MATERIAL {
+        uuid material_id PK
+        string kind "banner|post|rules; CHECK"
+        string title "до 80 знаков, не пусто"
+        string text "nullable, до 2000: у post и rules обязателен, у banner — подпись; CHECK"
+        string image_id FK "nullable: у banner обязателен, у текста пуст (CHECK); картинку не удалить, пока на неё ссылаются"
+        uuid partner_id FK "nullable: пусто — всем партнёрам, задан — только ему; партнёра с материалами не удалить"
+        int sort "порядок в кабинете, 0–9999: меньше — выше"
+        uuid created_by "без FK: запись переживает аккаунт"
+        datetime created_at
+        datetime updated_at
+        datetime archived_at "nullable: в архиве партнёру не виден, строка не удаляется"
     }
 
     PARTNER_BINDING {
@@ -1843,8 +1859,8 @@ erDiagram
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
   останется тем же. Формат, размер и стороны держат `CHECK` и
   `media/image-rules.ts`; на картинку ссылаются `TASK_DEF.image_id` и
-  `HOME_SLIDE.image_id` (`RESTRICT`: пока задание или слайд её показывает,
-  удалить нельзя). Картинка закрытого профиля (снимок чека `finance_receipt`,
+  `HOME_SLIDE.image_id` и `PARTNER_MATERIAL.image_id` (`RESTRICT`: пока
+  задание, слайд или материал её показывает, удалить нельзя). Картинка закрытого профиля (снимок чека `finance_receipt`,
   T-0462) хранит `view_permission`: в панели её показывают только с этим
   правом, игроку по `/api/v1/media` она не отдаётся вовсе.
 - **`HOME_SLIDE` — слайды команды на главной** (`35-stage4-plan.md` WP42,
@@ -2064,6 +2080,15 @@ erDiagram
   аккаунтом (кнопка «Открыть кабинет» выдаёт ему роль `partner`, T-0217), и
   привязать самого себя он не может ни ссылкой, ни кодом; связь остаётся и
   после закрытия кабинета.
+- **`PARTNER_MATERIAL` — материалы для партнёров** (`35-stage4-plan.md` Р136,
+  T-0221): баннеры (`banner`, картинка профиля `partner_material` модуля
+  картинок), тексты постов (`post`) и правила программы (`rules`), которые
+  выкладывает команда. Общий материал — `partner_id` пуст, адресный — задан.
+  Форму держит `CHECK`: баннеру нужна картинка, посту и правилам — непустой
+  текст, и картинки у текста нет. Архивная строка (`archived_at`) партнёру не
+  видна, но остаётся — из архива её возвращают. Кабинет читает общие и свои
+  неархивные по `sort` (индекс `partner_id, archived_at`); вайп игры строки не
+  трогает — это не игровой прогресс.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
