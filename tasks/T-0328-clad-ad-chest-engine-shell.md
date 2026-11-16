@@ -16,6 +16,8 @@ shared:
   - packages/core-game/src/game/sim/chests.ts
   - packages/core-game/src/game/sim/secrets.ts
   - packages/core-game/src/game/sim/world.ts
+  - packages/core-game/src/game/sim/create-world.ts
+  - packages/core-game/src/engine/run-engine.ts
   - packages/core-game/src/game/run/snapshot.ts
   - packages/core-game/src/game/run/run-result.ts
   - packages/core-game/src/game/MainScene.ts

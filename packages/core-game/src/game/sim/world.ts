@@ -1,4 +1,4 @@
-import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, RunModifierId, SecretKind, SecretsDef, SiegeDef, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestOpeningVia, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, RunModifierId, SecretKind, SecretsDef, SiegeDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import { markSpawn, type HuntState } from "../run/hunt-log";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
@@ -283,6 +283,18 @@ export interface ChestOpening {
   /** сколько наград — запасные (аптечка и опыт) */
   fallbacks: number;
   elapsedSec: number;
+  /** клад или второй сундук клада за ролик; нет поля — сундук падал с врага или вышел из разлома */
+  via?: ChestOpeningVia;
+}
+
+/**
+ * Окно второго сундука клада: открытый кладом сундук, за которым игрок ещё может взять второй за ролик
+ * (`sim/chests.ts`, tasks/T-0328). Живёт до следующего шага мира и в снимок не входит.
+ */
+export interface AdChestWindow {
+  /** номер открытия клада: второй сундук берётся, только пока это последний открытый сундук */
+  opening: number;
+  size: ChestSize;
 }
 
 /**
@@ -297,6 +309,8 @@ export interface ChestState {
   opened: number;
   founds: ChestFound[];
   openings: ChestOpening[];
+  /** окно второго сундука клада; не в снимке: продолженный забег его не открывает */
+  adWindow: AdChestWindow | null;
 }
 
 /**
@@ -431,6 +445,8 @@ export interface ProgressionState {
   banished: string[];
   /** сколько раз за забег переброс взят за рекламу, 0..`MAX_AD_REROLLS` (tasks/T-0199) */
   adRerolls: number;
+  /** сколько раз за забег взят второй сундук клада за рекламу, 0..`MAX_AD_CHESTS` (tasks/T-0328) */
+  adChests: number;
   /** сколько раз нажата каждая запись «Предела», в порядке `limitTypes` (`progression/limit.ts`) */
   limitStacks: number[];
 }
