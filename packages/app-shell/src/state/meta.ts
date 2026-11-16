@@ -1,4 +1,4 @@
-import { DIFFICULTY_IDS, type DifficultyId, type RunResult } from "@bh/shared-types";
+import { DIFFICULTY_IDS, RUN_MODIFIER_IDS, type DifficultyId, type RunModifierId, type RunResult } from "@bh/shared-types";
 import { loadBestSurvivalSec, mergeBestSurvivalSec, submitRunResult } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
@@ -25,6 +25,8 @@ const schema = z.object({
   lastDifficultyId: z.optional(z.enum(DIFFICULTY_IDS)),
   /** последний засчитанный забег — «до рекорда не хватило 0:42» на главной; до WP42 поля не было */
   lastRun: z.optional(z.object({ difficultyId: z.enum(DIFFICULTY_IDS), survivalSec: z.number().check(z.nonnegative()) })),
+  /** запомненный модификатор забега (T-0123); id из старого или чужого хранилища читается как «Без» */
+  lastModifierId: z.optional(z.string()),
   /** раскрыт ли «Подробнее» на экране смерти; старый снимок без поля — свёрнуто */
   deathDetailsOpen: z.optional(z.boolean()),
 });
@@ -42,6 +44,8 @@ export interface LastRun {
 export interface MetaStore {
   runs: number;
   lastWeaponId: string;
+  /** последний выбранный модификатор забега; `null` — «Без». Доступность решает лист по уровню аккаунта */
+  lastModifierId: RunModifierId | null;
   /** лучшее время выживания по каждому id сложности; 0 — рекорда нет. Показывается рекорд единой */
   best: BestByDifficulty;
   /** последний засчитанный забег; `null` — на этом устройстве ещё не играли */
@@ -50,6 +54,7 @@ export interface MetaStore {
   deathDetailsOpen: boolean;
   hydrate(): void;
   rememberWeapon(weaponId: string): void;
+  rememberModifier(modifierId: RunModifierId | null): void;
   rememberDeathDetails(open: boolean): void;
   /**
    * записать итог забега; возвращает `true`, если это новый рекорд. Обучающий
@@ -66,6 +71,7 @@ export interface MetaStore {
 export const useMeta = create<MetaStore>((set, get) => ({
   runs: 0,
   lastWeaponId: "",
+  lastModifierId: null,
   best: emptyBest(),
   lastRun: null,
   deathDetailsOpen: false,
@@ -76,6 +82,7 @@ export const useMeta = create<MetaStore>((set, get) => ({
     set({
       runs: stored.runs,
       lastWeaponId: stored.lastWeaponId,
+      lastModifierId: knownModifier(stored.lastModifierId),
       lastRun: stored.lastRun ?? null,
       deathDetailsOpen: stored.deathDetailsOpen ?? false,
       best: Object.fromEntries(
@@ -86,6 +93,11 @@ export const useMeta = create<MetaStore>((set, get) => ({
 
   rememberWeapon(weaponId: string): void {
     set({ lastWeaponId: weaponId });
+    persist(get());
+  },
+
+  rememberModifier(modifierId: RunModifierId | null): void {
+    set({ lastModifierId: modifierId });
     persist(get());
   },
 
@@ -141,6 +153,10 @@ export function bestOverall(best: BestByDifficulty): number {
   return Math.max(...DIFFICULTY_IDS.map((id) => best[id]));
 }
 
+function knownModifier(id: string | undefined): RunModifierId | null {
+  return RUN_MODIFIER_IDS.find((known) => known === id) ?? null;
+}
+
 function emptyBest(): BestByDifficulty {
   return { easy: 0, normal: 0, hard: 0 };
 }
@@ -159,6 +175,7 @@ function persist(state: MetaStore): void {
   value().write({
     runs: state.runs,
     lastWeaponId: state.lastWeaponId,
+    ...(state.lastModifierId === null ? {} : { lastModifierId: state.lastModifierId }),
     ...(state.lastRun === null ? {} : { lastRun: state.lastRun }),
     deathDetailsOpen: state.deathDetailsOpen,
   });
