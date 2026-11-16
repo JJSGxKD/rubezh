@@ -41,6 +41,7 @@ export const PLACE_FORMAT: Record<AdPlace, AdFormat> = {
   run_double: "rewarded",
   card_reroll: "rewarded",
   daily_double: "rewarded",
+  free_gems: "rewarded",
   task: "task",
   interstitial: "interstitial",
 };
@@ -65,6 +66,7 @@ export const PLACE_TITLES: Record<AdPlace, string> = {
   run_double: "Удвоение за забег",
   card_reroll: "Переброс карточек",
   daily_double: "Награда дня ×2",
+  free_gems: "Самоцветы за ролик",
   task: "Задания",
   interstitial: "Между забегами",
 };
