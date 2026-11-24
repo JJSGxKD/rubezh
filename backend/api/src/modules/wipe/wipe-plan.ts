@@ -43,6 +43,8 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   PaymentDiscrepancy: keep("расхождения сверки и их разбор — история денег"),
   VipSubscription: keep("подписка VIP остаётся"),
   VipPeriod: keep("неистёкший VIP остаётся"),
+  VipGift: keep("подаренный срок VIP остаётся, как оплаченный период: за него друг заплатил звёздами, а покупка не стирается никогда (T-0249)"),
+  VipGiftOrder: keep("кому дарит покупка подарка — заказ идёт вместе с покупкой, которая остаётся (T-0249)"),
   AnalyticsEvent: keep("аналитика задним числом не восстанавливается"),
   AccountSession: keep("сессии запуска — атрибуция и аналитика"),
   Acquisition: keep("первое и последнее касание"),

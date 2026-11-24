@@ -1,3 +1,4 @@
+import { pluralRu } from "../../common/card/labels.js";
 import type { ProviderInvoice } from "../../platforms/ports/payment-provider.js";
 import { startedMinutes } from "./continue-price.js";
 import type { PaymentMode } from "./purchase-types.js";
@@ -64,4 +65,16 @@ export function shopInvoice(input: ShopInvoiceInput): ProviderInvoice {
     };
   }
   return { title: input.text.title, description: input.text.description, payload: input.purchaseId, label: input.text.title, amount: input.chargedStars };
+}
+
+/** Сколько знаков имени получателя идёт в описание счёта: у площадки оно до 255 знаков, а в тестовом режиме перед ним ещё пояснение. */
+const GIFT_RECIPIENT_NAME_MAX = 48;
+
+/**
+ * Текст счёта на VIP в подарок (Р155, T-0249): название короткое, как требует площадка, а кому
+ * подарок — в описании, чтобы игрок видел, за что платит.
+ */
+export function vipGiftInvoiceText(title: string, recipientName: string, days: number): ShopInvoiceText {
+  const name = [...recipientName.trim()].slice(0, GIFT_RECIPIENT_NAME_MAX).join("");
+  return { title, description: `VIP на ${String(days)} ${pluralRu(days, "день", "дня", "дней")} в подарок — ${name === "" ? "другу" : name}` };
 }

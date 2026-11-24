@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
-import type { PrismaClient } from "../../generated/prisma/client.js";
+import { PUBLIC_ID_FACTORY, newPublicId } from "../../common/public-identity.js";
+import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { NAME_RULE_HITS, type NameRuleHitsSink } from "../name-rules/name-rule-hits.js";
 import { NAME_RULES, type NameRulesSource } from "../name-rules/name-rules-source.js";
@@ -57,8 +58,16 @@ export interface AccountIdentity {
  */
 export type AccountArrival = Omit<AccountIdentity, "photoUrl"> & { photoUrl?: string | null };
 
+/** Сколько раз заводящий аккаунт пробует новый публичный id, если выпавший уже занят. */
+export const PUBLIC_ID_ATTEMPTS = 3;
+
 export interface Account extends AccountIdentity {
   accountId: string;
+  /**
+   * Публичный id (T-0247, Р47): 12 hex-знаков, не меняется; единственный идентификатор игрока в
+   * публичных ответах. Необязателен в типе по той же причине, что `testerAt`.
+   */
+  publicId?: string;
   createdAt: Date;
   /** `null` — аккаунт не заблокирован */
   bannedAt: Date | null;
@@ -97,6 +106,10 @@ export interface AccountRepository {
    */
   upsert(identity: AccountArrival, nowMs: number): Promise<Account>;
   byId(accountId: string): Promise<Account | null>;
+  /** Найти по публичному id; `null` — такого нет. */
+  byPublicId(publicId: string): Promise<Account | null>;
+  /** Публичные id аккаунтов одним запросом; ненайденных в ответе нет. */
+  publicIds(accountIds: readonly string[]): Promise<Map<string, string>>;
   /** Имена аккаунтов одним запросом — для списков панели; ненайденных в ответе нет. */
   displayNames(accountIds: readonly string[]): Promise<Map<string, string>>;
   /** Найти по площадке и её идентификатору — так аккаунт ищут по Telegram ID */
@@ -146,6 +159,7 @@ export class PrismaAccountRepository implements AccountRepository {
     @Inject(PRISMA) private readonly prisma: PrismaClient,
     @Optional() @Inject(NAME_RULES) private readonly rules?: NameRulesSource,
     @Optional() @Inject(NAME_RULE_HITS) private readonly hits?: NameRuleHitsSink,
+    @Optional() @Inject(PUBLIC_ID_FACTORY) private readonly newId: () => string = newPublicId,
   ) {}
 
   async upsert(identity: AccountArrival, nowMs: number): Promise<Account> {
@@ -161,24 +175,12 @@ export class PrismaAccountRepository implements AccountRepository {
     // Признак «завели сейчас» — по времени создания: upsert не говорит, какая
     // из веток сработала, а событие user_registered нужно ровно один раз.
     // Ветка update ник не пишет: чистый ник и закрепление решаются вторым запросом.
-    const row = await this.prisma.account.upsert({
-      where: { platform_platformUserId: key },
-      create: {
-        accountId: newAccountId,
-        ...key,
-        displayName: storedNameFor(identity.displayName, identity.username, newAccountId, rules).name,
-        platformName,
-        username: identity.username,
-        photoUrl: identity.photoUrl,
-        createdAt: now,
-        lastSeenAt: now,
-      },
-      update: {
-        platformName,
-        username: identity.username,
-        ...(identity.photoUrl === undefined ? {} : { photoUrl: identity.photoUrl }),
-        lastSeenAt: now,
-      },
+    const row = await this.upsertRow(key, newAccountId, {
+      displayName: storedNameFor(identity.displayName, identity.username, newAccountId, rules).name,
+      platformName,
+      username: identity.username,
+      photoUrl: identity.photoUrl,
+      now,
     });
     const created = row.createdAt.getTime() === now.getTime();
 
@@ -198,9 +200,58 @@ export class PrismaAccountRepository implements AccountRepository {
     return toAccount(renamed.count === 0 ? row : { ...row, displayName: cleanName }, created);
   }
 
+  /**
+   * Строка аккаунта: найденная или заведённая. Занятый публичный id — единственная причина
+   * повторить: другая уникальность (платформа и её id) означает гонку входа, и её исход тот же,
+   * что при обычном `upsert`, — ошибка уходит вызывающему.
+   */
+  private async upsertRow(
+    key: { platform: AccountPlatform; platformUserId: string },
+    accountId: string,
+    fields: { displayName: string; platformName: string; username: string | null; photoUrl: string | null | undefined; now: Date },
+  ): Promise<AccountRow> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await this.prisma.account.upsert({
+          where: { platform_platformUserId: key },
+          create: {
+            accountId,
+            publicId: this.newId(),
+            ...key,
+            displayName: fields.displayName,
+            platformName: fields.platformName,
+            username: fields.username,
+            photoUrl: fields.photoUrl,
+            createdAt: fields.now,
+            lastSeenAt: fields.now,
+          },
+          update: {
+            platformName: fields.platformName,
+            username: fields.username,
+            ...(fields.photoUrl === undefined ? {} : { photoUrl: fields.photoUrl }),
+            lastSeenAt: fields.now,
+          },
+        });
+      } catch (error: unknown) {
+        if (attempt >= PUBLIC_ID_ATTEMPTS || !isPublicIdCollision(error)) throw error;
+      }
+    }
+  }
+
   async byId(accountId: string): Promise<Account | null> {
     const row = await this.prisma.account.findUnique({ where: { accountId } });
     return row === null ? null : toAccount(row, false);
+  }
+
+  async byPublicId(publicId: string): Promise<Account | null> {
+    const row = await this.prisma.account.findUnique({ where: { publicId } });
+    return row === null ? null : toAccount(row, false);
+  }
+
+  async publicIds(accountIds: readonly string[]): Promise<Map<string, string>> {
+    if (accountIds.length === 0) return new Map();
+    const rows = await this.prisma.account.findMany({ where: { accountId: { in: [...new Set(accountIds)] } }, select: { accountId: true, publicId: true } });
+    return new Map(rows.map((row) => [row.accountId, row.publicId]));
   }
 
   async displayNames(accountIds: readonly string[]): Promise<Map<string, string>> {
@@ -270,6 +321,7 @@ export class PrismaAccountRepository implements AccountRepository {
 
 type AccountRow = {
   accountId: string;
+  publicId: string;
   platform: string;
   platformUserId: string;
   displayName: string;
@@ -287,6 +339,7 @@ type AccountRow = {
 function toAccount(row: AccountRow, created: boolean): Account {
   return {
     accountId: row.accountId,
+    publicId: row.publicId,
     platform: row.platform as AccountPlatform,
     platformUserId: row.platformUserId,
     displayName: row.displayName,
@@ -301,4 +354,13 @@ function toAccount(row: AccountRow, created: boolean): Account {
     nameLockedAt: row.nameLockedAt,
     created,
   };
+}
+
+/**
+ * Нарушена уникальность именно публичного id: поле названо в мете ошибки (драйвер `pg` — по
+ * индексу или столбцу). Любая другая — не наша забота.
+ */
+function isPublicIdCollision(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false;
+  return JSON.stringify(error.meta ?? {}).includes("public_id");
 }

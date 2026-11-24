@@ -40,8 +40,11 @@ export const EMBLEMS_REPOSITORY = Symbol("EMBLEMS_REPOSITORY");
 export interface EmblemsRepository {
   /** Игрок, тестер и меценат, роль, выбранный знак — по списку аккаунтов; нет в базе — нет и в карте. */
   statuses(accountIds: readonly string[]): Promise<Map<string, AccountEmblemRow>>;
-  /** Конец VIP — самый поздний конец периода; у не имевшего VIP записи нет. */
-  vipUntil(accountIds: readonly string[]): Promise<Map<string, Date>>;
+  /**
+   * Конец VIP — самый поздний конец периода подписки или подаренного срока, который к моменту `at` уже начался
+   * и не оборван возвратом (T-0249); у не имевшего VIP записи нет.
+   */
+  vipUntil(accountIds: readonly string[], at?: Date): Promise<Map<string, Date>>;
   /** Итоги сезонов; у не попавшего ни в один достаточный сезон записи нет. */
   standings(accountIds: readonly string[]): Promise<Map<string, SeasonStanding>>;
   /** id выполненных достижений со знаком (`emblem_tier` не пуст) по каждому аккаунту. */
@@ -98,14 +101,25 @@ export class PrismaEmblemsRepository implements EmblemsRepository {
     return result;
   }
 
-  async vipUntil(accountIds: readonly string[]): Promise<Map<string, Date>> {
+  async vipUntil(accountIds: readonly string[], at: Date = new Date()): Promise<Map<string, Date>> {
     const result = new Map<string, Date>();
     if (accountIds.length === 0) return result;
-    // Конец VIP — самый поздний конец периода: тем же способом его читает `VipRepository.until`.
+    // Конец VIP — самый поздний конец периода: тем же способом его читает `VipRepository.until`. Подаренный
+    // срок (T-0249) идёт в счёт, только если уже начался к `at`, а возврат обрывает его в свой момент: подарок,
+    // который стоит в очереди за идущим, знака не даёт, а когда начнётся — даст. Правило то же, что у `vipActiveAt`.
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT account_id::text AS account_id, max(ends_at) AS until
-      FROM vip_period
-      WHERE account_id = ANY(${[...accountIds]}::uuid[])
+      SELECT account_id, max(until) AS until FROM (
+        SELECT account_id::text AS account_id, max(ends_at) AS until
+        FROM vip_period
+        WHERE account_id = ANY(${[...accountIds]}::uuid[])
+        GROUP BY account_id
+        UNION ALL
+        SELECT recipient_account_id::text, max(LEAST(ends_at, COALESCE(revoked_at, ends_at)))
+        FROM vip_gift
+        WHERE recipient_account_id = ANY(${[...accountIds]}::uuid[]) AND starts_at <= ${at}::timestamptz
+          AND LEAST(ends_at, COALESCE(revoked_at, ends_at)) > starts_at
+        GROUP BY recipient_account_id
+      ) AS ends
       GROUP BY account_id`;
     for (const raw of rows) {
       const row = vipSchema.parse(raw);
@@ -186,6 +200,11 @@ export function emblemHoldersSql(now: Date): Prisma.Sql {
   return Prisma.sql`
     SELECT ${EMBLEM_IDS.vip}::text AS task_id, count(*)::int AS holders
     FROM pop WHERE EXISTS (SELECT 1 FROM vip_period v WHERE v.account_id = pop.account_id AND v.ends_at > ${now}::timestamptz)
+       OR EXISTS (
+         SELECT 1 FROM vip_gift g
+         WHERE g.recipient_account_id = pop.account_id AND g.starts_at <= ${now}::timestamptz
+           AND LEAST(g.ends_at, COALESCE(g.revoked_at, g.ends_at)) > ${now}::timestamptz
+       )
     UNION ALL
     SELECT ${EMBLEM_IDS.tester}::text, count(*)::int
     FROM pop JOIN account a ON a.account_id = pop.account_id WHERE a.tester_at IS NOT NULL

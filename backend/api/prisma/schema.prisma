@@ -84,6 +84,8 @@ enum PurchaseProduct {
   vip
   /// донат проекту (Р109): добровольная сумма без игровых ценностей, `sku` — всегда `donation`, не разовый
   donation
+  /// VIP в подарок другу (Р155, T-0249): 30 дней разовой покупкой, не подпиской; получатель — в `vip_gift_order`
+  vip_gift
 }
 
 // Режим оплаты (docs/34-stage3-plan.md, Р14). `test` — разработка: игрок
@@ -200,6 +202,8 @@ model Account {
   appearanceId   String?   @map("appearance_id") @db.VarChar(24)
   /// в кружке аватара — фото площадки, а не голова облика (T-0237, Р47); по умолчанию голова облика
   avatarPhoto    Boolean   @default(false) @map("avatar_photo")
+  /// публичный id (T-0247, Р47): 12 hex-знаков, уникален и не меняется; внутренний account_id наружу не уходит. Новому аккаунту id ставит репозиторий, а запасное значение базы — для вставок мимо него
+  publicId       String    @unique @default(dbgenerated("substr(replace((gen_random_uuid())::text, '-'::text, ''::text), 1, 12)")) @map("public_id") @db.VarChar(12)
 
   roles         AccountRole[]
   // Знак у имени (T-0235): выбранная строка каталога; удалённая из каталога сбрасывает выбор
@@ -266,6 +270,9 @@ model Account {
   vipSubscriptions VipSubscription[]
   vipPeriods       VipPeriod[]
   vipDaily         VipDaily?
+  vipGiftsGiven    VipGift[]            @relation("VipGiftGiver")
+  vipGiftsGot      VipGift[]            @relation("VipGiftRecipient")
+  vipGiftOrders    VipGiftOrder[]
   showcaseOffers   ShowcaseOffer[]
   adContinues      RunAdContinue[]
   adRerolls        RunAdReroll[]
@@ -679,6 +686,8 @@ model Purchase {
   renewals        Purchase[]            @relation("PurchaseRenewal")
   vipSubscription VipSubscription?
   vipPeriod       VipPeriod?
+  vipGift         VipGift?
+  vipGiftOrder    VipGiftOrder?
   adConversions   AdConversion[]
   compensation    PurchaseCompensation?
 
@@ -3518,4 +3527,45 @@ model SecretFound {
 
   @@id([accountId, kind])
   @@map("secret_found")
+}
+
+// VIP в подарок другу (docs/35-stage4-plan.md Р155, tasks/T-0249). Подаренный срок живёт
+// отдельно от подписки (`vip_subscription`, `vip_period`): подписка и её продления пишут свой
+// срок и подарок не затирают, а VIP идёт, пока идёт подписка или неотозванный подарок.
+
+/// Подаренный срок VIP: одна строка на оплаченную покупку подарка, ключ — покупка. Начало — позже
+/// «сейчас» и конца последнего неотозванного подарка и подписки получателя, конец — через 30 суток.
+/// Возврат звёзд ставит `revoked_at`: не начавшийся срок пропадает целиком, идущий обрывается в этот
+/// момент, следующие подарки не сдвигаются
+model VipGift {
+  purchaseId         String    @id @map("purchase_id") @db.Uuid
+  giverAccountId     String    @map("giver_account_id") @db.Uuid
+  recipientAccountId String    @map("recipient_account_id") @db.Uuid
+  startsAt           DateTime  @map("starts_at") @db.Timestamptz(3)
+  /// позже `starts_at` (CHECK `vip_gift_span_check`)
+  endsAt             DateTime  @map("ends_at") @db.Timestamptz(3)
+  /// когда вернули звёзды; `null` — подарок в силе
+  revokedAt          DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt          DateTime  @map("created_at") @db.Timestamptz(3)
+
+  purchase  Purchase @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+  giver     Account  @relation("VipGiftGiver", fields: [giverAccountId], references: [accountId], onDelete: Restrict)
+  recipient Account  @relation("VipGiftRecipient", fields: [recipientAccountId], references: [accountId], onDelete: Cascade)
+
+  // Идёт ли VIP получателя и за чем встаёт новый подарок — по получателю и концу срока.
+  @@index([recipientAccountId, endsAt])
+  @@map("vip_gift")
+}
+
+/// Заказ подарка: кому дарит покупка. Пишет сервер при выставлении счёта; подтверждение оплаты берёт
+/// получателя отсюда, а не из клиента. Строка не меняется после записи
+model VipGiftOrder {
+  purchaseId         String   @id @map("purchase_id") @db.Uuid
+  recipientAccountId String   @map("recipient_account_id") @db.Uuid
+  createdAt          DateTime @map("created_at") @db.Timestamptz(3)
+
+  purchase  Purchase @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+  recipient Account  @relation(fields: [recipientAccountId], references: [accountId], onDelete: Cascade)
+
+  @@map("vip_gift_order")
 }

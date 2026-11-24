@@ -92,7 +92,7 @@ export interface VipRepository {
   cutPeriod?(purchaseId: string, at: Date): Promise<CutPeriod | null>;
   /**
    * У кого из `accountIds` VIP шёл хоть мгновение в промежутке `[from, to)` — по
-   * журналу периодов, а не по тому, что VIP идёт сейчас. Так закрытие месяца пасса
+   * журналу периодов и подаренным срокам, а не по тому, что VIP идёт сейчас. Так закрытие месяца пасса
    * (tasks/T-0312) узнаёт, кто за этот месяц платил. Необязателен только ради
    * подмен VIP в тестах, которым закрытие не нужно; в базе он есть всегда.
    */
@@ -214,11 +214,17 @@ export class PrismaVipRepository implements VipRepository {
 
   async withVipDuring(accountIds: readonly string[], from: Date, to: Date): Promise<Set<string>> {
     if (accountIds.length === 0) return new Set();
-    // Один запрос по индексу `(account_id, ends_at)`: период, кончившийся ровно к началу
-    // промежутка, и начавшийся ровно с его концом, в промежуток не входят.
+    // Один запрос по индексам `(account_id, ends_at)` и `(recipient_account_id, ends_at)`: период,
+    // кончившийся ровно к началу промежутка, и начавшийся ровно с его концом, в промежуток не входят.
+    // Подаренный срок (T-0249) считается так же, но до возврата: оборванный возвратом кончается в этот
+    // момент, а отозванный до начала не шёл вовсе.
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT DISTINCT account_id::text AS account_id FROM vip_period
-      WHERE account_id = ANY(${[...accountIds]}::uuid[]) AND starts_at < ${to} AND ends_at > ${from}`;
+      SELECT account_id::text AS account_id FROM vip_period
+      WHERE account_id = ANY(${[...accountIds]}::uuid[]) AND starts_at < ${to} AND ends_at > ${from}
+      UNION
+      SELECT recipient_account_id::text AS account_id FROM vip_gift
+      WHERE recipient_account_id = ANY(${[...accountIds]}::uuid[]) AND starts_at < ${to}
+        AND LEAST(ends_at, COALESCE(revoked_at, ends_at)) > GREATEST(${from}::timestamptz, starts_at)`;
     return new Set(rows.map((raw) => holderSchema.parse(raw).account_id));
   }
 

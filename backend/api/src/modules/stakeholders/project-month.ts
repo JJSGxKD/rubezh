@@ -13,7 +13,7 @@ import { Decimal } from "@bh/fx";
 const DAY_MS = 86_400_000;
 
 export type Platform = "telegram" | "max" | "vk" | "web";
-export type PurchaseKind = "continue_run" | "shop_item" | "vip" | "donation";
+export type PurchaseKind = "continue_run" | "shop_item" | "vip" | "donation" | "vip_gift";
 export type RevenueSource = "shop" | "continue" | "vip" | "donation";
 
 /** Строка живой оплаты месяца: только то, что нужно расчёту. */
@@ -61,6 +61,8 @@ const SOURCE_OF: Record<PurchaseKind, RevenueSource> = {
   shop_item: "shop",
   continue_run: "continue",
   vip: "vip",
+  // VIP в подарок — выручка VIP: заплатил дарящий (T-0249)
+  vip_gift: "vip",
   donation: "donation",
 };
 

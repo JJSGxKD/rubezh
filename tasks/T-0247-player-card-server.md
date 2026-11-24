@@ -3,8 +3,8 @@ id: T-0247
 title: Карточка игрока — сервер: публичный id, ответ карточки, заявка в друзья по публичному id
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0240, T-0237, T-0113]
@@ -26,6 +26,13 @@ shared:
   - backend/api/src/modules/achievements/emblems.service.ts
   - packages/shared-types/src/index.ts
   - docs/21-diagrams.md
+  - backend/api/src/modules/auth/auth.controller.ts
+  - backend/api/src/modules/seasons/dto/seasons.dto.ts
+  - backend/api/src/modules/seasons/seasons-view.service.ts
+  - backend/api/src/modules/seasons/seasons.module.ts
+  - backend/api/src/modules/friends/dto/friends.dto.ts
+  - backend/api/test/helpers/memory-auth.ts
+  - docs/30-configuration-map.md
 runner: any
 executor: sonnet-5.5
 effort: high
