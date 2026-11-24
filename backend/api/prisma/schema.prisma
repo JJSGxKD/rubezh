@@ -254,6 +254,8 @@ model Account {
   runBoosts        RunBoost[]
   notifications    Notification[]
   dailyReward      DailyReward?
+  dailyDoubles     DailyDouble[]
+  freeGemsClaims   FreeGemsClaim[]
   changelogSeen    ChangelogSeen?
   wheelSpins       WheelSpin[]
   taskProgress     TaskProgress[]
@@ -1853,6 +1855,8 @@ enum AdPlace {
   interstitial
   /// значения enum в базе дописываются в конец: порядок мест в коде (`AD_PLACES`) свой
   card_reroll
+  daily_double
+  free_gems
 }
 
 /// Условие успеха предложения (Р6): показ, клик или целевое действие.
@@ -3518,4 +3522,50 @@ model SecretFound {
 
   @@id([accountId, kind])
   @@map("secret_found")
+}
+
+// Награда дня ×2 за ролик (T-0242)
+
+/// Удвоение награды дня за ролик (docs/35-stage4-plan.md Р155): одна строка на игрока и игровые сутки — «в эти сутки
+/// награду дня уже удвоили». В `daily_reward` строка одна на игрока, отдельной строки забора дня нет, поэтому
+/// удвоенное лежит здесь. Хозяин места `daily_double` — модуль награды дня; сессия показа уникальна и не тратится
+/// на два удвоения. Запись идёт `ON CONFLICT DO NOTHING`: гонка двух запросов даёт одну строку.
+model DailyDouble {
+  accountId String   @map("account_id") @db.Uuid
+  /// игровые сутки (по Москве) удвоения — те же, в которые забрана награда дня
+  gameDay   DateTime @map("game_day") @db.Date
+  /// номер удвоенного дня по порядку забора (`daily_reward.claimed_days` на момент удвоения)
+  dayNumber Int      @map("day_number")
+  /// сессия показа места `daily_double`: повтор той же сессией дожимает начисление; без внешнего ключа — сессию проверяет забор модуля рекламы
+  sessionId String   @unique @map("session_id") @db.VarChar(32)
+  /// сколько монет и осколков начислено вторым разом — по тем же правилам, что забор дня (`dailyReward`)
+  coins     Int
+  shards    Int
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, gameDay])
+  @@map("daily_double")
+}
+
+// Самоцветы за ролик раз в игровые сутки (T-0243)
+
+/// Взятые самоцветы за ролик (docs/35-stage4-plan.md Р155): одна строка на игрока и игровые сутки — «в эти сутки
+/// самоцветы за ролик уже взяты». Хозяин места `free_gems` — магазин; сессия показа уникальна и не тратится на два
+/// взятия. Запись идёт `ON CONFLICT DO NOTHING`: гонка двух запросов даёт одну строку.
+model FreeGemsClaim {
+  accountId String   @map("account_id") @db.Uuid
+  /// игровые сутки (по Москве) взятия
+  gameDay   DateTime @map("game_day") @db.Date
+  /// сессия показа места `free_gems`: повтор той же сессией дожимает начисление; без внешнего ключа — сессию проверяет забор модуля рекламы
+  sessionId String   @unique @map("session_id") @db.VarChar(32)
+  /// сколько самоцветов записано к начислению — число ключа панели `ads.free-gems.amount` на момент взятия
+  gems      Int
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, gameDay])
+  @@map("free_gems_claim")
 }

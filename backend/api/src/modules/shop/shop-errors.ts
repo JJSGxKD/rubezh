@@ -35,6 +35,13 @@ export class ShowcaseSoldError extends DomainError {
   }
 }
 
+/** Самоцветы за ролик этих игровых суток уже взяты — раз в сутки; досмотренный ролик не потрачен. */
+export class FreeGemsClaimedError extends DomainError {
+  constructor() {
+    super("free_gems_claimed", "Самоцветы за ролик на сегодня уже взяты — приходи завтра", 409);
+  }
+}
+
 /** Срок акции вне пределов честной скидки (`shop-promo-rules.ts`). */
 export class PromoPeriodError extends DomainError {
   constructor(message: string) {

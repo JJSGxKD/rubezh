@@ -24,6 +24,7 @@ import { EXCHANGE_RESOURCES } from "../src/modules/wallet/wallet-limits.js";
 import { WALLET_RESOURCES, type WalletResource } from "../src/modules/wallet/wallet-types.js";
 import type { RevokeInput, RevokeOutcome } from "../src/modules/wallet/wallet.repository.js";
 import { SHOP_RESOURCES, SHOP_SKUS, TITLE_MAX, contentsOf, shopSkuSchema, skuById } from "../src/modules/shop/shop-catalog.js";
+import { FreeGemsService } from "../src/modules/shop/free-gems.service.js";
 import { ShopController } from "../src/modules/shop/shop.controller.js";
 import { ShopPromoService } from "../src/modules/shop/shop-promo.service.js";
 import { ShopService } from "../src/modules/shop/shop.service.js";
@@ -620,6 +621,8 @@ describe("магазин по HTTP", () => {
         { provide: ShopService, useValue: ctx.shop },
         // витрина снаряжения — свой тест (showcase.test.ts)
         { provide: ShowcaseService, useValue: {} },
+        // самоцветы за ролик — свой тест (free-gems.test.ts)
+        { provide: FreeGemsService, useValue: { view: async () => ({ status: "unavailable" }) } },
         RateLimiter,
         AuthGuard,
       ],

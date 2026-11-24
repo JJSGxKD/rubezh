@@ -198,7 +198,8 @@ describe("удвоение", () => {
     const cap = WALLET_DAILY_CAPS.ad_reward.coins ?? 0;
     // Активный игрок — полтора десятка медианных забегов по 88 монет.
     expect(15 * 88 * 5).toBeLessThanOrEqual(cap);
-    expect(WALLET_DAILY_CAPS.ad_reward.gems).toBeUndefined();
+    // Самоцветы по этой причине — только «Самоцветы за ролик» (T-0243): верх ключа панели, удвоение их не даёт.
+    expect(WALLET_DAILY_CAPS.ad_reward.gems).toBe(20);
     expect((maxRewardsPerDay("run_double") ?? 0) * MAX_COINS_PER_RUN).toBeGreaterThan(cap);
   });
 });

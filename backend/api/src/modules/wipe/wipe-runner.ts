@@ -124,7 +124,7 @@ export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter 
 }
 
 /**
- * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 28 таблиц плана в порядке
+ * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 32 таблицы плана в порядке
  * `WIPE_ORDER`, затем `purchase` (из неё снимок берёт покупки и ссылку на забег обнуляет стирание)
  * и `tester_compensation` (по ней снимок проверяет, не было ли вайпа). Полноту против `WIPE_ORDER`
  * проверяет тест: таблица, добавленная в план без строки здесь, роняет его.
@@ -151,6 +151,8 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "account_progress",
   "friend_gift",
   "daily_reward",
+  "daily_double",
+  "free_gems_claim",
   "wheel_spin",
   "vip_daily",
   "notification",
@@ -233,6 +235,10 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.friendGift.deleteMany({});
     case "DailyReward":
       return await tx.dailyReward.deleteMany({});
+    case "DailyDouble":
+      return await tx.dailyDouble.deleteMany({});
+    case "FreeGemsClaim":
+      return await tx.freeGemsClaim.deleteMany({});
     case "WheelSpin":
       return await tx.wheelSpin.deleteMany({});
     case "VipDaily":

@@ -36,10 +36,10 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 93 модели, стирается 30", () => {
+  it("остаётся 93 модели, стирается 32", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
     expect(actions.filter((action) => action === "keep")).toHaveLength(93);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(30);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(32);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
@@ -68,6 +68,18 @@ describe("план вайпа: полнота", () => {
     expect(plan.RunAdReroll?.action).toBe("wipe");
     expect(plan.RunAdReroll?.why).toContain("часть забега");
     expect(order.indexOf("RunAdReroll")).toBeLessThan(order.indexOf("Run"));
+  });
+
+  it("удвоение награды дня (T-0242) начинается заново вместе с самой наградой дня и стоит рядом с ней", () => {
+    expect(plan.DailyDouble?.action).toBe("wipe");
+    expect(plan.DailyDouble?.why).toContain("наград");
+    expect(order.indexOf("DailyDouble")).toBe(order.indexOf("DailyReward") + 1);
+  });
+
+  it("взятые самоцветы за ролик (T-0243) начинаются заново вместе с кошельком и стоят после удвоения награды дня", () => {
+    expect(plan.FreeGemsClaim?.action).toBe("wipe");
+    expect(plan.FreeGemsClaim?.why).toContain("кошел");
+    expect(order.indexOf("FreeGemsClaim")).toBe(order.indexOf("DailyDouble") + 1);
   });
 
   it("запись забега для проверки стирается своим шагом до забега (T-0317), а не только каскадом", () => {
@@ -120,6 +132,8 @@ describe("план вайпа: порядок стирания", () => {
       "AccountProgress",
       "FriendGift",
       "DailyReward",
+      "DailyDouble",
+      "FreeGemsClaim",
       "WheelSpin",
       "VipDaily",
       "Notification",
