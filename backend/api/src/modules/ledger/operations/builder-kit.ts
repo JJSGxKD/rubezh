@@ -47,10 +47,10 @@ export interface ArticleAccountNeed {
   currency: string;
 }
 
-/** Служебный счёт, который заводит сам учёт: транзит обмена и обязательство по займу. */
+/** Служебный счёт, который заводит сам учёт: транзит обмена, обязательство по займу, «Выплаты владельцу». */
 export interface ServiceAccount {
   accountId: string;
-  type: "asset" | "liability";
+  type: "asset" | "liability" | "equity";
   currency: string;
   name: string;
 }

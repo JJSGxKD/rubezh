@@ -3,8 +3,8 @@ id: T-0469
 title: Подтверждение отчёта участниками, выплаты и сообщения в боте
 epic: E15
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0468]
@@ -28,6 +28,22 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/37-accounting.md
+  - backend/api/src/modules/ledger/operations/operation-input.ts
+  - backend/api/src/modules/ledger/operations/operations.repository.ts
+  - backend/api/src/modules/ledger/operations/operations-notify.ts
+  - backend/api/src/modules/ledger/operations/approval.ts
+  - backend/api/src/modules/ledger/operations/builder-kit.ts
+  - backend/api/src/modules/ledger/periods/period-hooks.ts
+  - backend/api/src/modules/notifications-bot/bot-notify-rules.ts
+  - backend/api/src/modules/notifications-bot/bot-notify-texts.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/admin-my-project.http.test.ts
+  - backend/api/test/helpers/memory-payouts.ts
+  - backend/api/test/route-permissions.test.ts
+  - packages/app-shell/src/screens/meta/notifications.tsx
+  - packages/app-shell/src/i18n/ru-account.json
+  - packages/app-shell/test/notifications.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
