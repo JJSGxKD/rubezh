@@ -172,3 +172,37 @@ export function headlineChange(reward: ChestReward): UpgradeChange | null {
   if (reward.kind === "xp" || reward.kind === "heal") return null;
   return reward.changes[0] ?? null;
 }
+
+/**
+ * Стадия кнопки «Ещё сундук за ролик» — `AdChestStage` из `state/ad-chest.ts`: типом, а не импортом,
+ * чтобы правила остались чистыми функциями без хранилища.
+ */
+export type AdChestStageView =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "ready"; pass: boolean }
+  | { kind: "watching"; pass: boolean }
+  | { kind: "gone" };
+
+export interface AdChestButtonInput {
+  /** сундук открыт кладом и право не потрачено — по движку */
+  canAdChest: boolean;
+  stage: AdChestStageView;
+  /** второй сундук уже в окне: кнопка своё отработала */
+  taken: boolean;
+}
+
+/** `hidden` — кнопки нет; `ready` — можно нажать (`pass` — VIP, без ролика); `busy` — идёт ролик. */
+export type AdChestButtonState = { kind: "hidden" } | { kind: "ready"; pass: boolean } | { kind: "busy" };
+
+/**
+ * Кнопка «Ещё сундук за ролик» (tasks/T-0328, Р162). Видна, только пока движок обещает второй сундук
+ * (сундук клада, право не потрачено), сервер сказал «можно» (`ready`) или ролик идёт (`watching`), а
+ * второго сундука в окне ещё нет. Пока сервер отвечает (`checking`), кнопки нет — она не мигает.
+ */
+export function adChestButton(input: AdChestButtonInput): AdChestButtonState {
+  if (!input.canAdChest || input.taken) return { kind: "hidden" };
+  if (input.stage.kind === "ready") return { kind: "ready", pass: input.stage.pass };
+  if (input.stage.kind === "watching") return { kind: "busy" };
+  return { kind: "hidden" };
+}

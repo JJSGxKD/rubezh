@@ -269,6 +269,7 @@ model Account {
   showcaseOffers   ShowcaseOffer[]
   adContinues      RunAdContinue[]
   adRerolls        RunAdReroll[]
+  adChests         RunAdChest[]
   gemContinues     RunGemContinue[]
   compensation     TesterCompensation?
   botMentionTasks  BotMentionTask[]
@@ -525,6 +526,7 @@ model Run {
   purchases    Purchase[]
   adContinues  RunAdContinue[]
   adRerolls    RunAdReroll[]
+  adChests     RunAdChest[]
   gemContinues RunGemContinue[]
   proof        RunProof?
 
@@ -1853,6 +1855,7 @@ enum AdPlace {
   interstitial
   /// значения enum в базе дописываются в конец: порядок мест в коде (`AD_PLACES`) свой
   card_reroll
+  clad_chest
 }
 
 /// Условие успеха предложения (Р6): показ, клик или целевое действие.
@@ -3518,4 +3521,27 @@ model SecretFound {
 
   @@id([accountId, kind])
   @@map("secret_found")
+}
+
+// Второй сундук клада за рекламу (T-0327)
+
+/// Второй сундук клада за рекламу (docs/35-stage4-plan.md Р162): один на забег, выданный по сессии показа места
+/// `clad_chest` — досмотренной или пропуску VIP. Устроена как `RunAdReroll`: итог забега сверяется с этой книгой,
+/// заявленный второй сундук без строки отклоняет забег. Был ли в забеге клад, сервер не знает — за показ он
+/// ручается, а клад проверит повтор забега. `run_id` — ключ: второй сундук на забег не записывается, а сессия показа
+/// уникальна и потому не тратится на два забега.
+model RunAdChest {
+  runId      String   @id @map("run_id") @db.VarChar(64)
+  accountId  String   @map("account_id") @db.Uuid
+  /// сессия показа; повтор той же сессией на тот же забег дожимает ответ
+  sessionId  String   @unique @map("session_id") @db.VarChar(32)
+  /// сеть показа; у пропуска VIP — его имя
+  networkKey String   @map("network_key") @db.VarChar(32)
+  grantedAt  DateTime @map("granted_at") @db.Timestamptz(3)
+
+  run     Run     @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("run_ad_chest")
 }

@@ -61,7 +61,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "abandoned" | "rubezhHeld" | "levelUpRecommended" | "prologueWin" | "prologueWinPending" | "prologueWinOffline" | "homeBefore" | "homeAfter" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside" | "rating" | "runCard" | "emblems";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "abandoned" | "rubezhHeld" | "levelUpRecommended" | "prologueWin" | "prologueWinPending" | "prologueWinOffline" | "homeBefore" | "homeAfter" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "chestAd" | "chestAdPass" | "chestAdBusy" | "blessing" | "aside" | "rating" | "runCard" | "emblems";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -110,6 +110,9 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.chest", { size: 1 })} onClick={() => setPreview("chest1")} />
           <ListItem title={t("gallery.preview.chest", { size: 3 })} onClick={() => setPreview("chest3")} />
           <ListItem title={t("gallery.preview.chest", { size: 5 })} onClick={() => setPreview("chest5")} />
+          <ListItem title={t("gallery.preview.chestAd")} onClick={() => setPreview("chestAd")} />
+          <ListItem title={t("gallery.preview.chestAdPass")} onClick={() => setPreview("chestAdPass")} />
+          <ListItem title={t("gallery.preview.chestAdBusy")} onClick={() => setPreview("chestAdBusy")} />
           <ListItem title={t("gallery.preview.blessing")} onClick={() => setPreview("blessing")} />
           <ListItem title={t("gallery.preview.aside")} hint={t("gallery.preview.asideHint")} onClick={() => setPreview("aside")} />
           <ListItem title={t("gallery.preview.rating")} onClick={() => setPreview("rating")} />
@@ -560,8 +563,22 @@ function renderPreview(preview: Preview): ReactNode {
     case "chest3":
     case "chest5": {
       const size = preview === "chest1" ? 1 : preview === "chest3" ? 3 : 5;
-      return <ChestOverlay chest={{ index: size, size, rewards: SAMPLE_CHEST.slice(0, size) }} onTake={noop} />;
+      return <ChestOverlay chest={{ index: size, size, rewards: SAMPLE_CHEST.slice(0, size), canAdChest: false }} onTake={noop} />;
     }
+    // Сундук клада с кнопкой «Ещё сундук за ролик» (T-0328): обычная, у VIP и пока идёт ролик.
+    case "chestAd":
+    case "chestAdPass":
+    case "chestAdBusy":
+      return (
+        <ChestOverlay
+          chest={{ index: 3, size: 3, rewards: SAMPLE_CHEST.slice(0, 3), canAdChest: true }}
+          onTake={noop}
+          adChest={{
+            stage: preview === "chestAdPass" ? { kind: "ready", pass: true } : preview === "chestAdBusy" ? { kind: "watching", pass: false } : { kind: "ready", pass: false },
+            onWatch: noop,
+          }}
+        />
+      );
     case "blessing":
       return <BlessingOverlay options={SAMPLE_BLESSINGS} onChoose={noop} />;
     case "pause":

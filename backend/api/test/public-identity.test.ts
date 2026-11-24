@@ -166,6 +166,7 @@ describe("рейтинг", () => {
       continues: [],
       boosts: [],
       passives: [],
+      adChests: 0,
     };
   }
 

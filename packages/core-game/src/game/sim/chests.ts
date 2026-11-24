@@ -1,4 +1,4 @@
-import type { ChestReward, ChestSize, ChestSource, ChestsDef, ChestsLateDef, EnemyRank } from "@bh/shared-types";
+import type { ChestOpeningVia, ChestReward, ChestSize, ChestSource, ChestsDef, ChestsLateDef, EnemyRank } from "@bh/shared-types";
 import { readyEvolutionOption } from "../progression/evolutions";
 import { prologueChestSize } from "../run/prologue";
 import { addXp, applyUpgrade, collectCandidates, drawWeighted, healOption } from "../progression/levels";
@@ -194,7 +194,7 @@ function largestChestSize(rules: ChestsDef): number {
  * сундук не выдаёт то, что нельзя взять. Предложения и очередь уровней не
  * трогаются: открытие не заменяет и не откладывает выбор на уровне.
  */
-export function openChest(world: World, size: ChestSize): void {
+export function openChest(world: World, size: ChestSize, via?: ChestOpeningVia): void {
   const chests = world.chests;
   const rewards: ChestReward[] = [];
   let fallbacks = 0;
@@ -227,10 +227,52 @@ export function openChest(world: World, size: ChestSize): void {
     rewards.push(option);
   }
 
-  chests.openings.push({ index: chests.opened, size, rewards, fallbacks, elapsedSec: world.stats.elapsedSec });
+  chests.openings.push({
+    index: chests.opened,
+    size,
+    rewards,
+    fallbacks,
+    elapsedSec: world.stats.elapsedSec,
+    ...(via === undefined ? {} : { via }),
+  });
+  // Окно второго сундука — только у клада и только у последнего открытого сундука.
+  chests.adWindow = via === "clad" ? { opening: chests.opened, size } : null;
   chests.opened++;
   world.stats.chestsOpened++;
   if (size === largestChestSize(world.chestRules)) world.stats.rareChestsOpened++;
+}
+
+// --- Второй сундук клада за ролик -----------------------------------------------
+
+/**
+ * Условная команда в логе выбора (tasks/T-0328, Р162): второй сундук клада за ролик. Лежит рядом с
+ * `~adreroll`, поэтому повтор забега и запись для проверки берут её из того же лога без правок.
+ */
+export const AD_CHEST_COMMAND = "~adchest";
+
+/** Сколько вторых сундуков клада за ролик в забеге — правило, а не баланс: один. */
+export const MAX_AD_CHESTS = 1;
+
+/**
+ * Можно ли открыть второй сундук: право не потрачено, а последний открытый сундук — клад, и мир с тех
+ * пор не шагал (окно закрывается на следующем шаге тайников). Был ли ролик, движок не знает: за это
+ * отвечают оболочка и сервер, книга показов.
+ */
+export function canAdChest(world: World): boolean {
+  const slot = world.chests.adWindow;
+  return slot !== null && world.progression.adChests < MAX_AD_CHESTS && slot.opening === world.chests.opened - 1;
+}
+
+/**
+ * Открыть второй сундук клада: тот же размер и тот же отбор наград, что у сундуков забега, из потока
+ * сундуков. Невозможная команда возвращает `false` и ничего не меняет.
+ */
+export function applyAdChest(world: World): boolean {
+  const slot = world.chests.adWindow;
+  if (slot === null || !canAdChest(world)) return false;
+  world.progression.adChests++;
+  openChest(world, slot.size, "clad_ad");
+  return true;
 }
 
 /**

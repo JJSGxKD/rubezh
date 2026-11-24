@@ -1,5 +1,6 @@
 import type { DifficultyId, RunLoadout, UpgradeOption } from "@bh/shared-types";
 import { CONTENT_HASH } from "../../src/content/hash";
+import type { ContentSnapshot } from "../../src/content/snapshot";
 import { RunPerfTracker } from "../../src/game/diagnostics/run-perf";
 import { RunRecorder } from "../../src/game/diagnostics/run-recorder";
 import { applyCardTool, isCardToolCommand } from "../../src/game/progression/card-tools";
@@ -11,7 +12,8 @@ import { IDLE_CODE, inputOfCode, quantizeDirection } from "../../src/game/sim/in
 import { applyContinue } from "../../src/game/sim/continue";
 import { settleCordonDeath } from "../../src/game/sim/cordon";
 import { stepWorld, type SimInput } from "../../src/game/sim/step";
-import { TICK_SEC } from "../../src/game/sim/world";
+import { AD_CHEST_COMMAND, applyAdChest } from "../../src/game/sim/chests";
+import { TICK_SEC, type World } from "../../src/game/sim/world";
 import type { RunRecording } from "../../src/run-api";
 
 /**
@@ -24,8 +26,16 @@ export interface RecordedRunOptions {
   maxTicks: number;
   difficultyId?: DifficultyId;
   unitScale?: number;
-  /** сырое направление пальца на тике; `null` — палец не на экране */
-  steer: (tick: number) => readonly [number, number] | null;
+  /** сырое направление пальца на тике; `null` — палец не на экране; мир нужен, чтобы идти к месту на карте */
+  steer: (tick: number, world: World) => readonly [number, number] | null;
+  /** контент, на котором идёт забег; без поля — боевой (тогда и хэш боевой, если не задан `contentHash`) */
+  content?: ContentSnapshot;
+  contentHash?: string;
+  /**
+   * Команда вне выбора улучшения на этом тике — `~adchest`; `null` — нет. Спрашивается перед шагом
+   * (как оболочка отвечает на окно сундука) и ложится в лог выборов тем же `recorder.choice`.
+   */
+  command?: (world: World) => string | null;
   choose?: (offers: readonly UpgradeOption[]) => string;
   /** брать второй шанс при смерти, пока он есть, — как сцена по команде оболочки */
   continues?: boolean;
@@ -44,7 +54,9 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     unitScale,
     ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
     ...(options.modifierIds === undefined ? {} : { modifierIds: options.modifierIds }),
+    ...(options.content === undefined ? {} : { content: options.content }),
   });
+  const contentHash = options.contentHash ?? CONTENT_HASH;
   const recorder = new RunRecorder({
     reportId: "00000000-0000-4000-8000-000000000001",
     runId: "run-headless",
@@ -53,7 +65,7 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     mapId: world.mapId,
     difficultyId: world.difficultyLevel.id,
     startingWeaponId: world.weaponTypes[world.loadout.weapons[0].typeIndex].id,
-    contentHash: CONTENT_HASH,
+    contentHash,
     unitScale,
     replayBlocker: null,
     ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
@@ -82,7 +94,13 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
       recorder.choice(world.stats.tick, optionId);
       continue;
     }
-    const direction = options.steer(world.stats.tick);
+    const command = options.command?.(world) ?? null;
+    if (command !== null) {
+      if (command !== AD_CHEST_COMMAND || !applyAdChest(world)) throw new Error(`команда «${command}» не применилась: тест ошибся в сценарии`);
+      recorder.choice(world.stats.tick, command);
+      continue;
+    }
+    const direction = options.steer(world.stats.tick, world);
     code = quantizeDirection(direction?.[0] ?? 0, direction?.[1] ?? 0, code);
     spawner.update(world, TICK_SEC);
     stepWorld(world, inputOfCode(code, input));
@@ -109,7 +127,7 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     seed: options.seed,
     outcome,
     startingWeaponId: "",
-    contentHash: CONTENT_HASH,
+    contentHash,
   }).deathCause;
   const summary = perf.summary({ renderer: "webgl", renderCapFps: null, dpr: unitScale, canvasWidth: 780, canvasHeight: 1688, interruptions: 0 });
   // Через JSON, как по сети: повтор получает то, что пришло на сервер.

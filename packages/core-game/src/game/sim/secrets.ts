@@ -65,6 +65,9 @@ export function updateSecrets(world: World): void {
   const tick = world.stats.tick + 1;
   const elapsedSec = tick * TICK_SEC;
 
+  // Второй сундук клада можно взять, пока мир стоит на открытом окне: шаг пошёл — окно закрыто.
+  world.chests.adWindow = null;
+
   // Сначала места на земле, потом огоньки: огонёк должен видеть, что игрок
   // нашёл тайник в этом же тике, и не зависеть от порядка раскладки.
   if (world.player.alive) {
@@ -152,7 +155,7 @@ function touchStone(world: World, index: number, elapsedSec: number): void {
 /** Клад — сундук через сундуки забега: награды, их журнал и счётчики те же. */
 function digHoard(world: World, index: number, elapsedSec: number): void {
   recordUsed(world, index, "opened", elapsedSec);
-  openChest(world, world.secretRules.hoard.chestSize);
+  openChest(world, world.secretRules.hoard.chestSize, "clad");
 }
 
 // --- Древо-оберег ---------------------------------------------------------------

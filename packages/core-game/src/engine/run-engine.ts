@@ -72,6 +72,9 @@ export function createRunEngine(): RunEngine {
         rerollOffersViaAd(): void {
           scene()?.rerollOffersViaAd();
         },
+        openAdChest(): void {
+          scene()?.openAdChest();
+        },
         skipOffers(): void {
           scene()?.skipOffers();
         },

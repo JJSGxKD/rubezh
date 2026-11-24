@@ -1,5 +1,5 @@
 import type { ContentSnapshot } from "./content/snapshot";
-import type { BlessingDef, CardTools, ChestReward, ChestSize, ChestSource, DeviceClass, DifficultyId, RunLoadout, RunMode, RunModifierId, RunOutcome, RunPressureStart, RunResult, SecretKind, StatusElement, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardTools, ChestOpeningVia, ChestReward, ChestSize, ChestSource, DeviceClass, DifficultyId, RunLoadout, RunMode, RunModifierId, RunOutcome, RunPressureStart, RunResult, SecretKind, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -407,7 +407,23 @@ export interface RunEvents {
    * оболочка не ответит `closeChest`. `fallbacks` — сколько наград запасные
    * (аптечка, опыт).
    */
-  chestOpened: { index: number; size: ChestSize; rewards: ChestReward[]; fallbacks: number; elapsedSec: number };
+  chestOpened: {
+    index: number;
+    size: ChestSize;
+    rewards: ChestReward[];
+    fallbacks: number;
+    elapsedSec: number;
+    /**
+     * Каким путём открыт: `clad` — клад, `clad_ad` — второй сундук клада за ролик (tasks/T-0328); нет поля —
+     * сундук с врага или разлома. Второй сундук приходит в том же окне, что и первый.
+     */
+    via?: ChestOpeningVia;
+    /**
+     * Можно ли взять второй сундук за ролик (Р162): сундук открыт кладом, право не потрачено, мир с тех пор не
+     * шагал. Есть ли реклама, движок не знает — это ответ сервера.
+     */
+    canAdChest: boolean;
+  };
   /** игрок вошёл в круг тайника (аналитика и значки радара); огонёк — он появился */
   secretFound: { index: number; kind: SecretKind; elapsedSec: number };
   /**
@@ -750,6 +766,12 @@ export interface RunSession {
    * (tasks/T-0199); без зарядов, один раз за забег, иначе — ничего
    */
   rerollOffersViaAd(): void;
+  /**
+   * второй сундук клада за ролик (tasks/T-0328): оболочка зовёт его в окне сундука клада только после того,
+   * как сервер записал показ; раз за забег, иначе — ничего. Награды приходят событием `chestOpened`
+   * с `via: "clad_ad"`, окно остаётся открытым до `closeChest`.
+   */
+  openAdChest(): void;
   /** взять уровень без улучшения за долю опыта до следующего */
   skipOffers(): void;
   /** убрать предмет карточки из забега насовсем; лечение изгнать нельзя */
