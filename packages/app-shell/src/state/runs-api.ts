@@ -66,6 +66,8 @@ export const leaderboardSchema = z.object({
       rank: z.number(),
       /** лучший забег игрока: по нему строка открывает карточку забега (T-0297); сервер до карточки поля не отдавал */
       runId: z.optional(z.string()),
+      /** публичный id игрока (T-0247): по нему открывается карточка; сервер до публичных id поля не отдавал, строка тогда не открывает карточку */
+      publicId: z.optional(z.string()),
       name: z.string(),
       photoUrl: z.nullable(z.string()),
       survivalSec: z.number(),
@@ -78,6 +80,10 @@ export const leaderboardSchema = z.object({
       supporter: z.optional(z.literal(true)),
       /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен, тогда рисуются метки `tester` и `supporter` */
       emblem: z.optional(publicEmblemSchema),
+      /** действующий облик героя (T-0237); нет поля — сервер до обликов или источник недоступен, кружок рисует фото */
+      appearance: z.optional(z.string()),
+      /** в кружке фото площадки, а не голова облика (T-0237) */
+      avatarPhoto: z.optional(z.literal(true)),
       /** очки престижа (T-0107); сервер до достижений поля не отдавал */
       prestige: z.optional(z.number()),
       /** победа над стражем рубежа засчитана (T-0121); сервер шлёт только `true` или ничего */

@@ -29,10 +29,10 @@ import { FRIENDS_REPOSITORY, type FriendRow, type FriendsRepository, type Reques
  */
 
 /**
- * Строка списка со знаком у имени (T-0240) и обликом (T-0237); полей нет — знака и облика нет
- * или источник недоступен.
+ * Строка списка с публичным id (T-0247), знаком у имени (T-0240) и обликом (T-0237); полей нет —
+ * источник недоступен. Внутренний `accountId` строки остаётся: друзья и заявки им управляются.
  */
-type Marked<T> = T & { emblem?: PublicEmblem; appearance?: string; avatarPhoto?: true };
+type Marked<T> = T & { publicId?: string; emblem?: PublicEmblem; appearance?: string; avatarPhoto?: true };
 
 export interface FriendsView {
   friends: Marked<FriendRow>[];
@@ -230,6 +230,17 @@ export class FriendsService implements OnModuleInit {
   async link(accountId: string): Promise<{ code: string; startParam: string }> {
     const code = await this.friends.linkOf(accountId);
     return { code, startParam: friendStartParam(code) };
+  }
+
+  /**
+   * Заявка по публичному id (карточка игрока, T-0247): id переводится в аккаунт и дальше идут
+   * прежние правила. Нет такого, заблокирован, другая площадка — один и тот же 404, как у заявки
+   * по внутреннему id: по ответу нельзя отличить «нет» от «нельзя».
+   */
+  async requestByPublicId(actor: AccessTokenClaims, publicId: string): Promise<RequestResult> {
+    const target = await this.accounts.byPublicId(publicId);
+    if (target === null) throw new FriendNotFoundError();
+    return await this.request(actor, target.accountId);
   }
 
   async request(actor: AccessTokenClaims, targetId: string): Promise<RequestResult> {

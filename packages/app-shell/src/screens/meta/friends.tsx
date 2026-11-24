@@ -10,6 +10,7 @@ import { rewardFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { friendsLayout, giftAllCount } from "./friends-rules";
 import { GiftAll, Gifts, Invite, PeerAction, PeerRow, peerMarks } from "./friends-parts";
+import { PlayerCardHost, openPlayerCard } from "./player-card-link";
 import { RestrictedPlaque } from "./restricted-plaque";
 
 /**
@@ -174,13 +175,18 @@ export function FriendsScreen(): ReactNode {
             <div className="mt-2 grid gap-2">
               {view.friends.map((friend) => {
                 const gifted = view.gifts.sentToday.includes(friend.accountId);
+                const cardId = friend.publicId;
                 return (
                   <PeerRow
                     key={friend.accountId}
                     name={friend.displayName}
                     photoUrl={friend.photoUrl}
                     {...peerMarks(friend)}
-                    onPress={() => setRemoving(friend)}
+                    // Тап по другу открывает его карточку (T-0248); старый сервер без публичного id — прежний лист «Удалить».
+                    // Убрать друга можно и из карточки: она предлагает тот же лист подтверждения.
+                    {...(cardId === undefined
+                      ? { onPress: () => setRemoving(friend) }
+                      : { onPress: () => openPlayerCard(cardId, "friends"), pressLabel: t("playerCard.open", { name: friend.displayName }) })}
                   >
                     <PeerAction
                       kind={gifted ? "gifted" : "gift"}
@@ -198,6 +204,13 @@ export function FriendsScreen(): ReactNode {
           </>
         )}
       </ContentColumn>
+      <PlayerCardHost
+        onChanged={() => void load()}
+        onRemove={(publicId) => {
+          const friend = view?.friends.find((entry) => entry.publicId === publicId);
+          if (friend !== undefined) setRemoving(friend);
+        }}
+      />
 
       {removing === null ? null : (
         <Modal
