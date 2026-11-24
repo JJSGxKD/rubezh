@@ -13,6 +13,9 @@ import { DIFFICULTIES } from "../runs/run-rules.js";
 
 const name = z.string().min(1).max(64);
 const id = z.string().min(1).max(64);
+const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+/** Сумма в рублях десятичной строкой: «15980.40» — форматирует текст получатель сообщения, а не данные. */
+const rubles = z.string().regex(/^\d{1,15}\.\d{2}$/);
 
 /** Потолок сообщения команды: строка ленты, а не письмо. */
 export const TEAM_MESSAGE_MAX = 500;
@@ -63,6 +66,13 @@ export const NOTIFICATION_KINDS = {
   pass_closed: z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), rewards: z.number().int().min(1).max(60) }),
   /** команде: новая заявка на правку цены ждёт подтверждения второго участника (T-0309); в бота не дублируется */
   change_request_pending: z.object({ requestId: z.string().uuid(), kind: id, target: id, authorName: name }),
+  /**
+   * участнику проекта: отчёт закрытого месяца готов (`ready`, с его долей в рублях) или отозван на пересчёт
+   * (`recalled`, с причиной владельца); подтверждение — в панели «Мой проект» (Р222, T-0469)
+   */
+  finance_report: z.object({ period: month, state: z.enum(["ready", "recalled"]), amountRub: rubles.nullable(), reason: z.string().min(1).max(500).nullable() }),
+  /** участнику проекта: выплата за месяц проведена (Р222, T-0469) */
+  finance_payout: z.object({ period: month, amountRub: rubles }),
 } as const;
 
 export type NotificationKind = keyof typeof NOTIFICATION_KINDS;

@@ -98,9 +98,9 @@ describe("права на маршрутах", () => {
     expect(unguarded).toEqual([]);
   });
 
-  it("учёт в панели: чтение закрыто ledger.view, правка мест, статей, операций и шаблонов — finance.entry.create, закрытие месяцев — finance.period.close (T-0457, T-0460, T-0461, T-0463, T-0468, Р219, Р220, Р222)", () => {
+  it("учёт в панели: чтение закрыто ledger.view, правка мест, статей, операций и шаблонов — finance.entry.create, закрытие месяцев — finance.period.close (T-0457, T-0460, T-0461, T-0463, T-0468, T-0469, Р219, Р220, Р222)", () => {
     const ledgerRoutes = routes.filter((route) => route.controller === "AdminLedgerController");
-    const reading = ["articles", "balances", "journal", "listOperations", "listPeriods", "listTemplates", "operation", "period", "places"];
+    const reading = ["articles", "balances", "journal", "listOperations", "listPeriods", "listTemplates", "operation", "period", "periodPayouts", "places"];
     // сверка, закрытие и снятие закрытия месяца — право только владельца
     const closing = ["closePeriod", "reopenPeriod", "reviewPeriod"];
     const writing = ["archiveArticle", "archivePlace", "archiveTemplate", "createArticle", "createOperation", "createPlace", "createTemplate", "discardOperation", "draftPeriod", "renameArticle", "submitOperation", "updateOperation", "updatePlace", "updateTemplate"];

@@ -39,9 +39,12 @@ const DATE_FORMAT = new Intl.DateTimeFormat("ru-RU", { timeZone: GAME_DAY_TIME_Z
 export function botMessageOf(kind: string, payload: unknown, launch: (startParam: string) => string | null): OutgoingMessage | null {
   const text = textOf(kind, payload);
   if (text === null) return null;
-  const url = launch(`n-${kind}`);
+  // Сообщения о деньгах участника зовут в панель «Мой проект», а не в игру: кнопка «Открыть игру» тут сбила бы с толку.
+  const url = FINANCE_KINDS.has(kind) ? null : launch(`n-${kind}`);
   return { text, button: url === null ? null : { text: OPEN_GAME, url } };
 }
+
+const FINANCE_KINDS: ReadonlySet<string> = new Set(["finance_report", "finance_payout"]);
 
 /** Данные пришли из очереди — граница, поэтому схемой вида. Не по схеме — `null`, писать нечего. */
 function textOf(kind: string, payload: unknown): string | null {
@@ -80,6 +83,14 @@ function textOf(kind: string, payload: unknown): string | null {
     case "pass_closed": {
       const data = NOTIFICATION_KINDS.pass_closed.safeParse(payload);
       return data.success ? passClosedText(data.data.month, data.data.rewards) : null;
+    }
+    case "finance_report": {
+      const data = NOTIFICATION_KINDS.finance_report.safeParse(payload);
+      return data.success ? financeReportText(data.data) : null;
+    }
+    case "finance_payout": {
+      const data = NOTIFICATION_KINDS.finance_payout.safeParse(payload);
+      return data.success ? `Выплачено ${rubText(data.data.amountRub)} за ${monthName(data.data.period)}.` : null;
     }
     default:
       return null;
@@ -120,4 +131,31 @@ function passClosedText(month: string, rewards: number): string {
   const last = rewards % 10;
   const phrase = last === 1 && lastTwo !== 11 ? "награда зачислена" : last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14) ? "награды зачислены" : "наград зачислено";
   return `Пасс ${name} закрыт: ${String(rewards)} ${phrase} на счёт.`;
+}
+
+const MONTHS_NOMINATIVE = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"] as const;
+
+/** «ноябрь» для «за ноябрь»: у всех месяцев винительный падеж совпадает с именительным. */
+function monthName(period: string): string {
+  return MONTHS_NOMINATIVE[Number(period.slice(5, 7)) - 1] ?? period;
+}
+
+/** «15980.40» → «15 980,40 ₽»: тысячи — пробелами, дробная часть — запятой. */
+function rubText(amount: string): string {
+  const [whole = "0", fraction = "00"] = amount.split(".");
+  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/gu, " ")},${fraction} ₽`;
+}
+
+/**
+ * Отчёт участнику (Р222, T-0469): готов — с его частью и просьбой подтвердить в панели, отозван — с причиной. Готовый
+ * отчёт без суммы и отозванный без причины — не по смыслу вида: писать нечего.
+ */
+function financeReportText(data: NotificationPayload<"finance_report">): string | null {
+  const month = monthName(data.period);
+  if (data.state === "ready") {
+    if (data.amountRub === null) return null;
+    return `Отчёт за ${month} готов: твоя часть — ${rubText(data.amountRub)}. Подтверди в панели — без подтверждения выплата ждёт.`;
+  }
+  if (data.reason === null) return null;
+  return `Отчёт за ${month} отозван на пересчёт: ${data.reason.replace(/[.\s]+$/u, "")}.`;
 }

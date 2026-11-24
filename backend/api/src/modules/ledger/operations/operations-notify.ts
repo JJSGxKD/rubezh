@@ -6,6 +6,7 @@ import { ACCOUNT_REPOSITORY, type AccountRepository } from "../../auth/account.r
 import { NotifyTargets } from "../../settings/notify-targets.js";
 import { SETTINGS } from "../../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../../settings/settings.service.js";
+import { payoutSummary } from "../payouts/payout-summary.js";
 import type { OperationsChart } from "./builders.js";
 import type { OperationInput, OperationKind } from "./operation-input.js";
 
@@ -33,6 +34,7 @@ const KIND_NAMES: Readonly<Record<OperationKind, string>> = {
   income: "поступление",
   loan: "заём",
   reversal: "исправление",
+  payout: "выплата",
 };
 
 /** Что нужно знать сообщению об операции: человеческая суть, а не строки проводки. */
@@ -71,6 +73,8 @@ export function operationSummary(input: OperationInput, chart: OperationsChart):
       return `${input.amount} ${currencyOf(input.to)}`;
     case "reversal":
       return `проводки «${input.sourceKey}»`;
+    case "payout":
+      return payoutSummary(input, currencyOf(input.from));
   }
 }
 
