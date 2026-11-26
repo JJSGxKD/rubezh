@@ -26,6 +26,8 @@ export interface BotCommandSpec {
    */
   descriptionEn?: string;
   audience: "everyone" | "admin";
+  /** в чате команды команда видна только набравшему, ответ — ему же (Р199) */
+  ephemeral?: boolean;
 }
 
 /**

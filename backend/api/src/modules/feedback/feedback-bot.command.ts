@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { BotRouter, type BotUpdateHandler } from "../../platforms/telegram/bot-router.js";
+import { TeamEphemeral } from "../../platforms/telegram/team-ephemeral.js";
 import type { TelegramBotApi, TelegramUpdate } from "../../platforms/telegram/telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "../../platforms/telegram/telegram-bot-api.js";
 import { FEEDBACK_REPOSITORY, type FeedbackRepository, type StoredFeedback } from "./feedback.repository.js";
@@ -25,7 +26,7 @@ export type FeedbackBotApi = Pick<TelegramBotApi, "sendMessage" | "sendDocument"
 @Injectable()
 export class FeedbackBotCommand implements BotUpdateHandler, OnModuleInit {
   readonly name = "feedback";
-  readonly commands = [{ command: "feedback", description: "Отзывы игроков файлом", audience: "admin" as const }];
+  readonly commands = [{ command: "feedback", description: "Отзывы игроков файлом", audience: "admin" as const, ephemeral: true }];
   private readonly logger = new Logger("feedback");
 
   constructor(
@@ -33,6 +34,7 @@ export class FeedbackBotCommand implements BotUpdateHandler, OnModuleInit {
     private readonly router: BotRouter,
     @Inject(TELEGRAM_BOT_API) private readonly api: FeedbackBotApi,
     @Inject(FEEDBACK_REPOSITORY) private readonly repository: FeedbackRepository,
+    private readonly team: TeamEphemeral,
   ) {}
 
   get enabled(): boolean {
@@ -47,12 +49,15 @@ export class FeedbackBotCommand implements BotUpdateHandler, OnModuleInit {
     const message = update.message;
     if (message?.text === undefined || !/^\/feedback(@\w+)?(\s|$)/.test(message.text)) return false;
     if (message.from === undefined || !this.config.adminTelegramIds.has(String(message.from.id))) {
-      // Не-администратор: молчание, как на неизвестную команду.
+      // Не-администратор: в чате команды — эфемерный отказ (меню команд там видят
+      // все), в остальных местах молчание, как на неизвестную команду.
+      if (message.from !== undefined) await this.team.tryReply(message, "Отзывы выгружают только администраторы.");
       return true;
     }
 
     const chatId = String(message.chat.id);
     if (message.chat.type !== "private" || chatId !== String(message.from.id)) {
+      if (await this.team.tryReply(message, "Отзывы — файлом в личном чате с ботом: напишите там /feedback.")) return true;
       await this.api.sendMessage(chatId, "Отзывы — только в личном чате с ботом: здесь их увидели бы все участники.");
       return true;
     }

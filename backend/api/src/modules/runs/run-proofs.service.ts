@@ -42,17 +42,33 @@ export class RunProofConflictError extends DomainError {
 
 export type ProofReceipt = { status: "stored" | "duplicate"; keepUntil: string };
 
+/** Запись принята к забегу (tasks/T-0319): перепроверка по ней ставит повтор. */
+export type ProofListener = (runId: string) => Promise<void>;
+
 @Injectable()
 export class RunProofsService {
   private readonly logger = new Logger("run-proofs");
+  private readonly listeners: { name: string; listener: ProofListener }[] = [];
+  /** слушатели, запущенные приёмом и ещё не закончившие: на них ждут тесты и остановка, но не ответ игроку */
+  private readonly inflight = new Set<Promise<void>>();
 
   constructor(@Inject(RUN_PROOFS_REPOSITORY) private readonly repository: RunProofsRepository) {}
+
+  /**
+   * Слушатель приёма записи: модуль приёма о перепроверке не знает, подписывается она сама.
+   * Зовётся и на повторную доставку той же записи — постановка идемпотентна, а повтор
+   * клиента заодно доводит до очереди то, что упало в прошлый раз.
+   */
+  onStored(name: string, listener: ProofListener): void {
+    this.listeners.push({ name, listener });
+  }
 
   /** Принять запись: 200 — принята или уже была та же, 404 — забег чужой или неизвестен, 409 — другая запись, 422 — не прошла проверку. */
   async receive(accountId: string, runId: string, encoded: string, now = new Date()): Promise<ProofReceipt> {
     try {
       const receipt = await this.accept(accountId, runId, encoded, now);
       this.outcome(receipt.status);
+      this.emitInBackground(runId);
       return receipt;
     } catch (error: unknown) {
       if (error instanceof RunProofInvalidError) this.outcome("invalid", error.kind);
@@ -93,6 +109,33 @@ export class RunProofsService {
     if (stored === null) return await this.accept(accountId, runId, encoded, now);
     if (await sameProof(stored.proof, packed, proof)) return { status: "duplicate", keepUntil: stored.keepUntil.toISOString() };
     throw new RunProofConflictError();
+  }
+
+  /**
+   * Слушатели зовутся уже после ответа: постановка повтора — чтение базы, распаковка записи,
+   * снимок контента и Redis — не то, чего игрок должен ждать на закрытии забега. Недоставленное
+   * (процесс остановили на середине, Redis недоступен) доведёт проход перепроверки: запись и
+   * забег в базе уже есть, и отметка постановки не занята или протухла.
+   */
+  private emitInBackground(runId: string): void {
+    const work: Promise<void> = this.emitStored(runId).finally(() => void this.inflight.delete(work));
+    this.inflight.add(work);
+  }
+
+  /** Дождаться слушателей, запущенных приёмом: тестам и остановке процесса; ответ приёма их не ждёт. */
+  async idle(): Promise<void> {
+    await Promise.allSettled([...this.inflight]);
+  }
+
+  /** Упавший слушатель запись не отменяет: она уже принята, а повтор поставит проход перепроверки. */
+  private async emitStored(runId: string): Promise<void> {
+    for (const { name, listener } of this.listeners) {
+      try {
+        await listener(runId);
+      } catch (error: unknown) {
+        this.logger.warn(JSON.stringify({ module: "runs", event: "run_proof_listener_failed", listener: name, reason: error instanceof Error ? error.message.slice(0, 200) : "unknown" }));
+      }
+    }
   }
 
   private outcome(outcome: string, kind?: string): void {

@@ -79,6 +79,8 @@ export interface Ephemeral {
   callbackQueryId?: string;
   /** показать вместо сообщения, под которым нажали кнопку */
   replaceOriginal?: boolean;
+  /** ответ на эфемерную команду: её `ephemeral_message_id`, Telegram принимает его 15 секунд */
+  replyToEphemeralId?: number;
 }
 
 export interface EphemeralFields {
