@@ -36,15 +36,19 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 96 моделей, стирается 32", () => {
+  it("остаётся 96 моделей, стирается 33", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
     expect(actions.filter((action) => action === "keep")).toHaveLength(96);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(32);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(33);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
     for (const model of ["PassProgress", "PassClaim", "BoostCredit"]) expect(plan[model]?.action, model).toBe("wipe");
     expect(plan.PassSeason?.action).toBe("keep");
+  });
+
+  it("живые карточки бота (T-0395, Р199) стираются: после вайпа состояние другое, карточки в чатах отвечают «устарела»", () => {
+    expect(plan.BotCard?.action).toBe("wipe");
   });
 
   it("выданные облики (T-0245) остаются: окрас куплен за звёзды, а журнал покупок вайп не стирает", () => {
@@ -150,6 +154,7 @@ describe("план вайпа: порядок стирания", () => {
       "BoostCredit",
       "CodexEntry",
       "SecretFound",
+      "BotCard",
     ]);
   });
 

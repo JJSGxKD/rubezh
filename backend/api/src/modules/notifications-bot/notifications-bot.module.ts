@@ -12,10 +12,13 @@ import { BotNotifySender } from "./bot-notify-sender.js";
  * WP28). Своим модулем, а не частью ленты: лента остаётся листом и ни от
  * площадок, ни от настроек не зависит, а сюда приходит через `onCreated`.
  * Звук, тихие часы и событие `bot_message_sent` — правила `BotMessagesModule`
- * (Р199, tasks/T-0394).
+ * (Р199, tasks/T-0394). Очередь `notifications-bot` отдаётся и модулю живых карточек:
+ * лимитер у неё один на дубль и карточки.
  */
 @Module({
   imports: [AuthModule, NotificationsModule, MessagingModule, AccountSettingsModule, BotMessagesModule],
   providers: [BotNotifySender, BotNotifyQueue],
+  // Очередь нужна живым карточкам (Р199, tasks/T-0395): правки и отправки идут общим темпом с дублем.
+  exports: [BotNotifyQueue],
 })
 export class NotificationsBotModule {}

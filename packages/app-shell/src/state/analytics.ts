@@ -25,6 +25,7 @@ export const ANALYTICS_EVENTS = [
   "run_scored",
   "run_replayed",
   "bot_message_sent",
+  "bot_card_query",
   "run_abandoned",
   "external_account_linked",
   "run_paused",

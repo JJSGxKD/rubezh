@@ -1046,6 +1046,36 @@ export const SETTINGS = {
     { min: 1, max: 5, unit: ["сообщение", "сообщения", "сообщений"] },
     2,
   ),
+  /**
+   * Живые карточки бота (Р199, Р225, tasks/T-0395). Общий выключатель — выкл.: 14.11.2026 Telegram
+   * отключил виджеты у всех, и сценарии идут обычным сообщением. Ключи видов — у задач видов.
+   */
+  botWidgetEnabled: {
+    ...feature(
+      "bot.widget.enabled",
+      "Живые карточки",
+      "Карточки-виджеты в личке бота. Выключено — те же сценарии приходят обычным сообщением. 14.11.2026 Telegram отключил виджеты: включать, когда вернёт и проверка на проде пройдёт",
+      () => null,
+      false,
+    ),
+    group: BOT_MESSAGES_GROUP,
+  } satisfies SettingDefinition<boolean>,
+  botWidgetRetryMinutes: integer(
+    "bot.widget.retry-minutes",
+    BOT_MESSAGES_GROUP,
+    "Пауза карточек после отказа площадки",
+    "Площадка отказала в методе карточек — столько минут всё идёт обычными сообщениями, потом карточка пробуется снова",
+    { min: 5, max: 1440, unit: ["минута", "минуты", "минут"] },
+    30,
+  ),
+  botWidgetEditMinMinutes: integer(
+    "bot.widget.edit-min-minutes",
+    BOT_MESSAGES_GROUP,
+    "Правка карточки — не чаще раза в",
+    "Бот правит одну живую карточку не чаще; финальная правка периода — сразу",
+    { min: 1, max: 120, unit: ["минута", "минуты", "минут"] },
+    10,
+  ),
   linksAutoDailyCap: integer(
     "links.auto-daily-cap",
     AUTO_SOURCES_GROUP,
