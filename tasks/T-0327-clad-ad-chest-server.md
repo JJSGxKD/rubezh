@@ -37,6 +37,7 @@ shared:
   - apps/admin/src/api/ads.ts
   - apps/admin/src/api/review.ts
   - apps/admin/test/ads.test.ts
+  - packages/app-shell/src/state/ads-api.ts
   - docs/07-monetization-and-ads.md
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
