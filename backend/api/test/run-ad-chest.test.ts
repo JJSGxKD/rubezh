@@ -100,7 +100,7 @@ async function watched(ads: AdsService, time: Date, place: "clad_chest" | "wheel
 describe("место показа clad_chest", () => {
   it("есть среди мест, с наградой и пропуском VIP, без кулдауна: ограничение «раз за забег» держит хозяин места", () => {
     expect(AD_PLACES).toContain("clad_chest");
-    expect(AD_PLACES.indexOf("clad_chest")).toBe(AD_PLACES.indexOf("card_reroll") + 1);
+    expect(AD_PLACES.indexOf("clad_chest")).toBe(AD_PLACES.indexOf("card_reroll") + 2);
     expect(PLACE_RULES.clad_chest).toEqual({ rewarded: true, pass: true, cooldown: null });
     expect(PLACE_FORMAT.clad_chest).toBe("rewarded");
     expect(PLACE_TITLES.clad_chest).toBe("Второй сундук клада");
