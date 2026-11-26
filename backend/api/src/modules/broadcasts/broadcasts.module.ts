@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BotMessagesModule } from "../bot-messages/bot-messages.module.js";
 import { LinksModule } from "../links/links.module.js";
 import { MessagingModule } from "../messaging/messaging.module.js";
 import { RolesModule } from "../roles/roles.module.js";
@@ -10,9 +11,11 @@ import { BroadcastsService } from "./broadcasts.service.js";
 /**
  * Рассылки в бота (WP17). Своих маршрутов у модуля нет: ими управляет панель
  * (`admin/admin-broadcasts.controller.ts`), а игрок видит только сообщение.
+ * `BotMessagesModule` — сборка оформленного сообщения и событие `bot_message_sent`
+ * (Р199, оформленные рассылки).
  */
 @Module({
-  imports: [LinksModule, MessagingModule, RolesModule],
+  imports: [BotMessagesModule, LinksModule, MessagingModule, RolesModule],
   providers: [{ provide: BROADCASTS_REPOSITORY, useClass: PrismaBroadcastsRepository }, BroadcastSender, BroadcastsQueue, BroadcastsService],
   exports: [BroadcastsService],
 })

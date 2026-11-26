@@ -1,3 +1,5 @@
+import { BROADCAST_NOT_TESTED_MESSAGE, editionHash } from "../../src/modules/broadcasts/broadcast-rich.js";
+import { BroadcastStateError } from "../../src/modules/broadcasts/broadcasts-errors.js";
 import type {
   BroadcastRecord,
   BroadcastStatus,
@@ -30,7 +32,7 @@ export class MemoryBroadcastsRepository implements BroadcastsRepository {
 
   async create(input: NewBroadcast): Promise<BroadcastRecord> {
     const now = new Date();
-    const record: BroadcastRecord = { ...input, status: "draft", audience: null, approvedBy: null, startedBy: null, createdAt: now, updatedAt: now, startedAt: null, finishedAt: null };
+    const record: BroadcastRecord = { ...input, testedHash: null, status: "draft", audience: null, approvedBy: null, startedBy: null, createdAt: now, updatedAt: now, startedAt: null, finishedAt: null };
     this.records.set(input.broadcastId, record);
     return record;
   }
@@ -38,9 +40,16 @@ export class MemoryBroadcastsRepository implements BroadcastsRepository {
   async updateDraft(broadcastId: string, patch: DraftPatch): Promise<BroadcastRecord | null> {
     const record = this.records.get(broadcastId);
     if (record?.status !== "draft") return null;
-    const updated = { ...record, ...patch, approvedBy: null, updatedAt: new Date() };
+    const updated = { ...record, ...patch, approvedBy: null, testedHash: null, updatedAt: new Date() };
     this.records.set(broadcastId, updated);
     return updated;
+  }
+
+  async markTested(broadcastId: string, hash: string): Promise<boolean> {
+    const record = this.records.get(broadcastId);
+    if (record?.status !== "draft") return false;
+    this.records.set(broadcastId, { ...record, testedHash: hash });
+    return true;
   }
 
   async byId(broadcastId: string): Promise<BroadcastRecord | null> {
@@ -65,6 +74,8 @@ export class MemoryBroadcastsRepository implements BroadcastsRepository {
   async start(broadcastId: string, startedBy: string, at: Date): Promise<number | null> {
     const record = this.records.get(broadcastId);
     if (record?.status !== "draft") return null;
+    // Как в Postgres: отпечаток сверяется под блокировкой строки, а не только в сервисе.
+    if (record.format === "rich" && record.testedHash !== editionHash(record)) throw new BroadcastStateError(BROADCAST_NOT_TESTED_MESSAGE);
     const rows = new Map<string, Delivery>();
     for (const recipient of this.audience) {
       rows.set(recipient.accountId, { status: "queued", attempts: 0, error: null, claimed: false });
