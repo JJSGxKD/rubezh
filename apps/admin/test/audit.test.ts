@@ -186,6 +186,17 @@ describe("журнал аудита", () => {
     }
   });
 
+  it("«Повторить снова» (T-0319) — подпись, прежний исход словами и тик; объект — игрок", () => {
+    const repeated = entry({ action: "players.run.replay", target: ACCOUNT, targetName: "Оля", before: { replayVerdict: "mismatch", divergedTick: 1800 }, after: { runId: "9a1b2c3d-0000-4000-8000-000000000001" } });
+    expect(actionTitle("players.run.replay")).toBe("Разбор: повтор забега на сервере запущен снова");
+    expect(auditChanges(repeated).map((change) => [fieldTitle(change.field), auditValue(change.before, change.field), auditValue(change.after, change.field)])).toEqual([
+      ["забег", "—", "9a1b2c3d"],
+      ["исход повтора", "разошёлся", "—"],
+      ["тик расхождения", "1\u00a0800", "—"],
+    ]);
+    expect(auditObject(repeated)).toMatchObject({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
+  });
+
   it("объект: имя и ссылка на его экран, а где экрана нет — без ссылки", () => {
     expect(auditObject(entry({ action: "players.ban", target: ACCOUNT, targetName: "Оля" }))).toEqual({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
     // Аккаунт удалён — имени нет, остаётся начало id.
