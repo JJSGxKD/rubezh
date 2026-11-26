@@ -54,6 +54,7 @@ function finish(patch: Partial<RunFinish> = {}): RunFinish {
     continues: [],
     boosts: [],
     passives: [],
+    adChests: 0,
     ...patch,
   };
 }

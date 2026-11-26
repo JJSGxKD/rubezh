@@ -36,10 +36,10 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 96 моделей, стирается 31", () => {
+  it("остаётся 96 моделей, стирается 32", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
     expect(actions.filter((action) => action === "keep")).toHaveLength(96);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(31);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(32);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
@@ -74,6 +74,13 @@ describe("план вайпа: полнота", () => {
     expect(plan.RunAdReroll?.action).toBe("wipe");
     expect(plan.RunAdReroll?.why).toContain("часть забега");
     expect(order.indexOf("RunAdReroll")).toBeLessThan(order.indexOf("Run"));
+  });
+
+  it("второй сундук клада за рекламу (T-0327) — часть забега: стирается своим шагом до забега, а не только каскадом", () => {
+    expect(plan.RunAdChest?.action).toBe("wipe");
+    expect(plan.RunAdChest?.why).toContain("часть забега");
+    expect(order.indexOf("RunAdChest")).toBe(order.indexOf("RunAdReroll") + 1);
+    expect(order.indexOf("RunAdChest")).toBeLessThan(order.indexOf("Run"));
   });
 
   it("удвоение награды дня (T-0242) начинается заново вместе с самой наградой дня и стоит рядом с ней", () => {
@@ -114,6 +121,7 @@ describe("план вайпа: порядок стирания", () => {
       "RunAdContinue",
       "RunGemContinue",
       "RunAdReroll",
+      "RunAdChest",
       "RunProof",
       "RunReward",
       "RunBoost",

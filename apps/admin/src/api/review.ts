@@ -44,6 +44,7 @@ const REASON_TITLES: Readonly<Record<string, string>> = {
   unknown_content: "незнакомый отпечаток контента — сборка не из выпущенных",
   unpaid_continue: "второй шанс без оплаты",
   unpaid_ad_reroll: "рекламный переброс не подтверждён показом",
+  unpaid_ad_chest: "второй сундук не подтверждён показом",
   underpaid_continue: "второй шанс оплачен за меньшее время, чем прошло",
   unverified_time: "старт не дошёл — время забега не проверено",
   loadout_forged: "снимок снаряжения не подписан сервером",
