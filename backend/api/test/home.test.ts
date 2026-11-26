@@ -219,7 +219,7 @@ function service(
   return new HomeService(shop, vip, changelog, tasks, restrictions, settings, teamSlides, daily, wheel, donations);
 }
 
-const AD_NONE: WheelView["ad"] = { available: false, readyAt: null, pass: null };
+const AD_NONE: WheelView["ad"] = { available: false, readyAt: null, pass: null, capped: false };
 
 const DONATE_STARS: DonationView = { stars: { min: 1, max: 10_000, presets: [50, 100], mode: "live" }, tribute: null, supporter: false };
 const DONATE_NOTHING: DonationView = { stars: null, tribute: null, supporter: false };
@@ -301,7 +301,7 @@ describe("виджеты главной", () => {
   it("колесо: джекпот — самый крупный монетный сектор уровня; VIP — признак, а не имя пропуска", () => {
     expect(wheelWidget(wheelViewOf(1, false, AD_NONE))).toEqual({ free: false, jackpot: 1_000, ad: { available: false, readyAt: null, vip: false } });
     expect(wheelWidget(wheelViewOf(11, true, AD_NONE)).jackpot).toBe(1_200);
-    const vip = wheelWidget(wheelViewOf(1, false, { available: true, readyAt: "2026-10-04T12:30:00.000Z", pass: "vip" }));
+    const vip = wheelWidget(wheelViewOf(1, false, { available: true, readyAt: "2026-10-04T12:30:00.000Z", pass: "vip", capped: false }));
     expect(vip.ad).toEqual({ available: true, readyAt: "2026-10-04T12:30:00.000Z", vip: true });
     const shardsOnly: WheelView = { sectors: [{ resource: "shard_common", amount: 3, odds: 1 }], free: true, ad: AD_NONE };
     expect(wheelWidget(shardsOnly).jackpot).toBeNull();

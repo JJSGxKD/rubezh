@@ -1,15 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { UnavailableError, ValidationError } from "../../common/domain-error.js";
 import { Messengers, type SendOutcome } from "../../platforms/ports/messenger.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
+import { plainTextOf, type RichDocument } from "../../platforms/ports/rich-message.js";
+import { BotMessages } from "../bot-messages/bot-messages.service.js";
 import { LinksService } from "../links/links.service.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
+import { BROADCAST_NOT_TESTED_MESSAGE, editionHash, parseBroadcastMarkdown } from "./broadcast-rich.js";
 import { BROADCAST_RULES } from "./broadcast-rules.js";
 import { messageOf } from "./broadcast-sender.js";
 import { BroadcastApprovalRequiredError, BroadcastNotFoundError, BroadcastStateError } from "./broadcasts-errors.js";
 import { BroadcastsQueue } from "./broadcasts-queue.js";
-import { BROADCASTS_REPOSITORY, type BroadcastRecord, type BroadcastStatus, type BroadcastsRepository, type DeliveryStats } from "./broadcasts.repository.js";
+import { BROADCASTS_REPOSITORY, type BroadcastFormat, type BroadcastRecord, type BroadcastStatus, type BroadcastsRepository, type DeliveryStats } from "./broadcasts.repository.js";
 import type { Segment } from "./segment.js";
 
 /**
@@ -23,6 +26,9 @@ import type { Segment } from "./segment.js";
  *   должен не тот, кто запускает;
  * - кнопка ведёт через ссылку кампании рассылки (`/r/<код>`): клики и
  *   запуски видны в разделе «Ссылки» и в итоге рассылки;
+ * - оформленная рассылка (Р199, T-0403) — ограниченный Markdown: разметка
+ *   проверяется при сохранении, а запускается она только после теста себе
+ *   именно этой редакции, ушедшего оформленным;
  * - каждое действие — в аудит.
  *
  * Событий аналитики модуль не шлёт: рассылку порождает сервер, а конверт
@@ -33,6 +39,8 @@ import type { Segment } from "./segment.js";
 export interface BroadcastInput {
   title: string;
   platform: PlatformId;
+  /** не задан — простой текст; в правке — прежний формат рассылки */
+  format?: BroadcastFormat;
   text: string;
   buttonText: string | null;
   segment: Segment;
@@ -43,8 +51,24 @@ export type BroadcastEdit = Omit<BroadcastInput, "platform">;
 export interface BroadcastView extends BroadcastRecord {
   /** итог доставки; у черновика — `null` */
   stats: DeliveryStats | null;
+  /** тест себе ушёл оформленным именно с этой редакцией: отметка совпадает с текстом и кнопкой сейчас */
+  tested: boolean;
   /** порог аудитории: больше — старт только после одобрения второго человека */
   approvalAudience: number;
+}
+
+export interface BroadcastPreview {
+  doc: RichDocument;
+  /** то, что увидят MAX, VK и Telegram при выключенном оформлении */
+  plain: string;
+  problems: string[];
+}
+
+/** Ошибки разметки видит автор до сохранения, а не тысяча игроков после запуска. */
+function assertMarkup(format: BroadcastFormat, text: string): void {
+  if (format !== "rich") return;
+  const { problems } = parseBroadcastMarkdown(text);
+  if (problems.length > 0) throw new ValidationError(problems.slice(0, 3).join("; "));
 }
 
 @Injectable()
@@ -55,6 +79,7 @@ export class BroadcastsService {
     private readonly links: LinksService,
     private readonly messengers: Messengers,
     private readonly queue: BroadcastsQueue,
+    @Optional() private readonly composer?: BotMessages,
   ) {}
 
   async list(actor: AccountRef): Promise<BroadcastRecord[]> {
@@ -66,7 +91,14 @@ export class BroadcastsService {
     await this.roles.require(actor, "broadcast.edit");
     const broadcast = await this.found(broadcastId);
     const stats = broadcast.status === "draft" ? null : await this.broadcasts.stats(broadcastId);
-    return { ...broadcast, stats, approvalAudience: BROADCAST_RULES.approvalAudience };
+    return { ...broadcast, stats, tested: broadcast.testedHash !== null && broadcast.testedHash === editionHash(broadcast), approvalAudience: BROADCAST_RULES.approvalAudience };
+  }
+
+  /** Разбор Markdown без сохранения: предпросмотр в панели и список ошибок по ходу набора. */
+  async preview(actor: AccountRef, text: string): Promise<BroadcastPreview> {
+    await this.roles.require(actor, "broadcast.edit");
+    const { doc, problems } = parseBroadcastMarkdown(text);
+    return { doc, plain: plainTextOf(doc), problems };
   }
 
   async estimate(actor: AccountRef, platform: PlatformId, segment: Segment): Promise<{ audience: number }> {
@@ -77,6 +109,9 @@ export class BroadcastsService {
   async create(actor: AccountRef, input: BroadcastInput): Promise<BroadcastRecord> {
     await this.roles.require(actor, "broadcast.edit");
     if (this.messengers.for(input.platform) === null) throw new ValidationError("У этой площадки нет бота, которым мы пишем");
+    const format = input.format ?? "plain";
+    // До ссылки кампании: рассылка с ошибкой не должна оставлять за собой лишнюю ссылку.
+    assertMarkup(format, input.text);
     const broadcastId = randomUUID();
 
     let button: { linkCode: string; buttonUrl: string } | null = null;
@@ -97,6 +132,7 @@ export class BroadcastsService {
       broadcastId,
       title: input.title,
       platform: input.platform,
+      format,
       text: input.text,
       buttonText: input.buttonText,
       buttonUrl: button?.buttonUrl ?? null,
@@ -104,7 +140,7 @@ export class BroadcastsService {
       segment: input.segment,
       createdBy: actor.accountId,
     });
-    await this.audit(actor, "broadcast.create", broadcastId, { title: input.title, platform: input.platform, segment: input.segment });
+    await this.audit(actor, "broadcast.create", broadcastId, { title: input.title, platform: input.platform, format, segment: input.segment });
     return broadcast;
   }
 
@@ -113,26 +149,37 @@ export class BroadcastsService {
     const before = await this.found(broadcastId);
     // Ссылка кампании заводится при создании: кнопка без неё вела бы мимо счёта кликов.
     if (edit.buttonText !== null && before.linkCode === null) throw new ValidationError("Кнопку добавляют при создании рассылки — создайте новую");
-    const after = await this.broadcasts.updateDraft(broadcastId, { title: edit.title, text: edit.text, buttonText: edit.buttonText, segment: edit.segment });
+    const format = edit.format ?? before.format;
+    assertMarkup(format, edit.text);
+    const after = await this.broadcasts.updateDraft(broadcastId, { title: edit.title, format, text: edit.text, buttonText: edit.buttonText, segment: edit.segment });
     if (after === null) throw new BroadcastStateError("Рассылка уже запущена — правка закрыта");
     await this.roles.audit({
       actorAccountId: actor.accountId,
       action: "broadcast.update",
       target: broadcastId,
-      before: { title: before.title, text: before.text, segment: before.segment, approvedBy: before.approvedBy },
-      after: { title: after.title, text: after.text, segment: after.segment },
+      before: { title: before.title, format: before.format, text: before.text, segment: before.segment, approvedBy: before.approvedBy },
+      after: { title: after.title, format: after.format, text: after.text, segment: after.segment },
     });
     return after;
   }
 
-  /** Тест себе — в свой чат с ботом площадки рассылки: так видно ровно то, что получат игроки. */
+  /**
+   * Тест себе — в свой чат с ботом площадки рассылки: так видно ровно то, что
+   * получат игроки. Оформленная, ушедшая оформленным (не запасным текстом), даёт
+   * отметку этой редакции — без неё запуск закрыт.
+   */
   async testSend(actor: AccountRef, broadcastId: string): Promise<SendOutcome> {
     await this.roles.require(actor, "broadcast.edit");
     const broadcast = await this.found(broadcastId);
     if (actor.platform !== broadcast.platform) throw new ValidationError("Тест уходит в ваш чат с ботом площадки рассылки — войдите в панель с неё");
     const messenger = this.messengers.for(broadcast.platform);
     if (messenger === null) throw new UnavailableError("Бот площадки не настроен");
-    return await messenger.send(actor.platformUserId, messageOf(broadcast));
+    const message = messageOf(broadcast, this.composer);
+    const outcome = await messenger.send(actor.platformUserId, message);
+    if (broadcast.format === "rich" && message.rich !== undefined && outcome.status === "sent" && outcome.fallback !== true) {
+      await this.broadcasts.markTested(broadcastId, editionHash(broadcast));
+    }
+    return outcome;
   }
 
   async approve(actor: AccountRef, broadcastId: string): Promise<BroadcastRecord> {
@@ -148,6 +195,7 @@ export class BroadcastsService {
     const broadcast = await this.found(broadcastId);
     if (broadcast.status !== "draft") throw new BroadcastStateError("Рассылка уже запущена или закрыта");
     if (this.messengers.for(broadcast.platform) === null) throw new UnavailableError("Бот площадки не настроен");
+    if (broadcast.format === "rich" && broadcast.testedHash !== editionHash(broadcast)) throw new BroadcastStateError(BROADCAST_NOT_TESTED_MESSAGE);
 
     const audience = await this.broadcasts.count(broadcast.platform, broadcast.segment);
     if (audience === 0) throw new ValidationError("В аудитории никого — писать некому");
