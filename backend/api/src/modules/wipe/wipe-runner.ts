@@ -152,6 +152,7 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "account_progress",
   "friend_gift",
   "daily_reward",
+  "daily_double",
   "wheel_spin",
   "vip_daily",
   "notification",
@@ -236,6 +237,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.friendGift.deleteMany({});
     case "DailyReward":
       return await tx.dailyReward.deleteMany({});
+    case "DailyDouble":
+      return await tx.dailyDouble.deleteMany({});
     case "WheelSpin":
       return await tx.wheelSpin.deleteMany({});
     case "VipDaily":

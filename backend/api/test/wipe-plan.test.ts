@@ -36,15 +36,21 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 94 модели, стирается 31", () => {
+  it("остаётся 96 моделей, стирается 32", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(94);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(31);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(96);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(32);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
     for (const model of ["PassProgress", "PassClaim", "BoostCredit"]) expect(plan[model]?.action, model).toBe("wipe");
     expect(plan.PassSeason?.action).toBe("keep");
+  });
+
+  it("выданные облики (T-0245) остаются: окрас куплен за звёзды, а журнал покупок вайп не стирает", () => {
+    expect(plan.AppearanceGrant?.action).toBe("keep");
+    expect(plan.AppearanceGrant?.why).toContain("куплен");
+    expect(order).not.toContain("AppearanceGrant");
   });
 
   it("контент игры на сервере (T-0303) остаётся: это правила игры, а не данные игроков", () => {
@@ -75,6 +81,12 @@ describe("план вайпа: полнота", () => {
     expect(plan.RunAdChest?.why).toContain("часть забега");
     expect(order.indexOf("RunAdChest")).toBe(order.indexOf("RunAdReroll") + 1);
     expect(order.indexOf("RunAdChest")).toBeLessThan(order.indexOf("Run"));
+  });
+
+  it("удвоение награды дня (T-0242) начинается заново вместе с самой наградой дня и стоит рядом с ней", () => {
+    expect(plan.DailyDouble?.action).toBe("wipe");
+    expect(plan.DailyDouble?.why).toContain("наград");
+    expect(order.indexOf("DailyDouble")).toBe(order.indexOf("DailyReward") + 1);
   });
 
   it("запись забега для проверки стирается своим шагом до забега (T-0317), а не только каскадом", () => {
@@ -128,6 +140,7 @@ describe("план вайпа: порядок стирания", () => {
       "AccountProgress",
       "FriendGift",
       "DailyReward",
+      "DailyDouble",
       "WheelSpin",
       "VipDaily",
       "Notification",

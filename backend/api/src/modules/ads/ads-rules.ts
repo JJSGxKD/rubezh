@@ -9,11 +9,12 @@
 /**
  * Места показа (§3.7): второй шанс, крутка колеса, удвоение награды за
  * забег, переброс карточек выбора улучшения (Р133), второй сундук клада (Р162),
- * задания и межстраничная между забегами (О18). Награду за место
+ * удвоение награды дня (Р155), задания и межстраничная между забегами (О18).
+ * Награду за место
  * выдаёт его хозяин — колесо, забег, задания, — забирая сессию показа; модуль
  * рекламы лишь ручается, что показ был.
  */
-export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "card_reroll", "clad_chest", "task", "interstitial"] as const;
+export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "card_reroll", "daily_double", "clad_chest", "task", "interstitial"] as const;
 export type AdPlace = (typeof AD_PLACES)[number];
 
 /**
@@ -59,6 +60,8 @@ export const PLACE_RULES: Record<AdPlace, PlaceRules> = {
   card_reroll: { rewarded: true, pass: true, cooldown: null },
   // Второй сундук клада: «раз за забег» держит хозяин места (`runs/run-ad-chest.service.ts`); в общий дневной кап роликов входит.
   clad_chest: { rewarded: true, pass: true, cooldown: null },
+  // «Раз в сутки» держит хозяин места — модуль награды дня (`daily/daily-double.service.ts`): удвоить можно только забранную сегодня награду.
+  daily_double: { rewarded: true, pass: true, cooldown: null },
   // Сколько заданий сети и как часто, решает хозяин места — задания — по
   // строке сети из панели (`tasks/network-task-rules.ts`).
   task: { rewarded: true, pass: false, cooldown: null },

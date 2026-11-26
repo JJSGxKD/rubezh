@@ -29,6 +29,7 @@ import { AdminStakeholdersController } from "./admin-stakeholders.controller.js"
 import { AdminLedgerController } from "./admin-ledger.controller.js";
 import { LedgerModule } from "../ledger/ledger.module.js";
 import { StakeholdersModule } from "../stakeholders/stakeholders.module.js";
+import { AdminPartnerMaterialsController } from "./admin-partner-materials.controller.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminPassController } from "./admin-pass.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
@@ -168,6 +169,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminShopController,
     AdminPromoCodesController,
     AdminPartnersController,
+    AdminPartnerMaterialsController,
     AdminCabinetController,
     AdminStakeholdersController,
     AdminMyProjectController,
