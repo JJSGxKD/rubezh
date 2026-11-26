@@ -1028,6 +1028,16 @@ export const SETTINGS = {
     ),
     group: BOT_MESSAGES_GROUP,
   } satisfies SettingDefinition<boolean>,
+  botTeamEphemeralEnabled: {
+    ...feature(
+      "bot.team-ephemeral.enabled",
+      "Эфемерные ответы в чате команды",
+      "/help, меню выгрузки и отказы в чате команды видит только спросивший. Работает, когда включены сообщения нового поколения. Выключено — бот отвечает всем, как раньше",
+      () => null,
+      true,
+    ),
+    group: BOT_MESSAGES_GROUP,
+  } satisfies SettingDefinition<boolean>,
   botLoudPerDay: integer(
     "bot.loud-per-day",
     BOT_MESSAGES_GROUP,
