@@ -341,7 +341,7 @@ class MemoryContentRepository implements ContentRepository {
   private nextVersion = 1;
 
   private summary(row: ContentVersionRecord): ContentVersionSummary {
-    return { versionNo: row.versionNo, contentHash: row.contentHash, schemaVersion: row.schemaVersion, source: row.source, createdBy: row.createdBy, createdAt: row.createdAt, publishedAt: row.publishedAt };
+    return { versionNo: row.versionNo, contentHash: row.contentHash, schemaVersion: row.schemaVersion, source: row.source, createdBy: row.createdBy, createdAt: row.createdAt, publishedAt: row.publishedAt, releasedAllAt: row.releasedAllAt };
   }
   private draftSummary(row: ContentDraftRecord): ContentDraftSummary {
     return { draftId: row.draftId, baseVersionNo: row.baseVersionNo, title: row.title, author: row.author, updatedAt: row.updatedAt, archivedAt: row.archivedAt };
@@ -363,7 +363,7 @@ class MemoryContentRepository implements ContentRepository {
   async addVersion(input: NewContentVersion): Promise<{ created: boolean; version: ContentVersionSummary }> {
     const existing = this.versionRows.find((row) => row.contentHash === input.contentHash);
     if (existing !== undefined) return { created: false, version: this.summary(existing) };
-    const row: ContentVersionRecord = { ...structuredClone(input), versionNo: this.nextVersion++, publishedAt: null };
+    const row: ContentVersionRecord = { ...structuredClone(input), versionNo: this.nextVersion++, publishedAt: null, releasedAllAt: null };
     this.versionRows.push(row);
     return { created: true, version: this.summary(row) };
   }

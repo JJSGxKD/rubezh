@@ -156,6 +156,7 @@ erDiagram
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
     CONTENT_VERSION ||--o{ CONTENT_DRAFT : "черновик правит копию снимка версии-основы"
     CONTENT_DRAFT ||--o{ CONTENT_CHECK : "проверки черновика в sim-worker"
+    CONTENT_VERSION ||--o{ CONTENT_CURRENT : "какая версия в игре у команды и у всех"
     ACCOUNT ||--o{ TASK_CHANNEL_WATCH : "окна перепроверки подписки после награды"
     TASK_DEF ||--o{ TASK_CHANNEL_WATCH : "задание, чья награда под наблюдением"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
@@ -197,6 +198,7 @@ erDiagram
         string[] verdict_reasons
         boolean rubezh_reached "страж рубежа пришёл (со слов итога); победу засчитывает вердикт ok"
         int rubezh_cleared_sec "nullable: секунда, на которой пал страж (T-0121)"
+        string modifier_id "nullable: hurry|inverse — модификатор забега (T-0122); с ним забег вне рейтинга, награда ×1,25"
         int points "nullable: очки эффективности (T-0293); null — пролог, обучение, сбой подсчёта"
         jsonb axes "nullable: индексы осей t, k, h, c, b с тремя знаками, 1 — ровно ожидаемое"
         string style "nullable: ключ сильнейшей оси: t, k, h, c или b"
@@ -205,6 +207,13 @@ erDiagram
         string review_outcome "nullable: honest|annulled — решение разбора (Р203)"
         datetime reviewed_at "nullable"
         uuid reviewed_by "nullable: кто решил, без FK"
+        string replay_verdict "nullable: pending|match|mismatch|content_mismatch|not_replayable|broken|timeout|no_proof — перепроверка повтором (T-0319); null — повтор не нужен"
+        int replay_diverged_tick "nullable: тик первого расхождения"
+        datetime replayed_at "nullable: когда записан исход"
+        boolean replay_required "обязательный повтор (верх, рубин и золото, эпическая добыча, Страж), а не выборка"
+        int replay_attempt "номер попытки: растёт по «Повторить снова», входит в id задания"
+        datetime replay_queued_at "nullable: когда задание поставлено в очередь replay"
+        json replay_result "nullable: { reason, replayed, durationMs } воркера — таблица «заявлено / повтор»"
     }
 
     ACCOUNT_SESSION {
@@ -912,7 +921,7 @@ erDiagram
         bytea proof "gzip от JSON записи run-proof-v1: до 64 КБ сжатой, до 512 КБ распакованной"
         int size_bytes "сжатые байты, от 1 до 65536"
         datetime received_at
-        datetime keep_until "received_at + 7 дней; у проверенных верхних и с редкой добычей — 180 (T-0319); очистка раз в час удаляет просроченные пачками по 1000"
+        datetime keep_until "received_at + 7 дней; у совпавших обязательных и у разошедшихся — 180 (T-0319); очистка раз в час удаляет просроченные пачками по 1000"
     }
 
     VIP_SUBSCRIPTION {
@@ -1323,7 +1332,8 @@ erDiagram
         string source "repo или panel (CHECK)"
         uuid created_by "без FK; null — завёл выкат"
         datetime created_at
-        datetime published_at "null — не публиковалась; публикация — T-0306"
+        datetime published_at "null — в игре не бывала ни у команды, ни у всех; ставит публикация из панели или подхват версии из кода при выкате (T-0306)"
+        datetime released_all_at "null — у всех не бывала, её видела разве что команда; ставит публикация «Всем» и подхват указателем all; CHECK: только вместе с published_at. Откат «Всем» и запасная выдача старой схеме берут только такие версии (T-0306)"
     }
 
     CONTENT_DRAFT {
@@ -1343,6 +1353,13 @@ erDiagram
         string status "queued, done, failed, timeout (CHECK)"
         jsonb report "итог sim-worker как есть или { error }"
         datetime created_at "частичный UNIQUE (draft_id, snapshot_hash) где status не failed"
+    }
+
+    CONTENT_CURRENT {
+        string audience PK "team или all (CHECK): не больше одной строки на аудиторию"
+        int version_no FK "RESTRICT: версию не удалить, пока на неё указывает строка"
+        uuid set_by "без FK; null — поставил выкат"
+        datetime set_at
     }
 
     TASK_CHANNEL_WATCH {
@@ -1864,6 +1881,12 @@ erDiagram
   отчёт воркера читается при опросе `GET /checks/:id`, повтор того же снимка
   отдаёт прошлый отчёт (`snapshot_hash` — sha256 канонического JSON: порядок
   ключей jsonb его не меняет). Вайп таблицы не трогает: это правила игры.
+- **`CONTENT_CURRENT` — какая версия контента в игре** (`19-content-admin.md` §3,
+  T-0306): не больше одной строки на аудиторию, `team` (аккаунты с ролью) и `all`.
+  Нет строки `team` — команда играет версией «всем»; нет строки `all` —
+  ничего не публиковалось. Публикация и откат меняют номер версии в строке, версию
+  с указателем из базы не удалить. Хэш версии из панели — sha256 канонического JSON
+  снимка (хэш движка сервер посчитать не может). Поток — §4.44.
 - **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
@@ -2675,6 +2698,7 @@ flowchart TD
     API --> LG
     SH --> DT
     ADM --> DT
+    ADM --> PRK
 ```
 
 Стрелка из `apps/web-*` в `core-game` осталась одна и узкая: приложение берёт
@@ -5884,7 +5908,7 @@ sequenceDiagram
 - **Уведомление не блокирует решение:** сбой ленты или чата — предупреждение в логе,
   заявка уже записана.
 
-### 4.43 Повтор забега в sim-worker (этап 4, реализован воркер)
+### 4.43 Повтор забега в sim-worker (этап 4, реализованы воркер и сервер)
 
 Сервер перепроверяет забеги: обязательные — верх досок, высокие дивизионы, редкая
 добыча, Страж; остальные выборкой (`35-stage4-plan.md` WP5, `tasks/T-0319`). Повтор —
@@ -5931,7 +5955,52 @@ sequenceDiagram
     end
     W->>G: отпустить затвор
     W->>M: sim_jobs_total{queue=replay, outcome=вердикт}, sim_job_seconds{queue=replay}
-    S->>R: исход — событием завершения задания
+    S->>R: проход раз в минуту читает выполненные и упавшие задания, закрывает исход в строке забега
+```
+
+Сервер (`tasks/T-0319`) решает, что повторять, и закрывает исход:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant G as Приём забега (RunsHooks)
+    participant S as RunReplayService
+    participant DB as Postgres, run
+    participant P as Приём записи (run_proof)
+    participant Q as Redis, очередь replay
+    participant W as sim-worker
+    participant J as Проход раз в минуту
+    participant A as Разбор в панели
+
+    G->>S: забег записан
+    S->>S: нужен ли повтор (первая сотня, рубин и золото, добыча, Страж, выборка по хэшу runId)
+    S->>DB: replay_verdict = pending, replay_required (условное обновление)
+    P->>S: запись принята (в любом порядке с решением)
+    S->>DB: занять постановку: replay_queued_at, номер попытки
+    S->>Q: задание replay-забег-попытка, приоритет по важности
+    Q->>W: повтор
+    W-->>Q: исход тем же заданием
+    J->>Q: выполненные и упавшие задания
+    J->>DB: закрыть исход одной транзакцией, только если ждёт эта попытка
+    alt разошёлся, ключ replay.mismatch-verdict = observe (умолчание)
+        DB-->>DB: исход и тик записаны, запись 180 дней; вердикт, причины и рейтинг прежние
+    else разошёлся, ключ suspicious или rejected
+        DB-->>DB: вердикт строже прежнего, причина replay_mismatch (один раз), ranked = false, запись 180 дней
+        J->>S: доски и таблица недели — по базе
+    else совпал
+        DB-->>DB: вердикт прежний, запись обязательного забега 180 дней
+    else наша сторона: контент, сбой, предел времени
+        DB-->>DB: вердикт и рейтинг прежние, предупреждение в лог
+    end
+    J->>J: событие run_replayed, строка метрики replay_outcome_total
+    J->>DB: записи нет 72 часа — no_proof
+    J->>Q: задание давно поставлено, а исхода нет — на месте ли оно
+    alt пропало (Redis очищен)
+        J->>Q: поставить заново под тем же идентификатором, replay_queued_at прежняя
+    else воркер молчит 72 часа от первой постановки
+        J->>DB: timeout (наша сторона), задание снято с очереди
+    end
+    A->>S: «Повторить снова» — новая попытка, задание вперёд выборки, строка аудита
 ```
 
 - **Исход один на задание.** `match` — забег повторился; `mismatch` — повтор разошёлся
@@ -5943,6 +6012,54 @@ sequenceDiagram
   задание падает, метрика `outcome="error"`; воркер остаётся жив.
 - **Один повтор — не дольше минуты**, проверка ждёт идущий повтор не дольше этого же
   срока: начатое не прерывается.
+
+### 4.44 Публикация баланса: «Команде», «Всем», откат, выдача версии клиенту (этап 4, реализовано)
+
+Черновик, прошедший проверку (§4.33), становится версией игры
+(`19-content-admin.md` §3 «Публикация и выдача версии», §4.4–§4.5, `tasks/T-0306`).
+Версия — неизменяемая строка `content_version`, а то, какая из них в игре у кого,
+говорят две строки `content_current`: `team` и `all`. Откат — смена номера в строке.
+Клиент (`T-0307`) спрашивает версию по своей схеме, а сам снимок берёт по хэшу.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Панель (content.publish)
+    participant S as Сервер: ContentPublishService
+    participant L as Redis, замок content:publish:lock
+    participant D as Postgres
+    participant C as Клиент игрока (T-0307)
+    participant E as Край: Caddy и CDN
+
+    P->>S: POST /drafts/:id/publish {audience}
+    S->>D: черновик, его основа, живая проверка по snapshot_hash этого снимка
+    alt проверки нет, она устарела, не зелёная или ключ content.publish-require-check включён и причина есть
+        S-->>P: 409 content_check_required, причина в тексте
+    else годится (или ключ выключен — аудит помечает checkBypassed)
+        S->>L: SET NX PX 30 с, ожидание до 5 с
+        S->>D: одна транзакция: версия (хэш уникален — повтор версию не заводит) и указатели team, а для «Всем» ещё и all
+        S->>L: снять замок, если токен наш
+        S-->>P: {versionNo, created, changed, previousVersionNo}; аудит content.publish
+    end
+    P->>S: POST /rollback {audience, versionNo}
+    S->>D: версия уже бывала в игре у этой аудитории (команде — published_at, «Всем» — released_all_at) → указатель на неё; новой версии нет
+    C->>S: GET /content/current?schema=n (токен)
+    S->>D: указатели; роль в account_role — аудитория «команда»; версия указателя с schema_version ≤ n, а иначе последняя бывшая у всех (released_all_at)
+    S-->>C: {versionNo, hash, url} или null — играть встроенным
+    C->>E: GET /content/v/<хэш>.json
+    E-->>C: снимок, Cache-Control: public, max-age=31536000, immutable; повтор — 304
+```
+
+- **Условия публикации те же, что рельсы панели.** Готовая проверка того же снимка,
+  без проблем схемы и контента, симуляция уложилась во время, все посчитанные
+  метрики в коридорах. Сервер публикует снимок, прочитанный один раз, — правка
+  черновика посреди публикации проверенное не подменит.
+- **Целостность держит база.** Хэш версии уникален, указатель — одна строка на
+  аудиторию, операции берут строки в одном порядке (`team`, потом `all`); замок
+  Redis упорядочивает публикации между репликами, но без него версия всё равно одна.
+- **Выкат из кода** (`deploy.yml`, `docs/09` §10) заводит версию `repo` и ставит её
+  в игру только там, где текущая версия тоже из кода или её нет; панельную версию
+  не затирает.
 
 ## 5. Топология развёртывания
 
