@@ -90,6 +90,9 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod --filter backend-api...
 
 COPY --from=build /app/backend/api/dist backend/api/dist
+# Шрифт игры для картинок бота (Russo One, OFL): `src/common/card/svg.ts` ищет
+# его в `backend/api/assets/fonts` — на три уровня выше собранного `dist`.
+COPY backend/api/assets backend/api/assets
 COPY --from=build /app/packages/fx/dist packages/fx/dist
 COPY --from=build /app/packages/ledger/dist packages/ledger/dist
 COPY --from=build /app/packages/proxy-kit/dist packages/proxy-kit/dist
