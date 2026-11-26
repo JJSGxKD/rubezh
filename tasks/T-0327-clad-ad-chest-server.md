@@ -30,6 +30,7 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/src/modules/wipe/wipe-runner.ts
   - backend/api/test/run-verdict.test.ts
+  - backend/api/test/run-modifiers.test.ts
   - backend/api/test/ads.test.ts
   - backend/api/test/ads-catalog.test.ts
   - backend/api/test/wipe-plan.test.ts

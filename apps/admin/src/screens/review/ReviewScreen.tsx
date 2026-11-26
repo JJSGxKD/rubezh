@@ -8,7 +8,7 @@ import { BoardMarkBadge } from "./review-parts";
 import { navigate, useHashRoute } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 import { RunReport } from "./RunReport";
-import { reviewView } from "./run-report-view";
+import { replayBadge, replayTickText, reviewView } from "./run-report-view";
 
 /**
  * Раздел «Разбор забегов»: адрес `#/review` — очередь, `#/review/<забег>` —
@@ -62,6 +62,7 @@ function ReviewQueue() {
           { title: "Игрок", render: (run) => <PlayerCell run={run} more={(perPlayer.get(run.accountId) ?? 1) - 1} /> },
           { title: "Вердикт", render: (run) => <Badge tone={run.verdict === "rejected" ? "danger" : "warning"}>{run.verdict === "rejected" ? "отклонён" : "подозрительный"}</Badge> },
           { title: "Причины", help: HELP.review.reasons, render: (run) => run.verdictReasons.map(reasonTitle).join("; ") || "—" },
+          { title: "Повтор", render: (run) => <ReplayCell run={run} /> },
           { title: "Сложность", render: (run) => difficultyTitle(run.difficulty) },
           { title: "Время", render: (run) => (run.survivalSec === null ? "—" : formatDuration(run.survivalSec)), align: "right" },
           { title: "Уровень", render: (run) => run.level ?? "—", align: "right" },
@@ -79,6 +80,18 @@ function PlayerCell({ run, more }: { run: ReviewRow; more: number }) {
       <span>{run.displayName ?? <code className="text-xs text-text-muted">{run.accountId.slice(0, 8)}</code>}</span>
       {more > 0 ? <span className="text-xs text-warning">ещё {more} в очереди</span> : null}
       <BoardMarkBadge run={run} />
+    </span>
+  );
+}
+
+/** Исход перепроверки повтором и тик расхождения: у забега, которому повтор не назначали, прочерк. */
+function ReplayCell({ run }: { run: ReviewRow }) {
+  if (run.replay === undefined) return <span className="text-text-muted">—</span>;
+  const badge = replayBadge(run.replay.verdict);
+  return (
+    <span className="flex flex-col items-start gap-0.5">
+      <Badge tone={badge.tone}>{badge.text}</Badge>
+      {run.replay.divergedTick === null ? null : <span className="text-xs text-text-muted">{replayTickText(run.replay.divergedTick)}</span>}
     </span>
   );
 }
