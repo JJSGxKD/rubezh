@@ -14,6 +14,7 @@ import { PrismaRolesRepository } from "../src/modules/roles/roles.repository.js"
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { panelSettings } from "./helpers/settings.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Кабинет партнёра, ссылки, промокоды и воронка, на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -37,7 +38,7 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра: ссыл�
   let cabinet: PartnerCabinet;
   const staff: string[] = [];
 
-  const freshTelegramId = () => String(Math.floor(Math.random() * 1e15) + 3e15);
+  const freshTelegramId = () => uniquePlatformUserId();
   const uniqueWord = () => `K${randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`;
 
   async function player(): Promise<AccountRef> {

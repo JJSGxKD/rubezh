@@ -4,6 +4,7 @@ import { cleanAll } from "../src/cli/display-names-clean.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Ник при входе на живом Postgres (tasks/T-0150, docs/17-testing-strategy.md
@@ -22,7 +23,7 @@ describe.skipIf(DATABASE_URL === "")("ник при входе на живом P
   let accounts: PrismaAccountRepository;
 
   function newUserId(): string {
-    return String(500_000_000 + Math.floor(Math.random() * 400_000_000));
+    return uniquePlatformUserId();
   }
 
   function login(platformUserId: string, displayName: string, username: string | null = null, nowMs = Date.now()) {
@@ -191,7 +192,7 @@ describe.skipIf(DATABASE_URL === "")("команда names:clean на живом
       data: {
         accountId,
         platform: "telegram",
-        platformUserId: String(900_000_000 + Math.floor(Math.random() * 90_000_000)),
+        platformUserId: uniquePlatformUserId(),
         displayName,
         username: patch.username ?? null,
         platformName: patch.platformName ?? null,

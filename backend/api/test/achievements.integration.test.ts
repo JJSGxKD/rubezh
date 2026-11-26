@@ -36,6 +36,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Достижения с престижем на живых Postgres и Redis (tasks/T-0106,
@@ -90,7 +91,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(980_000_000 + Math.floor(Math.random() * 15_000_000)), displayName: "Достижения", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Достижения", username: null },
       Date.now(),
     );
     return created.accountId;

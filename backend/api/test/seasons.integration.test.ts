@@ -32,6 +32,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { panelSettings } from "./helpers/settings.js";
 import { redisDatabase } from "./helpers/redis-database.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Недельный сезон на настоящих Postgres и Redis (docs/17-testing-strategy.md
@@ -149,7 +150,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
 
   async function account(name = "Игрок"): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(600_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: name, username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null },
       Date.now(),
     );
     return created.accountId;

@@ -28,7 +28,7 @@ effort: high
 release: patch
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0441. Рисунки ступеней 3–5 для всех обычных врагов

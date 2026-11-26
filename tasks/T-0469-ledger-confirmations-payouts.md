@@ -39,7 +39,7 @@ batch: 5
 
 # T-0469. Подтверждение отчёта участниками, выплаты и сообщения в боте
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0469.json)](README.md#значки-статуса) [![T-0468](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0468.json&label=T-0468)](T-0468-ledger-periods-close.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0469.json)](README.md#значки-статуса) [![T-0468](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0468.json&label=T-0468)](archive/T-0468-ledger-periods-close.md)
 
 ## Зачем
 

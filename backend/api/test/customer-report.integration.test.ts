@@ -7,6 +7,7 @@ import { PrismaCustomerReportRepository } from "../src/modules/tasks/customer-re
 import { NO_ACHIEVEMENT_FIELDS, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Отчёт заказчику на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -58,7 +59,7 @@ describe.skipIf(DATABASE_URL === "")("отчёт заказчику на жив�
   }
 
   async function player(): Promise<string> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(950_000_000 + Math.floor(Math.random() * 40_000_000)), displayName: "Подписчик", username: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Подписчик", username: null }, Date.now());
     playerIds.push(created.accountId);
     return created.accountId;
   }
