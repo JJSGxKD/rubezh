@@ -7,8 +7,10 @@ import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
 import {
+  createMovementTally,
   POWER_PROFILES,
   simulateBalanceRun,
+  stillShareOf,
   summarizeRuns,
   type BalanceRunResult,
   type PowerProfile,
@@ -32,9 +34,9 @@ const STARTING_WEAPONS = WEAPONS.filter((weapon) => unlocksAt(ACCOUNT_UNLOCKS, 1
 
 const strongCache = new Map<string, BalanceRunResult[]>();
 
-/** Прогоны сильного бота: профиль и стойка; считаются один раз на файл. Без `content` — нынешний контент, с Карачуном. */
-function strongRuns(profile: PowerProfile, stance: StrongStance, content?: ContentSnapshot): BalanceRunResult[] {
-  const key = `${profile.id}:${stance}${content === undefined ? "" : ":custom"}`;
+/** Прогоны сильного бота: профиль и стойка; считаются один раз на файл. Контент нынешний, с Карачуном (Р223). */
+function strongRuns(profile: PowerProfile, stance: StrongStance): BalanceRunResult[] {
+  const key = `${profile.id}:${stance}`;
   const known = strongCache.get(key);
   if (known !== undefined) return known;
 
@@ -49,7 +51,6 @@ function strongRuns(profile: PowerProfile, stance: StrongStance, content?: Conte
           startingWeaponId,
           maxSec: 1800,
           loadout: profile.loadout,
-          ...(content === undefined ? {} : { content }),
         }),
       );
     }
@@ -58,7 +59,12 @@ function strongRuns(profile: PowerProfile, stance: StrongStance, content?: Conte
   return runs;
 }
 
-/** Прогоны «стоит» с профилем «ветеран»: стартовое оружие — «Очаг» из записи; контент нынешний, до T-0388 или без Карачуна. */
+const standCache = new Map<string, BalanceRunResult[]>();
+
+/**
+ * Прогоны «стоит» с профилем «ветеран»: стартовое оружие — «Очаг» из записи; контент нынешний, до T-0388 или без Карачуна.
+ * Кешируются по виду контента: прогоны нужны и коридору медианы, и мере движения Карачуна.
+ */
 function veteranStandRuns(content?: ContentSnapshot): BalanceRunResult[] {
   const runs: BalanceRunResult[] = [];
   for (let seed = 1; seed <= STRONG_BOT_TARGETS.stand.seeds; seed++) {
@@ -77,24 +83,33 @@ function veteranStandRuns(content?: ContentSnapshot): BalanceRunResult[] {
   return runs;
 }
 
+/** Прогоны «стоит» нынешнего контента и без Карачуна — по одному разу на файл. */
+function cachedStandRuns(variant: "current" | "withoutStalker"): BalanceRunResult[] {
+  const known = standCache.get(variant);
+  if (known !== undefined) return known;
+  const runs = variant === "current" ? veteranStandRuns() : veteranStandRuns(withoutStalker());
+  standCache.set(variant, runs);
+  return runs;
+}
+
 const strongMedian = (profile: PowerProfile, stance: StrongStance): number => summarizeRuns(strongRuns(profile, stance)).medianSurvivalSec;
 
 // Лесенка Р183 по сильному боту (Р197, T-0391): подстройка под силу калибруется им, а не уклоняющимся.
 // Медианы «бегает» считаются один раз на файл и переиспользуются свойствами ниже.
 describe("сильный бот: лесенка профилей (Р183, Р194, Р197)", () => {
-  it("«бегает»: новичок живёт около 7 минут", { timeout: 600_000 }, () => {
+  it("«бегает»: новичок живёт около 8,5 минут (Карачуна у него нет)", { timeout: 600_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.kite.novice;
     expect(strongMedian(POWER_PROFILES.novice, "kite")).toBeGreaterThanOrEqual(min);
     expect(strongMedian(POWER_PROFILES.novice, "kite")).toBeLessThanOrEqual(max);
   });
 
-  it("«бегает»: средний игрок живёт около 10 минут", { timeout: 600_000 }, () => {
+  it("«бегает»: средний игрок живёт около 10 минут с Карачуном (Р223)", { timeout: 600_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.kite.average;
     expect(strongMedian(POWER_PROFILES.average, "kite")).toBeGreaterThanOrEqual(min);
     expect(strongMedian(POWER_PROFILES.average, "kite")).toBeLessThanOrEqual(max);
   });
 
-  it("«бегает»: полный арсенал — в коридоре лесенки", { timeout: 600_000 }, () => {
+  it("«бегает»: полный арсенал — в коридоре лесенки с Карачуном (Р223)", { timeout: 600_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.kite.full;
     expect(strongMedian(POWER_PROFILES.full, "kite")).toBeGreaterThanOrEqual(min);
     expect(strongMedian(POWER_PROFILES.full, "kite")).toBeLessThanOrEqual(max);
@@ -108,18 +123,14 @@ describe("сильный бот: лесенка профилей (Р183, Р194, 
     expect(average).toBeLessThan(full);
   });
 
-  it("новичок к среднему — в коридоре отношений (цель 0,7 = 7 / 10 минут)", { timeout: 600_000 }, () => {
+  it("новичок к среднему — в коридоре отношений (с Карачуном 509 : 612 = 0,83, Р223)", { timeout: 600_000 }, () => {
     const { min, max } = PRESSURE_TARGETS.noviceToAverage;
-    // Без Карачуна (Р205, T-0424): отношение калибрует подстройку под силу, а новичка ниже 4-го уровня
-    // Карачун не касается, и с ним отношение съезжало бы от неравенства условий, а не от подстройки:
-    // 509 против 612 с Карачуном и 648 без него (docs/32-balance.md §2.11).
-    const average = summarizeRuns(strongRuns(POWER_PROFILES.average, "kite", withoutStalker())).medianSurvivalSec;
-    const ratio = strongMedian(POWER_PROFILES.novice, "kite") / average;
+    const ratio = strongMedian(POWER_PROFILES.novice, "kite") / strongMedian(POWER_PROFILES.average, "kite");
     expect(ratio).toBeGreaterThanOrEqual(min);
     expect(ratio).toBeLessThanOrEqual(max);
   });
 
-  it("полный арсенал к среднему — в коридоре отношений (цель 1,4 = 14 / 10 минут)", { timeout: 600_000 }, () => {
+  it("полный арсенал к среднему — в коридоре отношений (с Карачуном 936 : 612 = 1,53, Р223)", { timeout: 600_000 }, () => {
     const { min, max } = PRESSURE_TARGETS.fullToAverage;
     const ratio = strongMedian(POWER_PROFILES.full, "kite") / strongMedian(POWER_PROFILES.average, "kite");
     expect(ratio).toBeGreaterThanOrEqual(min);
@@ -135,7 +146,7 @@ describe("сильный бот: стойка по забегу владельц
 
   it("«стоит» + «ветеран» на нынешних числах с осадой падает к 6–10-й минуте (360–600 с, Р197, T-0392)", { timeout: 900_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.stand.veteran;
-    const median = summarizeRuns(veteranStandRuns()).medianSurvivalSec;
+    const median = summarizeRuns(cachedStandRuns("current")).medianSurvivalSec;
     expect(median).toBeGreaterThanOrEqual(min);
     expect(median).toBeLessThanOrEqual(max);
   });
@@ -232,16 +243,41 @@ function kiteWithAndWithoutStalker(profile: PowerProfile): { with: BalanceRunRes
   return { with: withStalker, without };
 }
 
+/** Среднее поля по прогонам; пустой набор — 0. */
+function meanOf(runs: readonly BalanceRunResult[], pick: (run: BalanceRunResult) => number): number {
+  return runs.length === 0 ? 0 : runs.reduce((sum, run) => sum + pick(run), 0) / runs.length;
+}
+
+/** Доля времени на месте по всем прогонам разом: тики окна меры складываются, длинный забег весит больше короткого. */
+function pooledStillShare(runs: readonly BalanceRunResult[]): number {
+  const tally = createMovementTally();
+  for (const run of runs) {
+    tally.still += run.movement?.still ?? 0;
+    tally.total += run.movement?.total ?? 0;
+  }
+  return stillShareOf(tally);
+}
+
 // Карачун (Р205, T-0424) давит на стоящего вторым способом после осады и не должен наказывать бегущего.
-describe("сильный бот: Карачун (Р205, T-0424)", () => {
-  // Цель Р205 не достигнута: стоящий бот уходит от Карачуна, выходит из круга осады и живёт не короче, а
-  // любое усиление, которое сдвигает его медиану, валит и бегающих (скорость 165 и выше: бегающие −22…−47%).
-  // Таблица замеров — docs/32-balance.md §2.11, вопрос — в PR T-0424. `it.fails` держит цель в гейте: когда
-  // условие начнёт выполняться, тест покраснеет и подскажет заменить его обычным.
-  it.fails("«стоит» + «ветеран»: с Карачуном медиана короче хотя бы на standDropMin", { timeout: 900_000 }, () => {
-    const withStalker = veteranStandRuns();
-    const without = veteranStandRuns(withoutStalker());
-    expect(drop(withStalker, without), "доля, на которую медиана с Карачуном короче").toBeGreaterThanOrEqual(STRONG_BOT_TARGETS.stalker.standDropMin);
+// Стоящего он не убивает раньше, а сдвигает с места (Р223): мера — доля времени на месте и число осад.
+describe("сильный бот: Карачун (Р205, Р223)", () => {
+  it("«стоит» + «ветеран»: доля времени на месте с Карачуном ниже хотя бы на standStillDropMin", { timeout: 900_000 }, () => {
+    const withShare = pooledStillShare(cachedStandRuns("current"));
+    const withoutShare = pooledStillShare(cachedStandRuns("withoutStalker"));
+    expect(withoutShare, "без Карачуна стоящий бот стоит большую часть забега").toBeGreaterThan(0.5);
+    expect(
+      1 - withShare / withoutShare,
+      `доля на месте: ${withShare.toFixed(2)} с Карачуном против ${withoutShare.toFixed(2)} без него`,
+    ).toBeGreaterThanOrEqual(STRONG_BOT_TARGETS.stalker.standStillDropMin);
+  });
+
+  it("«стоит» + «ветеран»: осад с Карачуном не больше standSiegesMaxRatio от осад без него", { timeout: 900_000 }, () => {
+    const withSieges = meanOf(cachedStandRuns("current"), (run) => run.sieges ?? 0);
+    const withoutSieges = meanOf(cachedStandRuns("withoutStalker"), (run) => run.sieges ?? 0);
+    expect(withoutSieges, "без Карачуна осады у стоящего случаются").toBeGreaterThan(0);
+    expect(withSieges / withoutSieges, `осад за забег: ${withSieges.toFixed(2)} с Карачуном против ${withoutSieges.toFixed(2)} без него`).toBeLessThanOrEqual(
+      STRONG_BOT_TARGETS.stalker.standSiegesMaxRatio,
+    );
   });
 
   for (const profile of [POWER_PROFILES.novice, POWER_PROFILES.average, POWER_PROFILES.full, POWER_PROFILES.veteran]) {
@@ -252,7 +288,7 @@ describe("сильный бот: Карачун (Р205, T-0424)", () => {
   }
 });
 
-describe("сильный бот: сборка набора около 15-й минуты (Р127, Р194)", () => {
+describe("сильный бот: сборка набора около 13–15-й минуты, с Карачуном (Р127, Р194, Р223)", () => {
   it("бессмертный «бегает» со средним профилем собирает набор в коридоре", { timeout: 900_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.build.average;
     const runs: BalanceRunResult[] = [];
@@ -266,9 +302,6 @@ describe("сильный бот: сборка набора около 15-й ми
           loadout: POWER_PROFILES.average.loadout,
           godMode: true,
           stopOnBuild: true,
-          // Без Карачуна (Р205, T-0424): набор калибрует опыт и сундуки, а бессмертный бот, убегая от Карачуна,
-          // собирает их хуже — с ним набор собирают 40% забегов вместо 60% (docs/32-balance.md §2.11).
-          content: withoutStalker(),
           maxSec: Math.ceil(max * STRONG_BOT_TARGETS.build.horizon),
         }),
       );

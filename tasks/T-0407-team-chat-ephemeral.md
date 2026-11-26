@@ -3,8 +3,8 @@ id: T-0407
 title: Эфемерные ответы в чате команды — /help, меню выгрузки и отказы видит только спросивший
 epic: E5
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0393, T-0394]
@@ -16,6 +16,9 @@ zones:
   - backend/api/test/export-bot.test.ts
 shared:
   - backend/api/src/platforms/telegram/telegram-bot-api.ts
+  - backend/api/src/platforms/telegram/telegram-api-call.ts
+  - backend/api/src/platforms/telegram/telegram-update-schema.ts
+  - backend/api/test/player-address.test.ts
   - backend/api/src/platforms/telegram/bot-router.ts
   - backend/api/src/platforms/telegram/bot-commands.ts
   - backend/api/src/platforms/telegram/bot.module.ts

@@ -3,8 +3,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { it } from "vitest";
 import { contentBeforeT0388 } from "../../packages/core-game/test/helpers/content-before-t0388";
+import { withoutStalker } from "../../packages/core-game/test/helpers/without-stalker";
 import { BALANCE_TARGETS, BUILD_COMPLETE_TARGETS, buildCompleteCorridorSec, MODIFIER_TARGETS, PRESSURE_TARGETS, STRONG_BOT_TARGETS } from "../../packages/core-game/src/content/balance-targets";
 import { PRESSURE } from "../../packages/core-game/src/content/pressure";
+import type { ContentSnapshot } from "../../packages/core-game/src/content/snapshot";
 import { createRunWorld } from "../../packages/core-game/src/game/run-world";
 import { buildScoreOf } from "../../packages/core-game/src/game/sim/player-power";
 import { DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
@@ -15,9 +17,12 @@ import { ACCOUNT_UNLOCKS } from "../../packages/core-game/src/content/unlocks";
 import { BASE_WEAPONS } from "../../packages/core-game/src/content/weapons";
 import { unlocksAt } from "../../packages/core-game/src/game/progression/unlocks";
 import {
+  createMovementTally,
+  MOVEMENT_FROM_SEC,
   POWER_PROFILES,
   quantile,
   simulateBalanceRun,
+  stillShareOf,
   summarizeRuns,
   withDevice,
   type BalanceRunResult,
@@ -650,6 +655,61 @@ function strongBotLines(): string[] {
       );
     }
   }
+
+  // Карачун и стоящий (Р223): мера движения — доля времени на месте и число осад, с ним и без него на тех же seed.
+  const standRuns = (content?: ContentSnapshot): BalanceRunResult[] => {
+    const runs: BalanceRunResult[] = [];
+    for (let seed = 1; seed <= targets.stand.seeds; seed++) {
+      runs.push(
+        simulateBalanceRun({
+          seed,
+          skill: "strong",
+          stance: "stand",
+          startingWeaponId: POWER_PROFILES.veteran.startingWeaponId,
+          difficultyId: BASE_DIFFICULTY_ID,
+          maxSec: POWER_MAX_SEC * 2,
+          loadout: POWER_PROFILES.veteran.loadout,
+          ...(content === undefined ? {} : { content }),
+        }),
+      );
+    }
+    return runs;
+  };
+  const stillOf = (runs: readonly BalanceRunResult[]): number => {
+    const tally = createMovementTally();
+    for (const run of runs) {
+      tally.still += run.movement?.still ?? 0;
+      tally.total += run.movement?.total ?? 0;
+    }
+    return stillShareOf(tally);
+  };
+  const siegesOf = (runs: readonly BalanceRunResult[]): number => runs.reduce((sum, run) => sum + (run.sieges ?? 0), 0) / Math.max(1, runs.length);
+  const standWith = standRuns();
+  const standWithout = standRuns(withoutStalker());
+  const stillWith = stillOf(standWith);
+  const stillWithout = stillOf(standWithout);
+  const siegesWith = siegesOf(standWith);
+  const siegesWithout = siegesOf(standWithout);
+  const stillDrop = stillWithout === 0 ? 0 : 1 - stillWith / stillWithout;
+  const siegesRatio = siegesWithout === 0 ? 0 : siegesWith / siegesWithout;
+  lines.push(
+    "",
+    "### Карачун: стоящий ветеран (Р205, Р223)",
+    "",
+    `«Стоит» + «ветеран», ${targets.stand.seeds} seed, те же seed с Карачуном и без него. Доля времени на месте — скорость ниже порога движения, ` +
+      `тики с ${MOVEMENT_FROM_SEC}-й секунды (отметки появления Карачуна), по всем забегам разом.`,
+    "",
+    "| | медиана, с | доля на месте | осад за забег | появлений Карачуна | касаний |",
+    "|---|---|---|---|---|---|",
+    `| без Карачуна | ${fixed(summarizeRuns(standWithout).medianSurvivalSec)} | ${stillWithout.toFixed(2)} | ${siegesWithout.toFixed(2)} | — | — |`,
+    `| с Карачуном | ${fixed(summarizeRuns(standWith).medianSurvivalSec)} | ${stillWith.toFixed(2)} | ${siegesWith.toFixed(2)} | ` +
+      `${(standWith.reduce((sum, run) => sum + (run.stalker?.appearances ?? 0), 0) / standWith.length).toFixed(1)} | ` +
+      `${(standWith.reduce((sum, run) => sum + (run.stalker?.hits ?? 0), 0) / standWith.length).toFixed(1)} |`,
+  );
+  verdicts.push(
+    verdict(`Карачун: доля на месте у стоящего ниже не меньше чем на ${percent(targets.stalker.standStillDropMin)}`, stillDrop >= targets.stalker.standStillDropMin, percent(stillDrop)),
+    verdict(`Карачун: осад у стоящего не больше ${targets.stalker.standSiegesMaxRatio} от осад без него`, siegesRatio <= targets.stalker.standSiegesMaxRatio, siegesRatio.toFixed(2)),
+  );
 
   // Сборка: бессмертный «бегает» со средним профилем, оружие и потолок — как у прочих замеров сборки.
   const build = targets.build.average;

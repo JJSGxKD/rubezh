@@ -22,7 +22,10 @@ export interface ContentVersionSummary {
   source: ContentSource;
   createdBy: string | null;
   createdAt: Date;
+  /** впервые вышла в игру — у команды или у всех; `null` — не публиковалась */
   publishedAt: Date | null;
+  /** впервые стала текущей у всех; `null` — у всех не бывала (T-0306) */
+  releasedAllAt: Date | null;
 }
 
 export interface ContentVersionRecord extends ContentVersionSummary {
@@ -127,9 +130,10 @@ interface VersionRow {
   createdBy: string | null;
   createdAt: Date;
   publishedAt: Date | null;
+  releasedAllAt: Date | null;
 }
 
-const VERSION_SUMMARY = { versionNo: true, contentHash: true, schemaVersion: true, source: true, createdBy: true, createdAt: true, publishedAt: true } as const;
+const VERSION_SUMMARY = { versionNo: true, contentHash: true, schemaVersion: true, source: true, createdBy: true, createdAt: true, publishedAt: true, releasedAllAt: true } as const;
 const DRAFT_SUMMARY = { draftId: true, baseVersionNo: true, title: true, author: true, updatedAt: true, archivedAt: true } as const;
 
 function sourceOf(value: string): ContentSource {

@@ -157,7 +157,7 @@ Zod-схемы `payload` — в словаре сервера
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_scored`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened`, `ring_ended`, `stalker_ended`, `tutorial_step`, `tutorial_completed`, `secret_found`, `secret_used`, `evolution_unlocked`, `card_rerolled`, `card_reroll_ad_offered`, `card_skipped`, `card_banished` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_scored`, `run_replayed`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened`, `ring_ended`, `stalker_ended`, `tutorial_step`, `tutorial_completed`, `secret_found`, `secret_used`, `evolution_unlocked`, `card_rerolled`, `card_reroll_ad_offered`, `card_skipped`, `card_banished` |
 | Интерфейс | `screen_viewed`, `ui_clicked`, `settings_changed`; `home_slide_viewed`, `home_slide_clicked` (карусель главной, WP42); `home_widget_clicked` (виджеты главной, WP42); `feed_event_viewed` (лента живых событий под «Играть», Р114) |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded`; `showcase_bought`, `shop_banner_clicked` (магазин, WP10); `donation_link_clicked` (донаты проекту, Р109) |
 | Реклама | `ad_shown`, `ad_failed`, `ad_clicked`, `ad_reward_claimed` (WP12); `ad_tested` (проверка рекламы командой, T-0333); выдача показа — строка `ad_session`, а не событие |
@@ -166,7 +166,7 @@ Zod-схемы `payload` — в словаре сервера
 | Шеринг | `share_offered`, `share_completed`, `shared_link_opened` |
 | Сообщения от бота | `bot_access_offered`, `bot_access_result` |
 | Прогрессия | `level_up`, `item_obtained`, `character_unlocked` |
-| Удержание | `compensation_claimed` (компенсация тестеру после вайпа, Р87); `daily_reward_claimed` (награда дня, WP13); `wheel_spun` (колесо, WP13); `task_completed`, `achievement_unlocked`, `task_link_opened` (задания и достижения, WP13, Р52); `task_points_claimed` (награда за ступень очков заданий, T-0105); `achievement_favorites_set` (любимые достижения в профиле, T-0107); `codex_viewed` (вкладка «Враги» гайдбука с кодексом, T-0127); `emblem_shown_changed` (знак у имени, T-0236); `bot_mention_started`, `bot_mention_checked` (юзернейм бота в имени и в bio, Р110) (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
+| Удержание | `compensation_claimed` (компенсация тестеру после вайпа, Р87); `daily_reward_claimed` (награда дня, WP13); `wheel_spun` (колесо, WP13); `task_completed`, `achievement_unlocked`, `task_link_opened` (задания и достижения, WP13, Р52); `task_points_claimed` (награда за ступень очков заданий, T-0105); `achievement_favorites_set` (любимые достижения в профиле, T-0107); `codex_viewed` (вкладка «Враги» гайдбука с кодексом, T-0127); `emblem_shown_changed` (знак у имени, T-0236); `appearance_changed` (облик героя и кружок аватара, T-0238); `bot_mention_started`, `bot_mention_checked` (юзернейм бота в имени и в bio, Р110) (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
 | Техника | `client_error`, `connection_lost`, `connection_restored`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
 | Обратная связь | `feedback_sent` — отзыв с формы обратной связи (`29-admin-panel.md` §6) |
 | Уведомления | `notification_opened` — игрок перешёл из ленты туда, куда звало уведомление (`35-stage4-plan.md` WP28) |
@@ -231,6 +231,7 @@ Zod-схемы `payload` — в словаре сервера
 | `achievement_favorites_set` | Пользуются ли любимыми достижениями (`39-retention-mechanics.md` К1, T-0107): игрок выбирает до трёх достижений для профиля. Доля игроков с непустым списком и распределение `count` показывают, нужен ли слот в профиле вообще и хватает ли трёх. Сохранённый список — таблица избранного модуля достижений; событие шлёт клиент, когда сервер принял список (в том числе пустой — «убрал все») | `count` — сколько любимых стало после сохранения, 0…3 |
 | `codex_viewed` | Открывают ли кодекс врагов и ради чего (`39-retention-mechanics.md` К2, T-0127): игрок заходит на вкладку «Враги» гайдбука, где закрытые записи — силуэты, а сверху полоса «Открыто N из M». Доля игроков, открывших вкладку, и распределение `opened` показывают, работает ли коллекция как цель; `claimable: true` — награда за ступень или за полный кодекс ждёт забора. Сколько записей открыто и кто закрыл кодекс — из таблицы `codex_entry` и `achievement_unlocked`, отдельного события на открытие записи нет. Событие шлёт клиент, когда сервер ответил: гость и ошибка сети его не дают | `opened` — открыто записей, `total` — всего врагов в кодексе, `claimable` — есть ли готовая к забору награда кодекса |
 | `emblem_shown_changed` | Пользуются ли выбором знака (`35-stage4-plan.md` Р149, T-0236): игрок меняет знак у имени или возвращает «по умолчанию». Доля сменивших и то, какие группы выбирают (статус, сезон, заслуга), показывают, нужен ли выбор вообще и какие знаки носят охотнее. Выбранный знак — таблица знаков модуля достижений; событие шлёт клиент, когда сервер принял выбор; выбор уже показанного знака события не шлёт | `emblem` — id выбранного знака или `auto` («по умолчанию»); `category` — группа знака, который теперь у имени (`status`, `season`, `merit`); у `auto` без знака её нет |
+| `appearance_changed` | Пользуются ли выбором облика (`35-stage4-plan.md` Р150, T-0238): игрок надевает облик или переключает кружок аватара между головой облика и фото из Telegram. Доля сменивших облик, популярность обликов и доля игроков с фото в кружке показывают, ради чего заходят на экран «Облик» и нужна ли голова в аватаре по умолчанию. Владение обликами считает сервер (модуль обликов), событие шлёт клиент, когда сервер принял выбор; повтор уже надетого и уже выбранного события не шлёт | `appearance` — id облика, который действует после выбора; `avatarPhoto` — в кружке фото из Telegram (`true`) или голова облика (`false`) |
 | `home_widget_clicked` | Какой крючок виджетов главной срабатывает (`35-stage4-plan.md` WP42, часть 3, Р76): готовое к забору во всю ширину, отсчёт «завтра», джекпот колеса, рекорд. Порядок и размер виджетов — правилом (`screens/home-widget-rules.ts`), и событие показывает, верно ли оно: виджет, по которому не идут ни первым, ни последним, — повод пересмотреть крючок. Что было дальше — события экрана, куда виджет привёл: `daily_reward_claimed`, `wheel_spun`, `task_completed`. Событие шлёт клиент при нажатии | `widget`: `daily`, `wheel`, `tasks`, `record`, `friends`; `state` — что виджет говорил: у награды дня `ready` / `waiting` / `idle`, у колеса `ready` / `ad` / `cooldown` / `waiting` / `idle`, у заданий `ready` / `progress` / `idle`, у рекорда `none` / `record` / `gap` / `best`, у друзей `news` / `idle`; `position` — место в сетке с нуля |
 | `feed_event_viewed` | Какие виды событий ленты на главной игроки успевают увидеть (`35-stage4-plan.md` Р114, T-0176): вид, который не доходит до экрана, не стоит места в ленте. Саму ленту собирает сервер (`GET /api/v1/feed`, T-0174); событие шлёт клиент, когда событие ленты было на виду не меньше секунды, — не чаще раза на событие за запуск приложения и не больше двадцати за запуск. Имени и идентификатора игрока в нём нет | `kind` — вид события ленты: `long_run`, `week_record`, `boss`, `chest`; `position` — место в ленте с нуля |
 | `shop_banner_clicked` | Какой баннер магазина ведёт к покупке (`35-stage4-plan.md` §3.6, WP10): порядок баннеров в полосе — по данным, а не на глаз. Покупка из баннера — те же `purchase_initiated` / `purchase_completed` с тем же `sku`; у Tribute покупка звёзд идёт вне игры, и клик — всё, что видно. Событие шлёт клиент при нажатии | `banner` — что предлагал: `promo` (акция), `vip`, `starter`, `recommended`, `gear`, `tribute`; `place`: `carousel` — полоса наверху, `gems` — плашка на вкладке самоцветов; `position` — место в полосе с нуля |
@@ -595,6 +596,12 @@ Grafana id кнопок не выводятся (высокая кардинал
   победивших: знаменатель — `run_started`, а не число итогов. Серверная
   проверка победы (`rubezh_implausible`) к событию не относится — клиент пишет
   то, что видит. Поля необязательные, версия не меняется;
+- `run_started`, `run_finished`, `run_abandoned` — модификатор забега (T-0122,
+  Р105): `modifier` — `hurry` или `inverse`, у забега без модификатора поля нет.
+  Из него считаются доля забегов с модификатором (знаменатель — `run_started`) и
+  длина забега по модификаторам. Серверная проверка (`modifier_locked`,
+  `modifier_mismatch`) к событию не относится — клиент пишет то, что выбрал. В
+  метки Prometheus модификатор не идёт. Поле необязательное, версия не меняется;
 - `run_scored` — **серверное** событие (T-0293, Р152): сервер посчитал очки
   эффективности записанного рейтингового забега (пролог и обучение очков не
   получают). Поля: `runId`, `points` (целое), `endurance`, `onslaught`, `hunt`,
@@ -615,6 +622,29 @@ Grafana id кнопок не выводятся (высокая кардинал
   **заготовка метрики** (кода нет: Prometheus в бэкенде появится вместе с
   метриками): гистограмма `rating_run_points{band}` — очки забега, метка `band`
   из пяти полос, без `run_id`;
+- `run_replayed` — **серверное** событие (T-0319, WP5): сервер перепроверил
+  забег повтором в `sim-worker` и получил исход. Поля: `runId`, `verdict` —
+  `match` (повтор совпал), `mismatch` (разошёлся; при умолчании ключа
+  `replay.mismatch-verdict` = `observe` это только наблюдение, при `suspicious` и
+  `rejected` забег ещё и уходит из рейтинга в разбор), `content_mismatch` (нет снимка контента записи), `not_replayable`
+  (запись обрезана), `broken` (запись не по схеме или повтор упал), `timeout`
+  (повтор не уложился в минуту или воркер молчал 72 часа) и `no_proof` (запись не
+  пришла за 72 часа); `divergedTick` — тик первого расхождения (у остальных исходов
+  `null`), `durationMs` — сколько считал повтор (у `no_proof` нуль), `clientOs` —
+  `ios`, `android`, `desktop`, `web` или `unknown` по последней сессии игрока: по нему
+  видно, где движок сервера расходится с клиентским (V8 против JavaScriptCore,
+  `35-stage4-plan.md`, Б5). Идентификатора игрока и текста причины воркера в
+  нагрузке нет — причина лежит в строке забега (`run.replay_result`) и видна
+  разбору. Пишется один раз на исход: повторная доставка того же исхода и исход
+  прошлой попытки события не порождают, а «Повторить снова» даёт новое. **Конверт:**
+  как у `run_scored` — `install_id = 'server'`, `session_id` — id забега,
+  `app_version = 'server'`, площадка — игрока. Клиент событие не шлёт;
+  **заготовка метрики** (кода нет: Prometheus в бэкенде появится вместе с
+  метриками): счётчик `replay_outcome_total{verdict,client_os}` — по одному на
+  исход, метки низкой кардинальности (семь исходов на пять площадок), без
+  `run_id` и `account_id`; пока же каждый исход — строка лога
+  `replay_outcome_total` с теми же полями. По доле `mismatch` на `client_os` видно
+  расхождение движков;
 - `run_abandoned` — `interrupted: "update"`: забег прервало обновление игры, и
   при следующем запуске сохранение другой сборки засчитано брошенным
   (`state/run-interrupted.ts`). Время и уровень — из сохранения, `enemiesKilled`
