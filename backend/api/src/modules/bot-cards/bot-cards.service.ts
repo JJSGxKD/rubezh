@@ -16,7 +16,7 @@ import { BotNotifyQueue } from "../notifications-bot/bot-notify-queue.js";
 import { SETTINGS } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import { BotCardKinds, type BotCardKind } from "./bot-card-kinds.js";
-import { CARD_JOBS, acquireLock, encodeState, pacedJobId, pausedKey, releaseLock, sendJobSchema, sendLockKey, stateHash } from "./bot-card-protocol.js";
+import { CARD_JOBS, CardCallTimeout, acquireLock, cardLockKey, encodeState, pacedJobId, pausedKey, releaseLock, sendJobSchema, sendLockKey, stateHash, withCardTimeout } from "./bot-card-protocol.js";
 import { BOT_CARDS_REPOSITORY, type BotCardsRepository } from "./bot-cards.repository.js";
 
 /**
@@ -39,7 +39,11 @@ import { BOT_CARDS_REPOSITORY, type BotCardsRepository } from "./bot-cards.repos
  */
 
 const TIMEOUT_MS = 3_000;
-const SEND_LOCK_TTL_MS = 15_000;
+/** Сборка состояния и площадка ограничены сроком: зависший вызов не держит единственный обработчик очереди. */
+const STATE_TIMEOUT_MS = 8_000;
+const PORT_TIMEOUT_MS = 10_000;
+/** Лок отправки переживает оба срока выше: операция не может идти дольше своего лока. */
+const SEND_LOCK_TTL_MS = 30_000;
 /** Кнопка под карточкой и запасным сообщением: считает приход игрока по параметру запуска вида. */
 const PLAY_BUTTON_TEXT = "▶ Играть";
 /** Сбой Redis повторяется на каждом сообщении — в лог не чаще раза в минуту. */
@@ -83,7 +87,7 @@ export class BotCardsService implements OnModuleInit {
     private readonly kinds: BotCardKinds,
     @Inject(BOT_CARDS_REPOSITORY) private readonly repository: BotCardsRepository,
     @Inject(BotNotifyQueue) private readonly queue: Pick<BotNotifyQueue, "registerPaced" | "addPaced">,
-    @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "get" | "eval">,
+    @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "get" | "eval" | "exists">,
   ) {}
 
   onModuleInit(): void {
@@ -120,12 +124,30 @@ export class BotCardsService implements OnModuleInit {
     if (card === null) return;
     const gapMs = this.panel.get(SETTINGS.botWidgetEditMinMinutes) * 60_000;
     // Время последней правки — в идентификаторе: пока задание ждёт, повторные касания сливаются в него, а касание
-    // во время самой правки (она занимает слот до вызова площадки) получает уже другой идентификатор и не теряется.
+    // во время самой правки получает уже другой идентификатор и не теряется. Пока правка держит карточку, слот
+    // ещё не сдвинут: тогда к идентификатору добавляется время касания, иначе BullMQ счёл бы его дублем активного.
+    const locked = await this.cardLocked(card.id);
+    const jobId = locked
+      ? pacedJobId(CARD_JOBS.edit, card.id, String(card.updatedAt.getTime()), "again", String(at.getTime()))
+      : pacedJobId(CARD_JOBS.edit, card.id, String(card.updatedAt.getTime()));
     await this.queue.addPaced(
       CARD_JOBS.edit,
       { cardId: card.id },
-      { jobId: pacedJobId(CARD_JOBS.edit, card.id, String(card.updatedAt.getTime())), delayMs: Math.max(0, card.updatedAt.getTime() + gapMs - at.getTime()) },
+      { jobId, delayMs: Math.max(0, card.updatedAt.getTime() + gapMs - at.getTime()) },
     );
+  }
+
+  /**
+   * Идёт правка, перенос или финал этой карточки. Не прочитать лок (Redis недоступен) — считаем, что идёт:
+   * лишняя правка безвредна (тот же хэш — площадка не зовётся), потерянная — нет.
+   */
+  private async cardLocked(cardId: string): Promise<boolean> {
+    try {
+      return (await withTimeout(this.redis.exists(cardLockKey(cardId)), TIMEOUT_MS, "лок карточки бота")) === 1;
+    } catch (error: unknown) {
+      this.warnRedis("card_lock_unreadable", error);
+      return true;
+    }
   }
 
   /**
@@ -224,22 +246,33 @@ export class BotCardsService implements OnModuleInit {
     } catch (error: unknown) {
       this.warnRedis("lock_unavailable", error);
     }
+    let timedOut = false;
     try {
       return await this.deliver(account, kind, messenger, silent, at);
+    } catch (error: unknown) {
+      // Вызов не ответил за срок и может ещё доработать: лок не снимаем, он истечёт сам, и вторая отправка
+      // не пойдёт поверх брошенной.
+      timedOut = error instanceof CardCallTimeout;
+      if (timedOut) this.warnRedis("send_lock_kept_after_timeout", error);
+      throw error;
     } finally {
-      if (token !== null) await releaseLock(this.redis, key, token).catch((error: unknown) => this.warnRedis("unlock_failed", error));
+      if (token !== null && !timedOut) await releaseLock(this.redis, key, token).catch((error: unknown) => this.warnRedis("unlock_failed", error));
     }
   }
 
   private async deliver(account: Account, kind: BotCardKind, messenger: Messenger, silent: boolean, at: Date): Promise<CardSendAttempt> {
-    const state = await kind.state(account.accountId, at);
+    const state = await withCardTimeout(kind.state(account.accountId, at), STATE_TIMEOUT_MS, "состояние карточки");
     const json = encodeState(state);
     const playUrl = this.links.launch(account.platform, kind.startRef);
     const button = playUrl === null ? null : { text: PLAY_BUTTON_TEXT, url: playUrl };
 
     const port = await this.portFor(account.platform, kind);
     if (port !== null) {
-      const outcome = await port.send(account.platformUserId, { kind: kind.kind, state: json, caption: kind.caption(state), button, silent, ...(kind.topic === undefined ? {} : { topic: kind.topic }) });
+      const outcome = await withCardTimeout(
+        port.send(account.platformUserId, { kind: kind.kind, state: json, caption: kind.caption(state), button, silent, ...(kind.topic === undefined ? {} : { topic: kind.topic }) }),
+        PORT_TIMEOUT_MS,
+        "отправка карточки у площадки",
+      );
       switch (outcome.status) {
         case "sent":
           await this.recordSent(account, kind, json, outcome.ref, outcome.version, at);
@@ -283,7 +316,7 @@ export class BotCardsService implements OnModuleInit {
   ): Promise<CardSendAttempt> {
     const composed = this.messages.compose(kind.fallback(state), { button, ...(kind.topic === undefined ? {} : { topic: kind.topic }) });
     const message = silent ? { ...composed, silent: true } : composed;
-    const outcome = await messenger.send(account.platformUserId, message);
+    const outcome = await withCardTimeout(messenger.send(account.platformUserId, message), PORT_TIMEOUT_MS, "запасное сообщение карточки");
     if (outcome.status === "retry") return done("failed", outcome.afterSec);
     await this.report(account, kind, message.rich === undefined ? "text" : "rich", eventOutcomeOf(outcome), silent);
     if (outcome.status === "blocked") {

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { BotCardEvents, type BotCardQuery } from "../src/modules/bot-cards/bot-card-events.js";
 import { BotCardKinds, type BotCardKind } from "../src/modules/bot-cards/bot-card-kinds.js";
-import { encodeState, stateHash } from "../src/modules/bot-cards/bot-card-protocol.js";
+import { cardLockKey, encodeState, stateHash } from "../src/modules/bot-cards/bot-card-protocol.js";
 import { BotCardsAnswerer } from "../src/modules/bot-cards/bot-cards-answerer.js";
 import { BotCardsFinalizer } from "../src/modules/bot-cards/bot-cards.finalizer.js";
 import { BotCardsModule } from "../src/modules/bot-cards/bot-cards.module.js";
@@ -99,6 +99,11 @@ class FakeRedis {
   async get(key: string): Promise<string | null> {
     this.check();
     return this.alive(key)?.value ?? null;
+  }
+
+  async exists(key: string): Promise<number> {
+    this.check();
+    return this.alive(key) === undefined ? 0 : 1;
   }
 
   async del(...keys: string[]): Promise<number> {
@@ -929,10 +934,103 @@ describe("правки отправленных карточек", () => {
     s.world.place = 1;
     await s.service.touch(account.accountId, "season", new Date());
     expect(s.queue.of("card-edit")).toHaveLength(1);
-    expect(s.queue.of("card-edit")[0]?.jobId).toBe(`card-edit-${row.id}-${String(T0.getTime() + 11 * MIN)}`);
+    expect(s.queue.of("card-edit")[0]?.jobId).toMatch(new RegExp(`^card-edit-${row.id}-.*-again-`));
     expect(s.queue.of("card-edit")[0]?.delayMs).toBe(10 * MIN);
     release();
     await running;
+  });
+
+  it("касание во время сборки состояния не теряется: пока активное задание держит карточку, ставится отдельное", async () => {
+    const s = setup();
+    const { account, row } = await sent(s);
+    s.world.place = 2;
+    await s.service.touch(account.accountId, "season", T0);
+    vi.setSystemTime(new Date(T0.getTime() + 11 * MIN));
+
+    const state = s.kind.state;
+    let releaseState: () => void = () => undefined;
+    let first = true;
+    s.kind.state = async (accountId, at) => {
+      const value = await state(accountId, at);
+      if (first) {
+        first = false;
+        await new Promise<void>((resolve) => {
+          releaseState = resolve;
+        });
+      }
+      return value;
+    };
+
+    // Состояние собирается, слот ещё не сдвинут: касание видит прежний updatedAt, и его jobId совпал бы с активным.
+    const running = s.queue.run("card-edit");
+    await vi.advanceTimersByTimeAsync(0);
+    s.world.place = 1;
+    await s.service.touch(account.accountId, "season", new Date());
+    expect(s.queue.of("card-edit")).toHaveLength(1);
+    expect(s.queue.of("card-edit")[0]?.jobId).toContain("-again-");
+    releaseState();
+    await running;
+    expect((await s.repository.byId(row.id))?.state).toBe('{"v":1,"place":2,"week":"2026-W46"}');
+
+    // Отдельное задание доживает до своего срока и доносит состояние, собранное после касания.
+    await vi.advanceTimersByTimeAsync(10 * MIN);
+    await s.queue.run("card-edit");
+    expect((await s.repository.byId(row.id))?.state).toBe('{"v":1,"place":1,"week":"2026-W46"}');
+  });
+
+  it("правка не переходит границу периода: состояние нового периода в старую карточку не пишется", async () => {
+    const s = setup();
+    const { account, row } = await sent(s);
+    s.world.period = PERIOD_NEXT;
+    s.world.place = 9;
+    await s.service.touch(account.accountId, "season", T0);
+    await s.queue.run("card-edit");
+    expect(s.port.updates).toEqual([]);
+    expect((await s.repository.byId(row.id))?.state).toBe('{"v":1,"place":3,"week":"2026-W46"}');
+
+    // Финал берёт состояние своего периода, а не нового: в задании и на площадке — прежние место и неделя.
+    s.queue.jobs = [];
+    const summary = await s.finalizer.tick(new Date(T0.getTime() + 12 * MIN));
+    expect(summary).toMatchObject({ status: "done", queued: 1 });
+    const job = s.queue.of("card-final")[0];
+    expect(job?.data).toMatchObject({ cardId: row.id, state: '{"v":1,"place":3,"week":"2026-W46","x":1}' });
+    await s.queue.run("card-final");
+    expect(s.port.updates).toEqual([{ ref: refOf(row), state: '{"v":1,"place":3,"week":"2026-W46","x":1}' }]);
+  });
+
+  it("сборка состояния не ответила за срок — задание бросает, лок карточки держится до истечения срока", async () => {
+    const s = setup();
+    const { account, row } = await sent(s);
+    s.world.place = 2;
+    await s.service.touch(account.accountId, "season", T0);
+    s.kind.state = () => new Promise(() => undefined);
+
+    const running = s.queue.run("card-edit");
+    const failed = expect(running).rejects.toThrow(/нет ответа за 8000 мс/);
+    await vi.advanceTimersByTimeAsync(8_000);
+    await failed;
+    expect(s.redis.has(cardLockKey(row.id))).toBe(true);
+    // Поверх брошенного вызова вторая операция не идёт: лок ещё держит.
+    await expect(s.updater.moved({ cardId: row.id })).rejects.toThrow(/занята/);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(s.redis.has(cardLockKey(row.id))).toBe(false);
+  });
+
+  it("площадка не ответила за срок — задание бросает, лок карточки держится до истечения срока", async () => {
+    const s = setup();
+    const { account, row } = await sent(s);
+    s.world.place = 2;
+    await s.service.touch(account.accountId, "season", T0);
+    s.port.update = () => new Promise(() => undefined);
+
+    const running = s.queue.run("card-edit");
+    const failed = expect(running).rejects.toThrow(/нет ответа за 10000 мс/);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await failed;
+    expect(s.redis.has(cardLockKey(row.id))).toBe(true);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(s.redis.has(cardLockKey(row.id))).toBe(false);
   });
 
   it("card-edit с тем же хэшем — площадка не вызывается", async () => {

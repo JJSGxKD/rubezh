@@ -117,6 +117,26 @@ export const cardLockKey = (cardId: string): string => `bot-cards:card:${cardId}
 /** Кэш состояния для запросов «обновить»: одно состояние на аккаунт и вид. */
 export const stateCacheKey = (accountId: string, kind: string): string => `bot-card:state:${accountId}:${kind}`;
 
+/**
+ * Вызов карточки (сборка состояния, площадка) не ответил за срок. Лок карточки после такого отказа не
+ * снимается: брошенный вызов может ещё доработать, и вторая операция не должна пойти поверх него — лок
+ * истечёт сам (tasks/T-0395, «доработка»).
+ */
+export class CardCallTimeout extends Error {}
+
+/** Как `withTimeout`, но отказ помечен `CardCallTimeout`: по нему вызывающий оставляет лок до истечения срока. */
+export async function withCardTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new CardCallTimeout(`${label}: нет ответа за ${ms} мс`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const LOCK_TIMEOUT_MS = 3_000;
 
 /** Снимает лок только тот, кто его взял: операция, пережившая свой лок, чужой не снимет. */

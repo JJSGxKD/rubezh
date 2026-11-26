@@ -6,7 +6,7 @@ import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repo
 import { MessagingService } from "../messaging/messaging.service.js";
 import { BotNotifyQueue } from "../notifications-bot/bot-notify-queue.js";
 import { BotCardKinds } from "./bot-card-kinds.js";
-import { CARD_FLAGS, CARD_JOBS, acquireLock, cardJobSchema, cardLockKey, encodeState, finalJobSchema, parseState, releaseLock, stateHash } from "./bot-card-protocol.js";
+import { CARD_FLAGS, CARD_JOBS, CardCallTimeout, acquireLock, cardJobSchema, cardLockKey, encodeState, finalJobSchema, parseState, releaseLock, stateHash, withCardTimeout } from "./bot-card-protocol.js";
 import { BOT_CARDS_REPOSITORY, type BotCardRow, type BotCardsRepository } from "./bot-cards.repository.js";
 import { BotCardsService } from "./bot-cards.service.js";
 
@@ -24,7 +24,10 @@ import { BotCardsService } from "./bot-cards.service.js";
  * а тот же финал площадка ответит `unchanged`.
  */
 
-const CARD_LOCK_TTL_MS = 20_000;
+const CARD_LOCK_TTL_MS = 30_000;
+/** Сборка состояния и площадка ограничены сроком: зависший вызов не держит обработчик очереди до конца лока. */
+const STATE_TIMEOUT_MS = 8_000;
+const PORT_TIMEOUT_MS = 10_000;
 
 /** Что вышло из правки: `ok` — площадка приняла, `dead` — карточку больше не править, `failed` — отказ без повтора. */
 type UpdateResult = "ok" | "dead" | "failed";
@@ -60,13 +63,16 @@ export class BotCardsUpdater implements OnModuleInit {
       const kind = this.kinds.get(card.kind);
       const port = this.liveCards.for(card.platform);
       if (kind === undefined || port === null || (await this.service.unavailable(card.platform, kind))) return;
-      const json = encodeState(await kind.state(card.accountId, at));
+      // Границу периода правка не переходит: карточка закрывает свою неделю, и состояние нового периода в неё
+      // не пишем — иначе финал старого периода уйдёт с данными нового (tasks/T-0395, «доработка», шаг 10).
+      if (kind.periodKey(at) !== card.periodKey) return;
+      const json = encodeState(await withCardTimeout(kind.state(card.accountId, at), STATE_TIMEOUT_MS, "состояние карточки"));
       const hash = stateHash(json);
       if (hash === card.stateHash) return;
       // Слот правки занимается до вызова площадки: состояние, изменившееся за время вызова, поставит новое
       // задание (`touch` считает задержку от этого времени), а не потеряется под выполняющимся.
       if (!(await this.repository.touched(card.id, card.state, card.stateHash, at))) return;
-      const result = await this.apply(card, await port.update(refOf(card), json), at);
+      const result = await this.apply(card, await withCardTimeout(port.update(refOf(card), json), PORT_TIMEOUT_MS, "правка карточки у площадки"), at);
       if (result === "ok") await this.repository.touched(card.id, json, hash, at);
       else if (result === "dead") await this.repository.close(card.id, at);
     });
@@ -82,7 +88,7 @@ export class BotCardsUpdater implements OnModuleInit {
       const port = this.liveCards.for(card.platform);
       const last = parseState(card.state);
       if (kind === undefined || port === null || last === null || (await this.service.unavailable(card.platform, kind))) return;
-      await this.apply(card, await port.update(refOf(card), encodeState({ ...last, [CARD_FLAGS.moved]: 1 })), at);
+      await this.apply(card, await withCardTimeout(port.update(refOf(card), encodeState({ ...last, [CARD_FLAGS.moved]: 1 })), PORT_TIMEOUT_MS, "перенос карточки у площадки"), at);
     });
   }
 
@@ -103,7 +109,7 @@ export class BotCardsUpdater implements OnModuleInit {
         return;
       }
       if (await this.service.isPaused(card.platform)) return;
-      await this.apply(card, await port.update(refOf(card), state), at);
+      await this.apply(card, await withCardTimeout(port.update(refOf(card), state), PORT_TIMEOUT_MS, "финал карточки у площадки"), at);
       // Финал одноразовый: принят, карточку больше не править или площадка отказала без повтора — закрываем в любом случае.
       await this.repository.close(card.id, at);
     });
@@ -140,10 +146,17 @@ export class BotCardsUpdater implements OnModuleInit {
     const key = cardLockKey(cardId);
     const token = await acquireLock(this.redis, key, CARD_LOCK_TTL_MS);
     if (token === null) throw new Error(`Карточка ${cardId} занята другой операцией`);
+    let timedOut = false;
     try {
       await run();
+    } catch (error: unknown) {
+      // Вызов не ответил за срок и может ещё доработать: лок не снимаем, он истечёт сам, и вторая операция
+      // не пойдёт поверх брошенной.
+      timedOut = error instanceof CardCallTimeout;
+      if (timedOut) this.logger.warn(JSON.stringify({ module: "bot-cards", event: "card_lock_kept_after_timeout", card: cardId }));
+      throw error;
     } finally {
-      await releaseLock(this.redis, key, token).catch((error: unknown) => this.logger.warn(JSON.stringify({ module: "bot-cards", event: "unlock_failed", reason: error instanceof Error ? error.message : "unknown" })));
+      if (!timedOut) await releaseLock(this.redis, key, token).catch((error: unknown) => this.logger.warn(JSON.stringify({ module: "bot-cards", event: "unlock_failed", reason: error instanceof Error ? error.message : "unknown" })));
     }
   }
 }
