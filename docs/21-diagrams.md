@@ -117,6 +117,7 @@ erDiagram
     ACCOUNT ||--o{ TASK_PARTICIPANT : "переходы и выполнения партнёрских целей"
     MEDIA_IMAGE |o--o{ TASK_DEF : "картинка 1:1 партнёрской цели"
     MEDIA_IMAGE |o--o{ HOME_SLIDE : "картинка 1:1 слайда команды"
+    MEDIA_IMAGE |o--o{ PARTNER_MATERIAL : "картинка баннера для партнёров"
     ACCOUNT ||--o{ TASK_RUN : "забеги, засчитанные заданиям"
     ACCOUNT ||--o| TEST_NOTICE : "принял предупреждение о тесте"
     AD_NETWORK ||--o{ AD_BLOCK : "блоки мест в кабинете сети"
@@ -168,6 +169,7 @@ erDiagram
     ACCOUNT ||--o| PARTNER_BINDING : "приведён партнёром"
     PROMO_CAMPAIGN ||--o{ PARTNER_BINDING : "чем привязан"
     PARTNER |o--o{ LINK : "ссылки партнёра: владелец задаётся при создании"
+    PARTNER |o--o{ PARTNER_MATERIAL : "материалы команды для одного партнёра; пусто — для всех"
     LINK |o--o{ PARTNER_BINDING : "по какой ссылке; ссылка удалена — код пуст"
     ACCOUNT ||--o{ ACCOUNT_RESTRICTION : "ограничения игрока"
     ACCOUNT |o--o{ ACCOUNT_RESTRICTION : "наложил и снял — команда"
@@ -1015,6 +1017,20 @@ erDiagram
         datetime postback_since "nullable: с какого времени по кликам действует адрес; CHECK: задан тогда и только тогда, когда задан адрес"
         string_array postback_events "по умолчанию registration; CHECK: только четыре известных события"
         uuid account_id FK "nullable, UK: игровой аккаунт партнёра (T-0217, Р136); пишется только из карточки, остаётся после закрытия кабинета; аккаунт удалён — пусто"
+    }
+
+    PARTNER_MATERIAL {
+        uuid material_id PK
+        string kind "banner|post|rules; CHECK"
+        string title "до 80 знаков, не пусто"
+        string text "nullable, до 2000: у post и rules обязателен, у banner — подпись; CHECK"
+        string image_id FK "nullable: у banner обязателен, у текста пуст (CHECK); картинку не удалить, пока на неё ссылаются"
+        uuid partner_id FK "nullable: пусто — всем партнёрам, задан — только ему; партнёра с материалами не удалить"
+        int sort "порядок в кабинете, 0–9999: меньше — выше"
+        uuid created_by "без FK: запись переживает аккаунт"
+        datetime created_at
+        datetime updated_at
+        datetime archived_at "nullable: в архиве партнёру не виден, строка не удаляется"
     }
 
     PARTNER_BINDING {
@@ -1892,8 +1908,8 @@ erDiagram
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
   останется тем же. Формат, размер и стороны держат `CHECK` и
   `media/image-rules.ts`; на картинку ссылаются `TASK_DEF.image_id` и
-  `HOME_SLIDE.image_id` (`RESTRICT`: пока задание или слайд её показывает,
-  удалить нельзя). Картинка закрытого профиля (снимок чека `finance_receipt`,
+  `HOME_SLIDE.image_id` и `PARTNER_MATERIAL.image_id` (`RESTRICT`: пока
+  задание, слайд или материал её показывает, удалить нельзя). Картинка закрытого профиля (снимок чека `finance_receipt`,
   T-0462) хранит `view_permission`: в панели её показывают только с этим
   правом, игроку по `/api/v1/media` она не отдаётся вовсе.
 - **`HOME_SLIDE` — слайды команды на главной** (`35-stage4-plan.md` WP42,
@@ -2113,6 +2129,15 @@ erDiagram
   аккаунтом (кнопка «Открыть кабинет» выдаёт ему роль `partner`, T-0217), и
   привязать самого себя он не может ни ссылкой, ни кодом; связь остаётся и
   после закрытия кабинета.
+- **`PARTNER_MATERIAL` — материалы для партнёров** (`35-stage4-plan.md` Р136,
+  T-0221): баннеры (`banner`, картинка профиля `partner_material` модуля
+  картинок), тексты постов (`post`) и правила программы (`rules`), которые
+  выкладывает команда. Общий материал — `partner_id` пуст, адресный — задан.
+  Форму держит `CHECK`: баннеру нужна картинка, посту и правилам — непустой
+  текст, и картинки у текста нет. Архивная строка (`archived_at`) партнёру не
+  видна, но остаётся — из архива её возвращают. Кабинет читает общие и свои
+  неархивные по `sort` (индекс `partner_id, archived_at`); вайп игры строки не
+  трогает — это не игровой прогресс.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -2903,6 +2928,7 @@ flowchart LR
         WHEEL["wheel<br/>колесо: сектора от уровня,<br/>бесплатная крутка в сутки, реализовано"]
         TASKS["tasks<br/>задания и достижения: каталог в базе,<br/>прогресс от забегов, реализовано"]
         MEDIA["media<br/>картинки из панели в базе по хэшу:<br/>проверка WebP, вечный кеш, реализовано"]
+        CARDS["cards<br/>картинки бота по публичному адресу:<br/>PNG в Redis по хэшу, вечный кеш, лимит, основа реализована"]
         TESTNOTICE["test-notice<br/>предупреждение об открытом тесте:<br/>принятие на аккаунт, реализовано"]
         WIPE["wipe<br/>компенсация тестеру после вайпа:<br/>выдача по кнопке, один раз, реализовано"]
         PROMOC["promo-codes<br/>промокоды и коды партнёров:<br/>ключ кода, активация, реализовано"]
@@ -3138,6 +3164,8 @@ flowchart LR
     MEDIA -- "media_image" --> PG
     ADMINAPI -. "загрузка картинки и её показ в панели" .-> MEDIA
     TASKS -. "картинка годится заданию: квадрат" .-> MEDIA
+    CADDY -- "/api/v1/cards/хэш.png" --> CARDS
+    CARDS -- "card:png:хэш, 30 дней; лимит по адресу" --> REDIS
     RUNS -. "записанный забег, RunsHooks" .-> TASKS
     TASKS -. "награда ключом задания и срока" .-> WALLET
     BADGES -. "награды к выдаче" .-> TASKS
@@ -4005,12 +4033,13 @@ sequenceDiagram
     B->>S: обновление
     S->>R: SET bot:start:{чат} NX EX 3 — двойное нажатие
     S->>P: рекорд, место, забеги (2 с, иначе карточка новичка)
-    S->>S: язык, имя без эмодзи → ключ SHA-256
+    S->>S: язык, имя без эмодзи → ключ SHA-256 (версия шаблона внутри)
+    Note over S,R: кэш file_id — общий слой картинок бота,<br/>common/card/card-cache.ts, его же берут картинки сообщений
     S->>R: GET bot:card:{ключ}
     alt file_id есть
         S->>TG: sendPhoto(file_id) — без рендера и загрузки
     else нет или Telegram его забыл
-        S->>S: SVG → PNG (одинаковые рендеры склеиваются)
+        S->>S: сцена 1200×675 (мир, облик, знак) + колонка → SVG → PNG шрифтом Russo One (одинаковые рендеры склеиваются)
         S->>TG: sendPhoto(PNG) + кнопка «Играть»
         TG-->>S: file_id крупнейшего размера
         S->>R: SET bot:card:{ключ} file_id EX 30 дней
@@ -6060,6 +6089,40 @@ sequenceDiagram
 - **Выкат из кода** (`deploy.yml`, `docs/09` §10) заводит версию `repo` и ставит её
   в игру только там, где текущая версия тоже из кода или её нет; панельную версию
   не затирает.
+
+### 4.45 Картинка у подготовленного сообщения: публикация по адресу и предпросмотр (этап 4, реализована основа)
+
+Основа картинок бота (Р156, `tasks/T-0252`): сцена `common/card/scene.ts`, кэш `file_id`
+`common/card/card-cache.ts`, хранилище `common/card/card-store.ts` и модуль `cards`.
+«Поделиться» кладёт картинку большим предпросмотром над текстом, потому что фото по
+адресу Telegram берёт только JPEG, а наши картинки — PNG; предпросмотр принимает PNG.
+Сами картинки сообщений (приглашение, итог забега, сезон) рисуют T-0253–T-0257.
+
+```mermaid
+sequenceDiagram
+    participant M as Модуль сообщения<br/>(приглашение, итог забега)
+    participant Sc as heroScene → renderPng<br/>(Russo One, облик игрока)
+    participant P as CardPublisher
+    participant R as Redis
+    participant TG as Telegram
+    participant C as Клиент получателя
+
+    M->>Sc: имя, облик, числа
+    Sc-->>M: PNG 1200×675
+    M->>P: publish(PNG)
+    P->>R: SET card:png:{SHA-256 PNG} EX 30 дней
+    P-->>M: https://{PUBLIC_API_URL}/api/v1/cards/{хэш}.png
+    M->>TG: savePreparedInlineMessage(текст, кнопка,<br/>link_preview_options{url, prefer_large_media, show_above_text})
+    Note over M,TG: адрес не задан или Redis не ответил — publish вернул null,<br/>сообщение уходит текстом, как у площадки без предпросмотра
+    C->>TG: игрок выбрал чат в shareMessage
+    TG->>R: GET /api/v1/cards/{хэш}.png (через лимит по адресу, 300 в минуту)
+    R-->>TG: PNG, Cache-Control public immutable, ETag = хэш
+    TG-->>C: сообщение: большая картинка над текстом, кнопка «Играть»
+```
+
+- **Адрес не угадывается**: хэш содержимого, ни id игрока, ни имени в нём нет; чужой или
+  просроченный хэш — 404, неверный вид имени — 404 без обращения к Redis.
+- **Картинка не держит отправку**: хранилище недоступно — сообщение уходит без неё.
 
 ## 5. Топология развёртывания
 

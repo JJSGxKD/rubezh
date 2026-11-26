@@ -15,6 +15,7 @@ import {
   type CabinetQuery,
 } from "../partners/partner-cabinet.js";
 import type { CabinetFunnel } from "../partners/partner-cabinet-funnel.js";
+import type { CabinetMaterials } from "../partners/partner-materials.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse, periodOf } from "./admin-parse.js";
@@ -51,6 +52,7 @@ const copySchema = z.object({ code: z.string().trim().min(1).max(CABINET_LIMITS.
  * задач берут партнёра той же точкой — `PartnerCabinet.partnerOf`.
  *
  * Воронка (T-0219) — `GET /funnel` с периодом; партнёра выбирает та же `partnerOf`, фильтр навязывает сервер.
+ * Материалы (T-0221) — `GET /materials`: что выложила команда, общее и адресованное этому партнёру; только чтение.
  *
  * Запись (новая ссылка, копия промокода) принимает `?partnerId=` тоже — ради отказа «Кабинет открыт для
  * просмотра»: в режиме поддержки кабинет только читают.
@@ -87,6 +89,12 @@ export class AdminCabinetController {
   async funnel(@Req() request: unknown, @Query() query: unknown): Promise<{ data: CabinetFunnel }> {
     const { partnerId, from, to } = parse(() => funnelQuerySchema.parse(query), "Некорректный период или запрос кабинета");
     return { data: await this.cabinet.funnel(accountOf(request), { partnerId }, periodOf({ from, to }, new Date())) };
+  }
+
+  /** Материалы команды: общие и адресованные этому партнёру, без архивных. */
+  @Get("materials")
+  async materials(@Req() request: unknown, @Query() query: unknown): Promise<{ data: CabinetMaterials }> {
+    return { data: await this.cabinet.materials(accountOf(request), this.scope(query)) };
   }
 
   @Get("promos")

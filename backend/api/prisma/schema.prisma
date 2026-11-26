@@ -2257,6 +2257,7 @@ model Partner {
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
   links     Link[]
+  materials PartnerMaterial[]
 
   @@index([createdAt])
   @@index([status])
@@ -2440,8 +2441,9 @@ model MediaImage {
   /// право на показ закрытой картинки (`ledger.view` у снимка чека, T-0462); пусто — открыта игроку и панели
   viewPermission String?  @map("view_permission") @db.VarChar(64)
 
-  tasks      TaskDef[]
-  homeSlides HomeSlide[]
+  tasks            TaskDef[]
+  homeSlides       HomeSlide[]
+  partnerMaterials PartnerMaterial[]
 
   @@map("media_image")
 }
@@ -3574,6 +3576,40 @@ model AppearanceGrant {
   // Возврат снимает облик по покупке.
   @@index([purchaseId])
   @@map("appearance_grant")
+}
+
+// Материалы для партнёров (docs/35-stage4-plan.md Р136, tasks/T-0221): баннеры,
+// тексты постов и правила программы, которые выкладывает команда. Партнёр
+// забирает их во вкладке «Материалы» кабинета.
+
+/// Материал для партнёров: баннер (картинка), текст поста или правила. Общий —
+/// `partner_id` пуст, для одного партнёра — задан. Архивный партнёру не виден,
+/// но запись остаётся. Форму строки держат `CHECK` в миграции и
+/// `partners/partner-materials.ts`
+model PartnerMaterial {
+  materialId String    @id @map("material_id") @db.Uuid
+  /// banner — картинка, post — текст поста, rules — правила программы
+  kind       String    @db.VarChar(8)
+  title      String    @db.VarChar(80)
+  /// у поста и правил обязателен, у баннера — подпись, может быть пустой
+  text       String?   @db.VarChar(2000)
+  /// у баннера обязателен: картинка профиля `partner_material`; у текста пуст
+  imageId    String?   @map("image_id") @db.VarChar(64)
+  /// кому: пусто — всем партнёрам, задан — только ему
+  partnerId  String?   @map("partner_id") @db.Uuid
+  /// порядок в кабинете: меньше — раньше
+  sort       Int       @default(0)
+  /// кто выложил; без внешнего ключа — запись переживает аккаунт
+  createdBy  String    @map("created_by") @db.Uuid
+  createdAt  DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @map("updated_at") @db.Timestamptz(3)
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
+
+  image   MediaImage? @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
+  partner Partner?    @relation(fields: [partnerId], references: [partnerId], onDelete: Restrict)
+
+  @@index([partnerId, archivedAt])
+  @@map("partner_material")
 }
 
 // Публикация контента (docs/19-content-admin.md §4.4–§4.5, tasks/T-0306): какая версия
