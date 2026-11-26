@@ -36,10 +36,10 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 96 моделей, стирается 30", () => {
+  it("остаётся 96 моделей, стирается 31", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
     expect(actions.filter((action) => action === "keep")).toHaveLength(96);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(30);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(31);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
@@ -74,6 +74,12 @@ describe("план вайпа: полнота", () => {
     expect(plan.RunAdReroll?.action).toBe("wipe");
     expect(plan.RunAdReroll?.why).toContain("часть забега");
     expect(order.indexOf("RunAdReroll")).toBeLessThan(order.indexOf("Run"));
+  });
+
+  it("удвоение награды дня (T-0242) начинается заново вместе с самой наградой дня и стоит рядом с ней", () => {
+    expect(plan.DailyDouble?.action).toBe("wipe");
+    expect(plan.DailyDouble?.why).toContain("наград");
+    expect(order.indexOf("DailyDouble")).toBe(order.indexOf("DailyReward") + 1);
   });
 
   it("запись забега для проверки стирается своим шагом до забега (T-0317), а не только каскадом", () => {
@@ -126,6 +132,7 @@ describe("план вайпа: порядок стирания", () => {
       "AccountProgress",
       "FriendGift",
       "DailyReward",
+      "DailyDouble",
       "WheelSpin",
       "VipDaily",
       "Notification",
