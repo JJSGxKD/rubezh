@@ -503,6 +503,8 @@ model Run {
   rubezhReached    Boolean     @default(false) @map("rubezh_reached")
   /// секунда, на которой пал страж; `null` — не пал
   rubezhClearedSec Int?        @map("rubezh_cleared_sec")
+  /// модификатор забега (T-0122, Р105): `hurry` или `inverse`; `null` — забег без него. Один на забег; такой забег не идёт в рейтинг, а награду множит сервер. Без индекса: фильтра по колонке нет
+  modifierId       String?     @map("modifier_id")
   /// очки эффективности (T-0293, Р152); `null` — пролог и обучение, сбой подсчёта или забег до очков
   points           Int?
   /// индексы пяти осей с тремя знаками: `{ t, k, h, c, b }`, 1 — ровно ожидаемое; сырые, без потолка индекса
@@ -521,6 +523,21 @@ model Run {
   reviewedBy       String?     @map("reviewed_by") @db.Uuid
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
+  /// перепроверка повтором на сервере (T-0319, WP5): `pending` — ждёт исхода, затем `match`, `mismatch`, `content_mismatch`, `not_replayable`, `broken`, `timeout` или `no_proof`; `null` — повтор забегу не нужен
+  replayVerdict      String?   @map("replay_verdict") @db.VarChar(16)
+  /// тик первого расхождения повтора с записью; `null` — не разошёлся или разошёлся только итог
+  replayDivergedTick Int?      @map("replay_diverged_tick")
+  /// когда исход повтора записан; `null` — исхода нет
+  replayedAt         DateTime? @map("replayed_at") @db.Timestamptz(3)
+  /// повтор был обязателен (верх досок, рубин и золото, эпическая добыча, победа над Стражем), а не выборкой: по нему приоритет очереди и последствия для наград (T-0320)
+  replayRequired     Boolean   @default(false) @map("replay_required")
+  /// номер попытки повтора: растёт по «Повторить снова»; входит в идентификатор задания, чтобы исход прошлой попытки не лёг на новую
+  replayAttempt      Int       @default(0) @map("replay_attempt")
+  /// когда задание поставлено в очередь `replay`; `null` — ещё не поставлено (записи нет или Redis был недоступен)
+  replayQueuedAt     DateTime? @map("replay_queued_at") @db.Timestamptz(3)
+  /// что воркер насчитал и что сказал: `{ reason, replayed: { ticks, survivalSec, level, enemiesKilled, checksum } | null, durationMs }` — для таблицы «заявлено / повтор» в разборе
+  replayResult       Json?     @map("replay_result")
+
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   purchases    Purchase[]
   adContinues  RunAdContinue[]
@@ -538,6 +555,8 @@ model Run {
   @@index([difficulty, finishedAt])
   // Очередь разбора: подозрительные и отклонённые, свежие первыми.
   @@index([verdict, finishedAt])
+  // Перепроверка повтором (T-0319): ожидающие постановки, застрявшие и без записи — одним проходом по `replay_verdict`.
+  @@index([replayVerdict, finishedAt])
   @@map("run")
 }
 
@@ -2915,10 +2934,15 @@ model ContentVersion {
   /// без внешнего ключа — запись переживает аккаунт; `null` — завёл выкат
   createdBy     String?   @map("created_by") @db.Uuid
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  /// `null` — версия ещё не публиковалась
+  /// когда версия впервые вышла в игру у кого-либо — у команды или у всех; `null` — ещё не публиковалась
   publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
+  /// когда версия впервые стала текущей у всех (`CHECK` в миграции: только вместе с `published_at`);
+  /// `null` — у всех не бывала, её видела разве что команда. Откат «Всем» и запасная выдача игроку
+  /// со старой схемой берут только такие версии
+  releasedAllAt DateTime? @map("released_all_at") @db.Timestamptz(3)
 
-  drafts ContentDraft[]
+  drafts  ContentDraft[]
+  current ContentCurrent[]
 
   @@map("content_version")
 }
@@ -3518,4 +3542,25 @@ model SecretFound {
 
   @@id([accountId, kind])
   @@map("secret_found")
+}
+
+// Публикация контента (docs/19-content-admin.md §4.4–§4.5, tasks/T-0306): какая версия
+// сейчас в игре у какой аудитории. Правила игры, а не данные игроков, — вайп не трогает.
+
+/// Указатель «какая версия в игре»: не больше одной строки на аудиторию. `team` — аккаунты с
+/// ролью, смотрят версию глазами до игроков; `all` — все. Нет строки `team` — команда играет
+/// версией «всем»; нет строки `all` — версию никто не публиковал, клиент играет встроенной.
+/// Откат — смена номера версии в строке, новой версии он не создаёт
+model ContentCurrent {
+  /// `team` или `all` (`CHECK` в миграции)
+  audience  String   @id @db.VarChar(4)
+  versionNo Int      @map("version_no")
+  /// без внешнего ключа — запись переживает аккаунт; `null` — версию поставил выкат
+  setBy     String?  @map("set_by") @db.Uuid
+  setAt     DateTime @map("set_at") @db.Timestamptz(3)
+
+  version ContentVersion @relation(fields: [versionNo], references: [versionNo], onDelete: Restrict)
+
+  @@index([versionNo])
+  @@map("content_current")
 }

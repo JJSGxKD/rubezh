@@ -473,8 +473,13 @@ function replyMarkup(options: SendOptions): ReplyMarkup {
 }
 
 /** Тихая отправка и эфемерность: поля попадают в запрос, только когда заданы. */
-function sendFlags(options: SendOptions): { disable_notification?: boolean; ephemeral_message_parameters?: ReturnType<typeof ephemeralFields> } {
+function sendFlags(options: SendOptions): {
+  disable_notification?: boolean;
+  ephemeral_message_parameters?: ReturnType<typeof ephemeralFields>;
+  reply_parameters?: { ephemeral_message_id: number };
+} {
   return {
+    ...(options.ephemeral?.replyToEphemeralId === undefined ? {} : { reply_parameters: { ephemeral_message_id: options.ephemeral.replyToEphemeralId } }),
     ...(options.silent === undefined ? {} : { disable_notification: options.silent }),
     ...(options.ephemeral === undefined ? {} : { ephemeral_message_parameters: ephemeralFields(options.ephemeral) }),
   };
