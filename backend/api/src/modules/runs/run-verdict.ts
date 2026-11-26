@@ -19,8 +19,8 @@ import { MAX_WEAPONS } from "./run-rules.js";
  *   короче прошедшего); второй шанс, за который не заплачено, — честный
  *   клиент продолжает только после подтверждения оплаты сервером; снимок
  *   снаряжения, которого сервер не подписывал, или с уровнем выше уровня
- *   аккаунта; буст, не купленный на забег; переброс карточек, за который не
- *   засчитан показ;
+ *   аккаунта; буст, не купленный на забег; переброс карточек и второй сундук
+ *   клада, за которые не засчитан показ;
  * - **подозрение (`suspicious`)** — статистика: слишком быстро убивал, слишком
  *   быстро качался, незнакомая сборка, продолжение оплачено по меньшему
  *   числу минут, чем прошло, снимок снаряжения устарел. Здесь бывают и
@@ -114,6 +114,8 @@ export type VerdictReason =
   | "unpaid_continue"
   /** рекламный переброс карточек заявлен без записи показа (T-0199) */
   | "unpaid_ad_reroll"
+  /** второй сундук клада заявлен без записи показа (T-0327) */
+  | "unpaid_ad_chest"
   /** за продолжение заплачено по меньшему числу минут, чем прошло к нему (Р5.2) */
   | "underpaid_continue"
   /** время забега не проверено: старт не дошёл или пришёл слишком поздно — вердикт не меняет */
@@ -170,6 +172,10 @@ export interface VerdictInput {
   adRerolls?: number;
   /** сколько из них записано в книгу показов */
   paidAdRerolls?: number;
+  /** сколько вторых сундуков клада за рекламу заявлено; нет поля — не заявлен (итог прошлой сборки) */
+  adChests?: number;
+  /** сколько из них записано в книгу показов */
+  paidAdChests?: number;
   /**
    * Забег с читами: бесплатное продолжение в забеге разработчика — тоже чит,
    * и отказом оно не считается. В рейтинг такой забег не идёт и так.
@@ -203,6 +209,7 @@ const REJECTING: ReadonlySet<VerdictReason> = new Set([
   "longer_than_wall_clock",
   "unpaid_continue",
   "unpaid_ad_reroll",
+  "unpaid_ad_chest",
   "loadout_forged",
   "loadout_level_ahead",
   "boost_unpaid",
@@ -241,6 +248,7 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
 
   if (!input.cheats && input.continues > input.paidContinues) reasons.push("unpaid_continue");
   if (!input.cheats && (input.adRerolls ?? 0) > (input.paidAdRerolls ?? 0)) reasons.push("unpaid_ad_reroll");
+  if (!input.cheats && (input.adChests ?? 0) > (input.paidAdChests ?? 0)) reasons.push("unpaid_ad_chest");
   if (input.underpaidContinues) reasons.push("underpaid_continue");
 
   if (input.loadout === "forged") reasons.push("loadout_forged");

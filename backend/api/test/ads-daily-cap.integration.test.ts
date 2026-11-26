@@ -210,15 +210,15 @@ describe.skipIf(DATABASE_URL === "")("дневной кап роликов на 
     await expect(ads.claim(me, first, "second_chance", at(NOON, 3))).resolves.toMatchObject({ repeat: true });
   });
 
-  it("гонка забора в разных местах: из четырёх разом при капе 3 проходят ровно три — общей блокировкой игрока, а не по месту", async () => {
+  it("гонка забора в разных местах: из шести разом при капе 3 проходят ровно три — общей блокировкой игрока, а не по месту", async () => {
     const me = await account();
     const { ads } = service(panelSettings({ [KEY]: 3 }));
     const sessions = await Promise.all(CAPPED_PLACES.map(async (place) => ({ place, sessionId: await watched(me, place) })));
-    expect(sessions).toHaveLength(4);
+    expect(sessions).toHaveLength(6);
     const results = await Promise.allSettled(sessions.map(({ place, sessionId }) => ads.claim(me, sessionId, place, at(NOON, 2))));
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(3);
     const rejected = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
-    expect(rejected.map((result) => result.reason)).toEqual([expect.any(AdDailyCapError)]);
+    expect(rejected.map((result) => result.reason)).toEqual([expect.any(AdDailyCapError), expect.any(AdDailyCapError), expect.any(AdDailyCapError)]);
     const [claimed] = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM ad_session WHERE account_id = ${me}::uuid AND claimed_at IS NOT NULL`;
     expect(claimed?.count).toBe(3);
   });

@@ -60,6 +60,7 @@ function runOf(difficultyId: Difficulty, patch: Partial<RunFinish> = {}): RunFin
     continues: [],
     boosts: [],
     passives: [],
+    adChests: 0,
     ...patch,
   };
 }
