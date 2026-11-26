@@ -5,13 +5,12 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from "@nestjs/common";
-import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { PANEL_LOGIN_PREFIX } from "../../modules/admin/panel-login.service.js";
 import { ROLE_CONFIRM_PREFIX } from "../../modules/admin/role-confirmations.js";
 import { FeatureSwitches } from "../../modules/settings/feature-switches.js";
 import { withTimeout } from "../../common/with-timeout.js";
-import { REDIS } from "../../infra/redis.js";
+import { CardDelivery, RedisCardFileCache, type CardFileCache } from "../../common/card/card-cache.js";
 import { BotRouter, type BotUpdateHandler } from "./bot-router.js";
 import { BotIdentity } from "./bot-identity.js";
 import { TelegramApiError, type InlineButton, type TelegramBotApi, type TelegramUpdate } from "./telegram-bot-api.js";
@@ -28,11 +27,10 @@ import type { TelegramUser } from "./telegram-bot-api.js";
  *
  * Карточка рисуется один раз на одинаковое содержимое. После первой отправки
  * Telegram отдаёт `file_id`, и дальше та же картинка уходит по нему — без
- * рендера и без загрузки. Протухший `file_id` — нарисовать и загрузить заново.
+ * рендера и без загрузки. Протухший `file_id` — нарисовать и загрузить заново:
+ * это общий кэш картинок бота (`common/card/card-cache.ts`).
  */
 
-/** Сколько помнить `file_id` карточки: Telegram хранит файлы бота долго, а шаблон меняется версией. */
-const CARD_CACHE_TTL_SEC = 30 * 24 * 60 * 60;
 /** Повторный `/start` в эти секунды — нажатие дважды, а не новая просьба. */
 const START_WINDOW_SEC = 3;
 /** Вход в панель (`panel-login.command.ts`) — не приход игрока: ни карточки, ни касания воронки. */
@@ -66,10 +64,7 @@ export class WelcomeProgressRegistry {
   source: WelcomeProgressSource | null = null;
 }
 
-export interface WelcomeCardCache {
-  get(key: string): Promise<string | null>;
-  set(key: string, fileId: string): Promise<void>;
-  delete(key: string): Promise<void>;
+export interface WelcomeCardCache extends CardFileCache {
   /** `true` — первый `/start` этого чата в окне */
   claimStart(chatId: string): Promise<boolean>;
 }
@@ -77,21 +72,7 @@ export interface WelcomeCardCache {
 export const WELCOME_CARD_CACHE = Symbol("WELCOME_CARD_CACHE");
 
 @Injectable()
-export class RedisWelcomeCardCache implements WelcomeCardCache {
-  constructor(@Inject(REDIS) private readonly redis: Redis) {}
-
-  get(key: string): Promise<string | null> {
-    return this.redis.get(`bot:card:${key}`);
-  }
-
-  async set(key: string, fileId: string): Promise<void> {
-    await this.redis.set(`bot:card:${key}`, fileId, "EX", CARD_CACHE_TTL_SEC);
-  }
-
-  async delete(key: string): Promise<void> {
-    await this.redis.del(`bot:card:${key}`);
-  }
-
+export class RedisWelcomeCardCache extends RedisCardFileCache implements WelcomeCardCache {
   async claimStart(chatId: string): Promise<boolean> {
     return (await this.redis.set(`bot:start:${chatId}`, "1", "EX", START_WINDOW_SEC, "NX")) !== null;
   }
@@ -118,8 +99,8 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
   readonly commands = [{ command: "start", description: "Открыть игру", descriptionEn: "Open the game", audience: "everyone" as const }];
   private readonly logger = new Logger("welcome");
   private readonly stop = new AbortController();
-  /** рендер одинаковой карточки, начатый другим `/start`, не повторяется в этом процессе */
-  private readonly rendering = new Map<string, Promise<Buffer>>();
+  /** кэш `file_id`, повторный рендер одинаковой карточки и протухший файл — общий слой картинок бота */
+  private readonly delivery: CardDelivery;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -132,7 +113,14 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
     private readonly identity: BotIdentity,
     private readonly auth: AuthService,
     @Inject(BOT_START_LISTENER) private readonly startListener: BotStartListener,
-  ) {}
+  ) {
+    this.delivery = new CardDelivery(cache, {
+      // Telegram больше не знает этот файл — рисуем заново. Иная ошибка
+      // (сеть, чат недоступен) повторной загрузкой не лечится.
+      isStale: (error) => error instanceof TelegramApiError && error.errorCode === 400,
+      log: (event, fields) => this.log("warn", event, fields),
+    });
+  }
 
   onModuleInit(): void {
     if (this.config.telegram.updates !== "off") this.router.register(this);
@@ -234,46 +222,12 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
     const caption = texts.caption(card.name, card.progress.best !== null);
     const keyboard = this.keyboard(card, userId);
     const options = keyboard.length === 0 ? {} : { keyboard };
-    const key = welcomeCacheKey(card);
-
-    const cached = await this.cache.get(key).catch((error: unknown) => {
-      this.log("warn", "cache_unavailable", { reason: reasonOf(error) });
-      return null;
+    const result = await this.delivery.send({
+      key: welcomeCacheKey(card),
+      render: () => this.render(card),
+      upload: (photo) => this.api.sendPhoto(chatId, photo, caption, this.stop.signal, options),
     });
-    if (cached !== null) {
-      try {
-        await this.api.sendPhoto(chatId, cached, caption, this.stop.signal, options);
-        this.log("log", "welcome_sent", { cached: true, language: card.language });
-        return;
-      } catch (error: unknown) {
-        // Telegram больше не знает этот файл — рисуем заново. Иная ошибка
-        // (сеть, чат недоступен) повторной загрузкой не лечится.
-        if (!(error instanceof TelegramApiError && error.errorCode === 400)) throw error;
-        this.log("warn", "cached_file_rejected", { reason: error.message });
-        await this.cache
-          .delete(key)
-          .catch((cacheError: unknown) => this.log("warn", "cache_delete_failed", { reason: reasonOf(cacheError) }));
-      }
-    }
-
-    const png = await this.renderOnce(key, card);
-    const sent = await this.api.sendPhoto(chatId, png, caption, this.stop.signal, options);
-    if (sent.fileId !== null) {
-      await this.cache
-        .set(key, sent.fileId)
-        .catch((error: unknown) => this.log("warn", "cache_write_failed", { reason: reasonOf(error) }));
-    }
-    this.log("log", "welcome_sent", { cached: false, language: card.language, pngBytes: png.length });
-  }
-
-  private renderOnce(key: string, card: WelcomeCard): Promise<Buffer> {
-    const existing = this.rendering.get(key);
-    if (existing !== undefined) return existing;
-    const job = Promise.resolve()
-      .then(() => this.render(card))
-      .finally(() => this.rendering.delete(key));
-    this.rendering.set(key, job);
-    return job;
+    this.log("log", "welcome_sent", { cached: result.cached, language: card.language, ...(result.cached ? {} : { pngBytes: result.pngBytes }) });
   }
 
   private keyboard(card: WelcomeCard, userId: string): InlineButton[][] {

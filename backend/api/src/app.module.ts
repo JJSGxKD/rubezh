@@ -53,6 +53,7 @@ import { WheelModule } from "./modules/wheel/wheel.module.js";
 import { BattlePassModule } from "./modules/battle-pass/battle-pass.module.js";
 import { TasksModule } from "./modules/tasks/tasks.module.js";
 import { MediaModule } from "./modules/media/media.module.js";
+import { CardsModule } from "./modules/cards/cards.module.js";
 import { RestrictionsModule } from "./modules/restrictions/restrictions.module.js";
 import { TestNoticeModule } from "./modules/test-notice/test-notice.module.js";
 import { WipeModule } from "./modules/wipe/wipe.module.js";
@@ -163,6 +164,7 @@ export const APP_MODULES = [
   ChangelogModule,
   WheelModule,
   MediaModule,
+  CardsModule,
   RestrictionsModule,
   TasksModule,
   SecretsCodexModule,
