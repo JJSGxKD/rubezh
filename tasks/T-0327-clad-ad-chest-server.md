@@ -44,6 +44,7 @@ shared:
   - docs/35-stage4-plan.md
   - backend/api/test/wipe-runner.integration.test.ts
   - backend/api/test/ads-daily-cap.test.ts
+  - backend/api/test/ads-daily-cap.integration.test.ts
   - backend/api/test/admin.test.ts
   - backend/api/test/ads-daily-cap.integration.test.ts
   - backend/api/test/admin.test.ts
