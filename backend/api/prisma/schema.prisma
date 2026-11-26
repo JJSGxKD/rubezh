@@ -1299,7 +1299,11 @@ model Broadcast {
   /// бот какой площадки пишет — у аккаунта канал один, бот его площадки
   platform    Platform
   text        String          @db.VarChar(4096)
+  /// `plain` — простой текст; `rich` — ограниченный Markdown, разбор — `broadcasts/broadcast-rich.ts` (Р199)
+  format      String          @default("plain") @db.VarChar(8)
   buttonText  String?         @map("button_text") @db.VarChar(64)
+  /// отпечаток редакции (формат, текст, кнопка), ушедшей тестом себе оформленной; правка его сбрасывает
+  testedHash  String?         @map("tested_hash") @db.VarChar(64)
   /// ссылка кампании рассылки: кнопка ведёт через `/r/<код>`, клики и запуски — по ней
   linkCode    String?         @map("link_code") @db.VarChar(16)
   /// адрес кнопки на момент создания: домен клиента мог смениться, а текст — нет

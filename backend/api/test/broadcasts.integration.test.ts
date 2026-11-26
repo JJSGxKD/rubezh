@@ -4,6 +4,7 @@ import { loadAppConfig } from "../src/config/app-config.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { editionHash } from "../src/modules/broadcasts/broadcast-rich.js";
 import { PrismaBroadcastsRepository } from "../src/modules/broadcasts/broadcasts.repository.js";
 import { segmentSchema } from "../src/modules/broadcasts/segment.js";
 import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
@@ -79,6 +80,7 @@ describe.skipIf(DATABASE_URL === "")("рассылки на живом Postgres"
       broadcastId,
       title: "Тест",
       platform: "telegram",
+      format: "plain",
       text: "Привет",
       buttonText: null,
       buttonUrl: null,
@@ -88,11 +90,11 @@ describe.skipIf(DATABASE_URL === "")("рассылки на живом Postgres"
     });
     expect(created).toMatchObject({ status: "draft", segment: mine({}) });
     expect(await broadcasts.approve(broadcastId, fresh.accountId)).toBe(true);
-    expect((await broadcasts.updateDraft(broadcastId, { title: "Тест 2", text: "Привет", buttonText: null, segment: mine({}) }))?.approvedBy).toBeNull();
+    expect((await broadcasts.updateDraft(broadcastId, { title: "Тест 2", format: "plain", text: "Привет", buttonText: null, segment: mine({}) }))?.approvedBy).toBeNull();
 
     expect(await broadcasts.start(broadcastId, reached.accountId, new Date())).toBe(2);
     expect(await broadcasts.start(broadcastId, reached.accountId, new Date())).toBeNull();
-    expect(await broadcasts.updateDraft(broadcastId, { title: "Поздно", text: "x", buttonText: null, segment: mine({}) })).toBeNull();
+    expect(await broadcasts.updateDraft(broadcastId, { title: "Поздно", format: "plain", text: "x", buttonText: null, segment: mine({}) })).toBeNull();
     expect(await broadcasts.sending()).toContain(broadcastId);
 
     const [first] = await broadcasts.claim(broadcastId, 1, 60);
@@ -120,5 +122,56 @@ describe.skipIf(DATABASE_URL === "")("рассылки на живом Postgres"
     expect(await broadcasts.transition(broadcastId, ["sending"], "done", new Date())).toBe(false);
     expect((await broadcasts.byId(broadcastId))?.finishedAt).toBeInstanceOf(Date);
     expect(await broadcasts.sending()).not.toContain(broadcastId);
+  });
+
+  it("оформленная рассылка: формат и отпечаток теста хранятся, правка сбрасывает, запуск сверяет отпечаток под блокировкой", async () => {
+    const author = await player();
+    const segment = segmentSchema.parse({ campaign, skipRecentDays: 0 });
+    const text = "# Новость\n\n- пункт";
+    const draft = { title: "Новость", platform: "telegram", format: "rich", buttonText: null, buttonUrl: null, linkCode: null, segment, createdBy: author.accountId } as const;
+    const broadcastId = randomUUID();
+
+    const created = await broadcasts.create({ ...draft, broadcastId, text });
+    expect(created).toMatchObject({ format: "rich", testedHash: null });
+    const hash = editionHash({ format: "rich", text, buttonText: null });
+
+    // Без отпечатка текущей редакции запуск отказывает, и черновик остаётся черновиком.
+    await expect(broadcasts.start(broadcastId, author.accountId, new Date())).rejects.toMatchObject({ code: "broadcast_state" });
+    expect((await broadcasts.byId(broadcastId))?.status).toBe("draft");
+
+    expect(await broadcasts.markTested(broadcastId, hash)).toBe(true);
+    expect((await broadcasts.byId(broadcastId))?.testedHash).toBe(hash);
+
+    // Правка сбрасывает отметку вместе с одобрением.
+    const edited = await broadcasts.updateDraft(broadcastId, { title: "Новость", format: "rich", text: `${text}\n\nещё`, buttonText: null, segment });
+    expect(edited).toMatchObject({ format: "rich", testedHash: null, approvedBy: null });
+
+    // Запоздавший тест прежней редакции не открывает запуск новой.
+    expect(await broadcasts.markTested(broadcastId, hash)).toBe(true);
+    await expect(broadcasts.start(broadcastId, author.accountId, new Date())).rejects.toMatchObject({ code: "broadcast_state" });
+    expect((await broadcasts.byId(broadcastId))?.status).toBe("draft");
+
+    await broadcasts.markTested(broadcastId, editionHash({ format: "rich", text: `${text}\n\nещё`, buttonText: null }));
+    expect(await broadcasts.start(broadcastId, author.accountId, new Date())).toBeGreaterThanOrEqual(1);
+
+    // Запущенной рассылке отметку не пишут, а второй запуск ничего не добавляет.
+    expect(await broadcasts.markTested(broadcastId, "0".repeat(64))).toBe(false);
+    expect((await broadcasts.byId(broadcastId))?.testedHash).not.toBe("0".repeat(64));
+    expect(await broadcasts.start(broadcastId, author.accountId, new Date())).toBeNull();
+  });
+
+  it("простая рассылка запускается без отпечатка; старая строка без формата — простой текст, а неизвестный формат читается как простой", async () => {
+    const author = await player();
+    const segment = segmentSchema.parse({ campaign, skipRecentDays: 0 });
+    const legacyId = randomUUID();
+    // Строка, какой она была до миграции: колонки формата и отметки не заданы.
+    await prisma.broadcast.create({ data: { broadcastId: legacyId, title: "Старая", platform: "telegram", text: "Привет", segment, createdBy: author.accountId } });
+    expect(await broadcasts.byId(legacyId)).toMatchObject({ format: "plain", testedHash: null });
+
+    await prisma.broadcast.update({ where: { broadcastId: legacyId }, data: { format: "html" } });
+    expect((await broadcasts.byId(legacyId))?.format).toBe("plain");
+
+    expect(await broadcasts.markTested(legacyId, "a".repeat(64))).toBe(true);
+    expect(await broadcasts.start(legacyId, author.accountId, new Date())).toBeGreaterThanOrEqual(1);
   });
 });

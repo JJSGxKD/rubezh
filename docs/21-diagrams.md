@@ -690,7 +690,9 @@ erDiagram
         string title
         enum platform "бот какой площадки пишет"
         string text "до 4096, неизменен после старта"
+        string format "plain|rich: простой текст или ограниченный Markdown (T-0403)"
         string button_text "nullable"
+        string tested_hash "nullable: отпечаток редакции, ушедшей тестом себе оформленной"
         string button_url "nullable: /r/<код> на домене клиента"
         string link_code "nullable: ссылка кампании рассылки"
         json segment "фильтры аудитории, разбираются схемой"
