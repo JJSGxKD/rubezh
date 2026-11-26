@@ -3,8 +3,8 @@ id: T-0221
 title: Материалы для партнёров — баннеры, тексты постов и правила в кабинете
 epic: E14
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0219]
@@ -30,6 +30,10 @@ shared:
   - backend/api/src/modules/admin/admin.module.ts
   - docs/21-diagrams.md
   - docs/23-referral-and-partner-program.md
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/partner-materials.test.ts
+  - backend/api/src/modules/partners/partners.module.ts
+  - backend/api/src/modules/partners/partner-cabinet-slug.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
