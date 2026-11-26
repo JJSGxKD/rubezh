@@ -71,6 +71,27 @@ export const PLACE_RULES: Record<AdPlace, PlaceRules> = {
 export const OFFERED_PLACES = AD_PLACES.filter((place): place is Exclude<AdPlace, "task"> => place !== "task");
 
 /**
+ * Места, чьи ролики идут в общий дневной кап (Р155): место с наградой, кроме
+ * задания сети. Задание — не ролик, его делают руками; межстраничная без
+ * награды, её держит своя политика. Список выводится из правил мест, чтобы
+ * новое место с наградой попало под кап само, а не забылось.
+ */
+export const CAPPED_PLACES: readonly AdPlace[] = AD_PLACES.filter((place) => PLACE_RULES[place].rewarded && place !== "task");
+
+/** Место под дневным капом роликов. */
+export function isCappedPlace(place: AdPlace): boolean {
+  return CAPPED_PLACES.includes(place);
+}
+
+/**
+ * Дневной кап достигнут: досмотрено столько роликов, сколько разрешено, или
+ * больше. `cap === 0` — кап выключен в панели.
+ */
+export function dailyCapReached(watchedToday: number, cap: number): boolean {
+  return cap > 0 && watchedToday >= cap;
+}
+
+/**
  * Сколько живёт сессия показа. Показ и клик решаются за минуты; целевое
  * действие сеть подтверждает днями — сессия ждёт постбэка.
  */

@@ -13,13 +13,15 @@ import { ClientScripts } from "../client-scripts/client-scripts.service.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import type { RestrictionKind } from "../restrictions/restriction-catalog.js";
 import type { RestrictionRow } from "../restrictions/restrictions.repository.js";
-import { AdCooldownError, AdNotCompletedError, AdSessionClosedError } from "./ads-errors.js";
+import { AdCooldownError, AdDailyCapError, AdNotCompletedError, AdSessionClosedError } from "./ads-errors.js";
 import { InterstitialGate, type InterstitialRefusal } from "./interstitial-gate.js";
 import type { InterstitialMoment } from "./interstitial-policy.js";
 import {
   CLAIM_WINDOW_MIN,
   PLACE_RULES,
   SESSION_TTL_MIN,
+  dailyCapReached,
+  isCappedPlace,
   networkOrder,
   nextRewardAt,
   placeState,
@@ -55,6 +57,12 @@ import {
  * Сеть с API (Taddy, Р78) отдаёт креатив серверу ещё при выдаче: нет
  * креатива — выдача тут же идёт к следующей сети, а игрок не ждёт отказа
  * клиента. Показ и досмотр такого креатива сервер сообщает сети сам.
+ *
+ * Ролики за награду — под общим дневным капом на игровые сутки по всем
+ * местам (`ads.rewarded.daily-cap`, Р155): упёрся — «за ролик» не
+ * предлагается до завтра, а VIP с пропуском, задание сети и межстраничная в
+ * кап не входят. Кап держат и выдача, и забор: ролики, выданные разом, пока
+ * кап был свободен, сверх него награды не принесут.
  *
  * Межстраничную выдача даёт только по её политике — площадка, флаг выката,
  * частота (`interstitial-gate.ts`, WP12 ч.10).
@@ -129,6 +137,8 @@ export interface AdReadiness {
   readyAt: Date | null;
   /** награда будет без ролика (VIP); `null` — нужен показ */
   pass: string | null;
+  /** ролики за награду на сегодня кончились (дневной кап): кнопку не прячут молча, а говорят об этом */
+  capped: boolean;
 }
 
 /**
@@ -173,6 +183,11 @@ export class AdsService {
     if (restricted !== null) return this.unavailable(viewer, place, restricted.notify ? "restricted" : "no_fill", null);
     const [history, pass] = await Promise.all([this.db(this.repository.history(viewer.accountId, place, at)), this.db(this.passes.of(viewer.accountId, at))]);
     if (pass !== null && !PLACE_RULES[place].rewarded) return this.unavailable(viewer, place, "pass", null);
+    // Кап раньше кулдауна: до завтра ролика не будет, и «загляни позже» было бы неправдой. У VIP награда без ролика.
+    if (await this.capReached(viewer.accountId, place, PLACE_RULES[place].pass ? pass : null, at)) {
+      this.log({ event: "ad_capped", accountId: viewer.accountId, place });
+      throw new AdDailyCapError();
+    }
     const state = placeState(history.sessions, history.dayStart, at);
     const retryAt = nextRewardAt(place, state, at);
     if (retryAt !== null) return this.unavailable(viewer, place, "cooldown", retryAt);
@@ -294,9 +309,14 @@ export class AdsService {
     // Начатый до ограничения просмотр награду тоже не принесёт.
     const kind = RESTRICTED_BY[place];
     if (kind !== undefined) await this.restrictions.ensure(accountId, kind, at);
-    const outcome = await this.db(this.repository.claim(sessionId, accountId, place, at, (session, history) => claimVerdict(session, history, at)));
+    const dailyCap = isCappedPlace(place) ? this.settings.get(SETTINGS.adsRewardedDailyCap) : 0;
+    const outcome = await this.db(this.repository.claim(sessionId, accountId, place, at, (session, history) => claimVerdict(session, history, at), dailyCap));
     if (outcome.status === "not_completed") throw new AdNotCompletedError();
     if (outcome.status === "cooldown") throw new AdCooldownError(outcome.retryAt);
+    if (outcome.status === "capped") {
+      this.log({ event: "ad_capped", accountId, place, step: "claim" });
+      throw new AdDailyCapError();
+    }
     if (!outcome.repeat) this.log({ event: "ad_claimed", accountId, place, network: outcome.session.networkKey });
     return { session: outcome.session, repeat: outcome.repeat };
   }
@@ -313,8 +333,21 @@ export class AdsService {
     // Молчаливое ограничение прячет кнопку, как будто рекламы нет; о
     // котором сообщили — оставляет: выдача скажет игроку, что закрыто.
     const silenced = (await this.restricted(viewer.accountId, place, at))?.notify === false;
-    const available = !silenced && (pass !== null || blocks.some((block) => block.place === place && servable(block) && blockReaches(block, viewer.platform)));
-    return { available, readyAt: nextRewardAt(place, placeState(history.sessions, history.dayStart, at), at), pass };
+    const capped = await this.capReached(viewer.accountId, place, pass, at);
+    const available = !silenced && !capped && (pass !== null || blocks.some((block) => block.place === place && servable(block) && blockReaches(block, viewer.platform)));
+    return { available, readyAt: nextRewardAt(place, placeState(history.sessions, history.dayStart, at), at), pass, capped };
+  }
+
+  /**
+   * Упёрся ли игрок в дневной кап роликов. У места без награды и у задания
+   * сети кап не действует, а у игрока с пропуском награда идёт без ролика.
+   * Счёт — одним запросом, и только когда кап включён.
+   */
+  private async capReached(accountId: string, place: AdPlace, pass: string | null, at: Date): Promise<boolean> {
+    if (pass !== null || !isCappedPlace(place)) return false;
+    const cap = this.settings.get(SETTINGS.adsRewardedDailyCap);
+    if (cap === 0) return false;
+    return dailyCapReached(await this.db(this.repository.rewardedWatchedToday(accountId, at)), cap);
   }
 
   /** Ограничение, которое закрывает награду места; у межстраничной награды нет. */
