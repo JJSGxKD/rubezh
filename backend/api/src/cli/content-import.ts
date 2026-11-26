@@ -1,6 +1,8 @@
 import { configFromEnvironment } from "../config/app-config.js";
 import { createPrisma } from "../infra/database.js";
+import { adoptRepoVersion } from "../modules/content/content-adopt.js";
 import { ContentImportError, importContentVersion, parseContentExport, readContentExport } from "../modules/content/content-import.js";
+import { PrismaContentPublishRepository } from "../modules/content/content-publish.repository.js";
 import { PrismaContentRepository } from "../modules/content/content.repository.js";
 import { PrismaRolesRepository } from "../modules/roles/roles.repository.js";
 
@@ -13,7 +15,9 @@ import { PrismaRolesRepository } from "../modules/roles/roles.repository.js";
  *   pnpm --filter backend-api content:import ../../dist/content-snapshot.json — локально, файл снимка
  *
  * Тот же хэш — ничего не меняется: выкат можно повторять. Новый хэш заводит
- * следующую версию с источником `repo`; сделать её текущей — дело публикации (T-0306).
+ * следующую версию с источником `repo`. Текущей она становится, только если
+ * текущая версия тоже из кода (до первой публикации из панели); иначе встаёт
+ * рядом, и её видно в «Истории» панели (docs/19-content-admin.md §4.5, T-0306).
  */
 
 async function main(): Promise<void> {
@@ -37,6 +41,20 @@ async function main(): Promise<void> {
       console.log(`контент: заведена версия ${String(outcome.versionNo)} (хэш ${outcome.contentHash})`);
     } else {
       console.log(`контент: версия ${String(outcome.versionNo)} с хэшем ${outcome.contentHash} уже есть — ничего не менял`);
+    }
+    // Подхват — и для уже заведённой версии: прежний выкат мог завести её, пока в игре стояла версия из панели,
+    // а откат на неё из панели потом вернул бы указатель «из кода».
+    const { adopted } = await adoptRepoVersion(new PrismaContentPublishRepository(prisma), outcome.versionNo, new Date());
+    if (adopted.length > 0) {
+      await new PrismaRolesRepository(prisma).append({
+        actorAccountId: null,
+        action: "content.version.adopt",
+        target: String(outcome.versionNo),
+        after: { contentHash: outcome.contentHash, audiences: adopted },
+      });
+      console.log(`контент: версия ${String(outcome.versionNo)} теперь в игре у: ${adopted.join(", ")}`);
+    } else {
+      console.log(`контент: версия ${String(outcome.versionNo)} в игру не поставлена — у аудиторий текущая версия из панели или она уже эта`);
     }
   } finally {
     await prisma.$disconnect();
