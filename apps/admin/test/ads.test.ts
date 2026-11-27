@@ -98,14 +98,14 @@ const NETWORKS: AdNetwork[] = [
   { networkKey: "taddy", name: "Taddy", active: false, priority: 40, keys: {}, missing: ["pubId"], problem: null },
 ];
 
-const FORMATS = { second_chance: "rewarded", wheel_spin: "rewarded", run_double: "rewarded", card_reroll: "rewarded", task: "task", interstitial: "interstitial" };
+const FORMATS = { second_chance: "rewarded", wheel_spin: "rewarded", run_double: "rewarded", card_reroll: "rewarded", daily_double: "rewarded", clad_chest: "rewarded", task: "task", interstitial: "interstitial" };
 
 function block(patch: Partial<AdBlock> = {}): AdBlock {
   return { blockId: "b1", networkKey: "adsgram", place: "wheel_spin", externalId: "123", success: "view", active: true, platforms: [], devices: [], problem: null, archivedAt: null, ...patch };
 }
 
 function view(patch: Partial<AdsView> = {}): AdsView {
-  return { networks: NETWORKS, blocks: [], funnel: [], passes: [], days: 7, places: ["second_chance", "wheel_spin", "run_double", "card_reroll", "task", "interstitial"], profiles: PROFILES, formats: FORMATS, testMode: false, ...patch };
+  return { networks: NETWORKS, blocks: [], funnel: [], passes: [], days: 7, places: ["second_chance", "wheel_spin", "run_double", "card_reroll", "daily_double", "clad_chest", "task", "interstitial"], profiles: PROFILES, formats: FORMATS, testMode: false, ...patch };
 }
 
 function form(patch: Partial<BlockForm> = {}): BlockForm {
@@ -156,10 +156,34 @@ describe("реклама в панели: место «Переброс карт
   });
 });
 
+describe("реклама в панели: место «Второй сундук клада» (tasks/T-0327)", () => {
+  it("место есть в списке после «Переброса карточек» и названо словами", () => {
+    expect(AD_PLACES.indexOf("clad_chest")).toBe(AD_PLACES.indexOf("card_reroll") + 2);
+    expect(PLACE_TITLES.clad_chest).toBe("Второй сундук клада");
+  });
+
+  it("блок места заводится у сети с видео за награду", () => {
+    const options = placeOptions(view(), "adsgram");
+    expect(options.find((option) => option.place === "clad_chest")?.support).not.toBeNull();
+  });
+});
+
+describe("реклама в панели: место «Награда дня ×2» (tasks/T-0242)", () => {
+  it("место есть в списке после «Переброса карточек» и названо словами", () => {
+    expect(AD_PLACES.indexOf("daily_double")).toBe(AD_PLACES.indexOf("card_reroll") + 1);
+    expect(PLACE_TITLES.daily_double).toBe("Награда дня ×2");
+  });
+
+  it("блок места заводится у сети с видео за награду", () => {
+    const options = placeOptions(view(), "adsgram");
+    expect(options.find((option) => option.place === "daily_double")?.support).not.toBeNull();
+  });
+});
+
 describe("реклама в панели: форма блока по профилю сети", () => {
   it("места — по форматам сети; недоступные — с причиной словами", () => {
     const richads = placeOptions(view(), "richads");
-    expect(richads.filter((option) => option.support !== null).map((option) => option.place)).toEqual(["second_chance", "wheel_spin", "run_double", "card_reroll", "interstitial"]);
+    expect(richads.filter((option) => option.support !== null).map((option) => option.place)).toEqual(["second_chance", "wheel_spin", "run_double", "card_reroll", "daily_double", "clad_chest", "interstitial"]);
     expect(richads.find((option) => option.place === "task")?.reason).toBe("месту нужен формат «задание сети», у RichAds его нет");
     expect(placeOptions(view(), "monetag")[0]?.reason).toBe("сети нет в коде");
   });

@@ -11,6 +11,7 @@ const TELEGRAM_USER_ID = /^\d{1,20}$/;
  * Подготовленное сообщение Telegram (порт `MessagePreparer`): статья с текстом
  * и кнопкой-ссылкой. Отправить её в личку, группу или канал игрок может из
  * Mini App через `shareMessage`; в чат с ботами — нет: там приглашение никому.
+ * Картинка (`imageUrl`) уходит большим предпросмотром над текстом.
  */
 export class TelegramMessagePreparer implements MessagePreparer {
   readonly platform = "telegram" as const;
@@ -28,6 +29,7 @@ export class TelegramMessagePreparer implements MessagePreparer {
       description: message.description,
       text: message.text,
       button: { text: message.button.text, url: message.button.url },
+      ...(message.imageUrl === undefined ? {} : { imageUrl: message.imageUrl }),
     });
   }
 }

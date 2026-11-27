@@ -17,7 +17,7 @@ const ACTOR: AccountRef = { accountId: "a1", platform: "telegram", platformUserI
 
 function broadcast(id: string, status: BroadcastRecord["status"], startedAt: Date | null): BroadcastRecord {
   return {
-    broadcastId: id, title: id, platform: "telegram", text: "", buttonText: null, buttonUrl: null, linkCode: null,
+    broadcastId: id, title: id, platform: "telegram", format: "plain", text: "", buttonText: null, testedHash: null, buttonUrl: null, linkCode: null,
     segment: {} as BroadcastRecord["segment"], status, audience: 100, createdBy: "x", approvedBy: null, startedBy: null,
     createdAt: NOW, updatedAt: NOW, startedAt, finishedAt: null,
   };

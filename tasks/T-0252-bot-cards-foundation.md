@@ -3,8 +3,8 @@ id: T-0252
 title: Картинки бота — основа: шрифт Russo One, общая сцена с обликом, кэш file_id, публичный адрес картинки
 epic: E5
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0237]
@@ -22,6 +22,7 @@ shared:
   - backend/api/src/platforms/telegram/welcome.command.ts
   - backend/api/src/platforms/ports/prepared-message.ts
   - backend/api/src/platforms/telegram/telegram-message-preparer.ts
+  - backend/api/src/platforms/telegram/telegram-bot-api.ts
   - backend/api/src/app.module.ts
   - backend/api/Dockerfile
   - docs/12-ip-and-licensing.md

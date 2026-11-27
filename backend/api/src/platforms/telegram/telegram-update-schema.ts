@@ -54,6 +54,8 @@ export const updateSchema = z.object({
       chat: chatSchema,
       /** тема супергруппы, если сообщение пришло из неё — ответ уходит туда же */
       message_thread_id: z.number().int().optional(),
+      /** команда пришла эфемерной: видна только боту (Bot API 10.2) — ответ строится на неё */
+      ephemeral_message_id: z.number().int().optional(),
       from: userSchema.optional(),
       successful_payment: paymentSchema.optional(),
       refunded_payment: paymentSchema.optional(),

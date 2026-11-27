@@ -16,17 +16,19 @@ import {
   type AppearanceSourceView,
   type AppearanceView,
 } from "./appearance-rules.js";
+import { APPEARANCE_GRANTS_REPOSITORY, type AppearanceGrantsRepository } from "./appearance-grants.repository.js";
 import { APPEARANCE_REPOSITORY, type AppearanceRepository } from "./appearance.repository.js";
 
 /**
  * Облики героя (docs/35-stage4-plan.md Р150, tasks/T-0237): каким обликом владеет игрок, какой
  * из них выбран и какой действует. Владение считается при чтении по состоянию аккаунта —
- * уровню, VIP, достижению, забранной ступени недели и месту в сезоне; в базе хранится только
- * выбор. Выбранный облик, которым игрок больше не владеет (истёк VIP), остаётся выбранным, а в
+ * уровню, VIP, достижению, забранной ступени недели и месту в сезоне — и по обликам,
+ * выданным разово (`appearance_grant`, tasks/T-0245); в базе хранится выбор и эти выдачи. Выбранный
+ * облик, которым игрок больше не владеет (истёк VIP, возвращён набор), остаётся выбранным, а в
  * ответах вместо него действует `keeper`.
  *
- * Облик для строк списков готовит `of`: список аккаунтов — пять запросов, по одному на источник
- * (аккаунт с уровнем, достижения, ступень недели, VIP, сезоны), сколько бы строк ни было.
+ * Облик для строк списков готовит `of`: список аккаунтов — шесть запросов, по одному на источник
+ * (аккаунт с уровнем, достижения, ступень недели, выдачи, VIP, сезоны), сколько бы строк ни было.
  * VIP и место в сезоне читает репозиторий знаков (T-0235) теми же методами.
  */
 
@@ -54,6 +56,7 @@ export class AppearanceService {
     private readonly tasks: TasksService,
     @Inject(APPEARANCE_REPOSITORY) private readonly repository: AppearanceRepository,
     @Inject(EMBLEMS_REPOSITORY) private readonly emblems: Pick<EmblemsRepository, "vipUntil" | "standings">,
+    @Inject(APPEARANCE_GRANTS_REPOSITORY) private readonly grants: AppearanceGrantsRepository,
   ) {}
 
   /**
@@ -101,14 +104,15 @@ export class AppearanceService {
   }
 
   /**
-   * Чем владеет каждый из аккаунтов. Источников пять, и каждый читается одним запросом на весь
+   * Чем владеет каждый из аккаунтов. Источников шесть, и каждый читается одним запросом на весь
    * список. У аккаунта, которого нет в базе, записи нет.
    */
   private async standings(accountIds: readonly string[], at: Date): Promise<Map<string, Standing>> {
-    const [rows, done, weekly, vip, seasons] = await Promise.all([
+    const [rows, done, weekly, granted, vip, seasons] = await Promise.all([
       this.db(this.repository.accounts(accountIds)),
       this.db(this.repository.completed(accountIds, OWNERSHIP_ACHIEVEMENTS)),
       this.db(this.repository.weeklyClaimed(accountIds, TOP_WEEKLY_POINTS)),
+      this.db(this.grants.held(accountIds)),
       this.db(this.emblems.vipUntil(accountIds)),
       this.db(this.emblems.standings(accountIds)),
     ]);
@@ -120,6 +124,7 @@ export class AppearanceService {
         bestSeasonPlace: seasons.get(accountId)?.bestPlace ?? null,
         doneAchievements: done.get(accountId) ?? new Set<string>(),
         weeklyTopClaimed: weekly.has(accountId),
+        grants: granted.get(accountId) ?? new Set<string>(),
       });
       result.set(accountId, { held, selected: row.appearanceId, avatarPhoto: row.avatarPhoto });
     }
