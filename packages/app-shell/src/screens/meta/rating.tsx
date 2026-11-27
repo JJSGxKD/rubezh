@@ -266,7 +266,7 @@ export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; 
       style={staggerStyle(Math.min(props.index, 8))}
     >
       <RankMark rank={place} />
-      <Avatar name={entry.name} url={entry.photoUrl} size={36} />
+      <Avatar name={entry.name} url={entry.photoUrl} size={36} appearance={entry.appearance} avatarPhoto={entry.avatarPhoto} />
       <div className="min-w-0 flex-1">
         {/* Метки не сжимаются, поэтому на узком экране уходят на вторую строку, а не выдавливают имя и не наезжают на время. */}
         <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm font-semibold text-text">

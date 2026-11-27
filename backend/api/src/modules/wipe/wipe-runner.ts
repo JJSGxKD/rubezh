@@ -133,6 +133,7 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "run_ad_continue",
   "run_gem_continue",
   "run_ad_reroll",
+  "run_ad_chest",
   "run_proof",
   "run_reward",
   "run_boost",
@@ -161,6 +162,7 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "boost_credit",
   "codex_entry",
   "secret_found",
+  "bot_card",
   "purchase",
   "tester_compensation",
 ];
@@ -182,7 +184,7 @@ async function lockTables(tx: Prisma.TransactionClient, timeoutMs: number): Prom
 }
 
 /**
- * Стереть все строки модели плана. Ветка на каждую из 28 стираемых моделей — явная,
+ * Стереть все строки модели плана. Ветка на каждую из 31 стираемых моделей — явная,
  * без обращения к делегату по имени: стирание не должно зависеть от опечатки.
  * Модель, которой тут нет, — отказ; тест проверяет, что ветка есть у каждой модели `WIPE_ORDER`.
  */
@@ -194,6 +196,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.runGemContinue.deleteMany({});
     case "RunAdReroll":
       return await tx.runAdReroll.deleteMany({});
+    case "RunAdChest":
+      return await tx.runAdChest.deleteMany({});
     case "RunProof":
       return await tx.runProof.deleteMany({});
     case "RunReward":
@@ -250,6 +254,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.passClaim.deleteMany({});
     case "BoostCredit":
       return await tx.boostCredit.deleteMany({});
+    case "BotCard":
+      return await tx.botCard.deleteMany({});
     default:
       throw new Error(`Модель ${model} не входит в план стирания`);
   }

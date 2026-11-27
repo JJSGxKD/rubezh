@@ -36,10 +36,10 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 93 модели, стирается 31", () => {
+  it("остаётся 96 моделей, стирается 33", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(93);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(31);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(96);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(33);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
@@ -47,8 +47,18 @@ describe("план вайпа: полнота", () => {
     expect(plan.PassSeason?.action).toBe("keep");
   });
 
+  it("живые карточки бота (T-0395, Р199) стираются: после вайпа состояние другое, карточки в чатах отвечают «устарела»", () => {
+    expect(plan.BotCard?.action).toBe("wipe");
+  });
+
+  it("выданные облики (T-0245) остаются: окрас куплен за звёзды, а журнал покупок вайп не стирает", () => {
+    expect(plan.AppearanceGrant?.action).toBe("keep");
+    expect(plan.AppearanceGrant?.why).toContain("куплен");
+    expect(order).not.toContain("AppearanceGrant");
+  });
+
   it("контент игры на сервере (T-0303) остаётся: это правила игры, а не данные игроков", () => {
-    for (const model of ["ContentVersion", "ContentDraft", "ContentCheck"]) expect(plan[model]?.action, model).toBe("keep");
+    for (const model of ["ContentVersion", "ContentDraft", "ContentCheck", "ContentCurrent"]) expect(plan[model]?.action, model).toBe("keep");
   });
 
   it("связь с аккаунтом MAX или VK (T-0377) остаётся: она постоянна, как привязки приглашения и источника (Р188)", () => {
@@ -68,6 +78,13 @@ describe("план вайпа: полнота", () => {
     expect(plan.RunAdReroll?.action).toBe("wipe");
     expect(plan.RunAdReroll?.why).toContain("часть забега");
     expect(order.indexOf("RunAdReroll")).toBeLessThan(order.indexOf("Run"));
+  });
+
+  it("второй сундук клада за рекламу (T-0327) — часть забега: стирается своим шагом до забега, а не только каскадом", () => {
+    expect(plan.RunAdChest?.action).toBe("wipe");
+    expect(plan.RunAdChest?.why).toContain("часть забега");
+    expect(order.indexOf("RunAdChest")).toBe(order.indexOf("RunAdReroll") + 1);
+    expect(order.indexOf("RunAdChest")).toBeLessThan(order.indexOf("Run"));
   });
 
   it("удвоение награды дня (T-0242) начинается заново вместе с самой наградой дня и стоит рядом с ней", () => {
@@ -108,6 +125,7 @@ describe("план вайпа: порядок стирания", () => {
       "RunAdContinue",
       "RunGemContinue",
       "RunAdReroll",
+      "RunAdChest",
       "RunProof",
       "RunReward",
       "RunBoost",
@@ -136,6 +154,7 @@ describe("план вайпа: порядок стирания", () => {
       "BoostCredit",
       "CodexEntry",
       "SecretFound",
+      "BotCard",
     ]);
   });
 

@@ -38,6 +38,11 @@ function payload<Shape extends z.ZodRawShape>(shape: Shape) {
 const amount = z.number().nonnegative();
 const ratio = z.number().min(0).max(1);
 
+// Модификатор забега (T-0122, Р105). Список — копия `RUN_MODIFIER_IDS` из
+// `runs/run-verdict.ts`: словарь не зависит от модулей; равенство держит
+// `run-modifiers.test.ts`. Метка Prometheus из него не делается.
+const runModifier = z.enum(["hurry", "inverse"]);
+
 // Покупка глазами клиента (docs/34-stage3-plan.md, WP5; магазин и VIP —
 // docs/35-stage4-plan.md, WP10): воронка от нажатия до выдачи. Суммы здесь —
 // разрез, а не выручка: выручку и возвраты считают по таблице `purchase`
@@ -83,6 +88,8 @@ const runOutcome = payload({
   contentHash: id,
   isNewRecord: z.boolean(),
   cheats: z.boolean(),
+  // Модификатор забега (tasks/T-0122): необязательный, версия прежняя.
+  modifier: runModifier.optional(),
   // Откуда забег: `update` — прерван обновлением игры и засчитан брошенным при
   // следующем запуске (tasks/T-0163). Необязательное: обычный исход поля не
   // несёт, версия прежняя.
@@ -159,6 +166,8 @@ export const EVENT_DICTIONARY = {
       screenMode: id,
       orientation: id,
       devMode: z.boolean(),
+      // Модификатор забега (tasks/T-0122): необязательный, версия прежняя.
+      modifier: runModifier.optional(),
       // Сила игрока (очки) и уровень давления на старте, класс устройства
       // (docs/22-analytics-and-metrics.md §3.3, T-0196). Необязательные: забег
       // разработчика и сборки до подстройки их не шлют, версия прежняя.
@@ -187,6 +196,21 @@ export const EVENT_DICTIONARY = {
       strengthBand: id,
     }),
   },
+  // Серверное событие: сервер перепроверил забег повтором (tasks/T-0319, WP5). `verdict` —
+  // исход, `divergedTick` — тик первого расхождения (у остальных исходов `null`),
+  // `durationMs` — сколько считал повтор (у `no_proof` нуль), `clientOs` — площадка
+  // клиента по последней сессии игрока: по ней видно, где движок сервера расходится с
+  // клиентским. Шлёт только сервер, клиент его не пишет.
+  run_replayed: {
+    version: 1,
+    payload: payload({
+      runId: id,
+      verdict: z.enum(["match", "mismatch", "content_mismatch", "not_replayable", "broken", "timeout", "no_proof"]),
+      divergedTick: count.nullable(),
+      durationMs: count,
+      clientOs: z.enum(["ios", "android", "desktop", "web", "unknown"]),
+    }),
+  },
   run_abandoned: { version: 1, payload: runOutcome },
   // Серверное событие: бот отправил игроку сообщение (tasks/T-0394, Р199).
   // `format` — как сообщение задумано, `outcome` — чем кончилось: `fallback` —
@@ -200,6 +224,18 @@ export const EVENT_DICTIONARY = {
       outcome: z.enum(["sent", "blocked", "failed", "fallback"]),
       topic: z.enum(["none", "news", "rewards", "support"]),
       silent: z.boolean(),
+    }),
+  },
+  // Серверное событие: запрос из живой карточки бота и чем он кончился (tasks/T-0395, Р199).
+  // `card` — вид (`unknown`, пока запрос не дошёл до карточки), `action` — `refresh` или
+  // действие вида, `outcome` — итог; всё, что не итог действия и не «выключено», — `error`.
+  // Игрока в нагрузке нет. Шлёт только сервер, клиент его не пишет.
+  bot_card_query: {
+    version: 1,
+    payload: payload({
+      card: id,
+      action: id,
+      outcome: z.enum(["ok", "already", "locked", "limited", "off", "error"]),
     }),
   },
   // Серверное событие: бот MAX или VK применил одноразовый код и сервер закрепил
@@ -382,6 +418,10 @@ export const EVENT_DICTIONARY = {
   // `auto` — «по умолчанию»; `category` — группа знака, который стал виден у имени (у `auto` без
   // знака её нет). Событие шлёт клиент после ответа сервера; выбор того же знака события не шлёт.
   emblem_shown_changed: { version: 1, payload: payload({ emblem: id, category: z.enum(["status", "season", "merit"]).optional() }) },
+  // Сменил облик героя или кружок аватара (T-0238, docs/35-stage4-plan.md Р150): `appearance` — id
+  // облика, который действует после выбора, `avatarPhoto` — в кружке фото из Telegram. Событие шлёт
+  // клиент после ответа сервера; выбор того же облика и того же кружка события не шлёт.
+  appearance_changed: { version: 1, payload: payload({ appearance: id, avatarPhoto: z.boolean() }) },
   // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
   // открывших доходят до награды. Подписку проверяет бот, и она видна только
   // по achievement_unlocked; открытие без награды — «не подписался». У

@@ -15,8 +15,9 @@ import { createQueueConnection } from "../../infra/queues.js";
 import { describeDbError } from "../../infra/database.js";
 import { REDIS } from "../../infra/redis.js";
 import { BotRouter, type BotUpdateHandler } from "../../platforms/telegram/bot-router.js";
+import { TeamEphemeral, type TelegramCallbackQuery, type TelegramMessage } from "../../platforms/telegram/team-ephemeral.js";
 import type { InlineButton, TelegramBotApi, TelegramUpdate } from "../../platforms/telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../../platforms/telegram/telegram-bot-api.js";
+import { TELEGRAM_BOT_API, TelegramApiError } from "../../platforms/telegram/telegram-bot-api.js";
 import type { ExportPeriod } from "./export.repository.js";
 import { ExportService } from "./export.service.js";
 import { RolesService } from "../roles/roles.service.js";
@@ -30,6 +31,10 @@ import { RolesService } from "../roles/roles.service.js";
  * можно подделать, команду — набрать руками. Не-администратору бот не отвечает
  * вовсе — как на любую неизвестную команду, существование выгрузки не
  * раскрывается. Администратору в группе — отказ без данных.
+ *
+ * В чате команды меню, подсказки и отказы идут эфемерно — их видит только
+ * нажавший (Р199, `TeamEphemeral`); статус и архив уходят только в личный
+ * чат нажавшего.
  *
  * Сборка идёт в очереди с параллельностью 1, а не в обработчике: вебхук
  * отвечает сразу, а выгрузка «весь тест» не должна нагружать базу вдвоём.
@@ -51,6 +56,16 @@ const LOCK_TTL_SEC = 30 * 60;
 const COOLDOWN_SEC = 5 * 60;
 const ENQUEUE_TIMEOUT_MS = 2_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+const MENU_TEXT = "Выгрузка данных закрытого теста. За какой период? Telegram ID в архиве заменены псевдонимами.";
+const MENU_KEYBOARD: InlineButton[][] = [
+  [
+    { text: PERIOD_LABELS.day, callback_data: "export:day" },
+    { text: PERIOD_LABELS.week, callback_data: "export:week" },
+  ],
+  [{ text: PERIOD_LABELS.since, callback_data: "export:since" }],
+  [{ text: PERIOD_LABELS.all, callback_data: "export:all" }],
+];
 
 export interface ExportJob {
   adminId: string;
@@ -113,7 +128,7 @@ export function periodOf(kind: ExportPeriodKind, now: Date): ExportPeriod | null
 @Injectable()
 export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   readonly name = "export";
-  readonly commands = [{ command: "export", description: "Выгрузка данных закрытого теста", audience: "admin" as const }];
+  readonly commands = [{ command: "export", description: "Выгрузка данных закрытого теста", audience: "admin" as const, ephemeral: true }];
   private readonly logger = new Logger("export");
   private queue: Queue<ExportJob> | null = null;
   private worker: Worker<ExportJob> | null = null;
@@ -129,6 +144,7 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
     @Inject(TELEGRAM_BOT_API) private readonly api: ExportBotApi,
     private readonly exports: ExportService,
     private readonly roles: RolesService,
+    private readonly team: TeamEphemeral,
   ) {}
 
   /** Выгрузка работает сейчас; выключают её на ходу из панели — например, при утечке токена бота. */
@@ -164,17 +180,20 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
     return false;
   }
 
-  private async handleCommand(message: NonNullable<TelegramUpdate["message"]>): Promise<boolean> {
+  private async handleCommand(message: TelegramMessage): Promise<boolean> {
     if (message.text === undefined || !/^\/export(@\w+)?(\s|$)/.test(message.text)) return false;
     // Выгрузка — по праву `data.export`, а не по списку Telegram ID
     // (docs/34-stage3-plan.md, WP2). Список остался аварийным путём внутри
     // ролей: он действует, пока в системе нет ни одного владельца.
     if (message.from === undefined || !(await this.canExport(String(message.from.id)))) {
-      // Нет права: молчание, как на неизвестную команду.
+      // Нет права: в чате команды — эфемерный отказ (меню команд там видят все),
+      // в остальных местах молчание, как на неизвестную команду.
+      if (message.from !== undefined) await this.team.tryReply(message, "Выгрузка — только с правом на выгрузку данных.");
       return true;
     }
     const chatId = String(message.chat.id);
     if (message.chat.type !== "private" || chatId !== String(message.from.id)) {
+      if (await this.team.tryReply(message, MENU_TEXT, { keyboard: MENU_KEYBOARD })) return true;
       await this.api.sendMessage(chatId, "Выгрузка — только в личном чате с ботом: здесь её увидели бы все участники.");
       return true;
     }
@@ -187,12 +206,15 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
     return await this.roles.canByPlatformUser("telegram", telegramId, "data.export");
   }
 
-  private async handleCallback(query: NonNullable<TelegramUpdate["callback_query"]>): Promise<boolean> {
+  private async handleCallback(query: TelegramCallbackQuery): Promise<boolean> {
     const data = query.data ?? "";
     if (!data.startsWith("export:")) return false;
     const adminId = String(query.from.id);
     const chat = query.message?.chat;
-    const allowed = (await this.canExport(adminId)) && chat !== undefined && chat.type === "private" && String(chat.id) === adminId;
+    const inPrivate = chat !== undefined && chat.type === "private" && String(chat.id) === adminId;
+    // Нажатие допускается и в чате команды: данные всё равно уйдут только в личку.
+    const inTeamChat = chat !== undefined && this.team.enabled() && this.team.isTeamChat(String(chat.id));
+    const allowed = (await this.canExport(adminId)) && (inPrivate || inTeamChat);
     if (!allowed) {
       // Подделанное нажатие или кнопка из пересланного сообщения: гасим часики
       // у нажавшего и ничего не делаем.
@@ -203,6 +225,11 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
 
     const choice = data.slice("export:".length);
     if (choice === "menu") {
+      if (inTeamChat) {
+        // Такой кнопки в чате команды нет — ветка от подделки.
+        await this.team.answerPress(query, "Меню выгрузки — по команде /export.");
+        return true;
+      }
       await this.api.answerCallbackQuery(query.id);
       await this.sendMenu(adminId);
       return true;
@@ -211,23 +238,34 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
       await this.api.answerCallbackQuery(query.id);
       return true;
     }
-    await this.start(query.id, adminId, choice);
+    await this.start(query, adminId, choice, inTeamChat);
     return true;
   }
 
-  private async start(callbackId: string, adminId: string, period: ExportPeriodKind): Promise<void> {
+  private async start(query: TelegramCallbackQuery, adminId: string, period: ExportPeriodKind, inTeamChat: boolean): Promise<void> {
     const wait = await this.locks.cooldownLeft(adminId);
     if (wait > 0) {
-      await this.api.answerCallbackQuery(callbackId, `Выгрузка была только что. Следующая — через ${Math.ceil(wait / 60)} мин.`);
+      await this.team.answerPress(query, `Выгрузка была только что. Следующая — через ${Math.ceil(wait / 60)} мин.`);
       return;
     }
     // Двойное нажатие и нажатия на старые кнопки упираются в этот лок.
     if (!(await this.locks.claim(adminId))) {
-      await this.api.answerCallbackQuery(callbackId, "Выгрузка уже готовится");
+      await this.team.answerPress(query, "Выгрузка уже готовится");
       return;
     }
-    await this.api.answerCallbackQuery(callbackId, "Готовлю выгрузку");
-    const statusMessageId = await this.api.sendMessage(adminId, `Готовлю выгрузку: ${PERIOD_LABELS[period].toLowerCase()}…`);
+    // Статус — до подсказки: если личного чата с ботом нет, выгрузку не начинаем.
+    let statusMessageId: number;
+    try {
+      statusMessageId = await this.api.sendMessage(adminId, `Готовлю выгрузку: ${PERIOD_LABELS[period].toLowerCase()}…`);
+    } catch (error: unknown) {
+      await this.locks.release(adminId);
+      if (error instanceof TelegramApiError && (error.errorCode === 403 || error.errorCode === 400)) {
+        await this.team.answerPress(query, "Откройте личный чат с ботом и нажмите «Старт» — архив придёт туда.");
+        return;
+      }
+      throw error;
+    }
+    await this.team.answerPress(query, inTeamChat ? "Готовлю выгрузку — пришлю в личку." : "Готовлю выгрузку");
     try {
       await this.jobs.add({ adminId, chatId: adminId, period, statusMessageId, requestedAt: Date.now() });
     } catch (error: unknown) {
@@ -303,20 +341,7 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
   }
 
   private async sendMenu(chatId: string): Promise<void> {
-    const keyboard: InlineButton[][] = [
-      [
-        { text: PERIOD_LABELS.day, callback_data: "export:day" },
-        { text: PERIOD_LABELS.week, callback_data: "export:week" },
-      ],
-      [{ text: PERIOD_LABELS.since, callback_data: "export:since" }],
-      [{ text: PERIOD_LABELS.all, callback_data: "export:all" }],
-    ];
-    await this.api.sendMessage(
-      chatId,
-      "Выгрузка данных закрытого теста. За какой период? Telegram ID в архиве заменены псевдонимами.",
-      undefined,
-      { keyboard },
-    );
+    await this.api.sendMessage(chatId, MENU_TEXT, undefined, { keyboard: MENU_KEYBOARD });
   }
 
   private async enqueue(job: ExportJob): Promise<void> {
