@@ -10,6 +10,49 @@ import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 import { PartnerCard } from "./PartnerCard";
 import { PartnerDialog } from "./PartnerDialog";
+import { PartnerMaterials } from "./PartnerMaterials";
+
+const TABS = [
+  { id: "partners", title: "Партнёры" },
+  { id: "materials", title: "Материалы" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
+/**
+ * Раздел «Партнёры»: список партнёров и вкладка «Материалы» (T-0221) — то, что команда выкладывает в кабинеты
+ * партнёров. Вкладки живут над списком, а не внутри него: сбой загрузки списка не прячет материалы. Карточка
+ * по адресу `#/partners/<id>` открывается на вкладке «Партнёры».
+ */
+export function PartnersScreen({ id }: { id: string | null }) {
+  const [tab, setTab] = useState<TabId>("partners");
+  const view = useSession((session) => session.view);
+  useEffect(() => {
+    if (id !== null) setTab("partners");
+  }, [id]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div role="tablist" aria-label="Раздел «Партнёры»" className="flex gap-1 overflow-x-auto border-b border-border [scrollbar-width:none]">
+        {TABS.map((item) => {
+          const selected = item.id === tab;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setTab(item.id)}
+              className={`-mb-px flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm font-medium transition-colors ${selected ? "border-accent text-text" : "border-transparent text-text-muted hover:text-text"}`}
+            >
+              {item.title}
+            </button>
+          );
+        })}
+      </div>
+      {tab === "materials" ? <PartnerMaterials canEdit={can(view, "partners.edit")} /> : <PartnersList id={id} />}
+    </div>
+  );
+}
 
 /**
  * Партнёры (docs/35-stage4-plan.md WP41, часть 2): кто приводит игроков
@@ -19,7 +62,7 @@ import { PartnerDialog } from "./PartnerDialog";
  * отклонённых. Карточка открывается и по адресу `#/partners/<id>`: на неё
  * ведёт карточка игрока.
  */
-export function PartnersScreen({ id }: { id: string | null }) {
+function PartnersList({ id }: { id: string | null }) {
   const { state, reload } = useApi(() => fetchPartners(api), []);
   const view = useSession((session) => session.view);
   const canEdit = can(view, "partners.edit");

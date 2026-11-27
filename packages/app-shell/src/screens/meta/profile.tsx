@@ -24,6 +24,9 @@ import { useShell } from "../../state/shell";
 import { createAchievementsApi, type AchievementsSummary } from "../../state/achievements-api";
 import { createEmblemsApi, type EmblemsView } from "../../state/emblems-api";
 import "../../i18n/emblems";
+import "../../i18n/appearance";
+import { useLoadOwnAppearance, useOwnAppearance } from "../../state/appearance-api";
+import { useViewerArt } from "../../state/viewer-art";
 import { ItemIcon } from "../item-icons";
 import { achievementTitle, CategoryIcon } from "./achievement-card";
 import { AccountLevel } from "./account-level";
@@ -67,6 +70,10 @@ export function ProfileScreen(): ReactNode {
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [openRun, setOpenRun] = useState<string | null>(null);
   const emblems = useOwnEmblems(account !== null);
+  // Облики — арт: кнопка «Облик» и голова в своём кружке только у зрителя с артом (T-0238).
+  const art = useViewerArt();
+  useLoadOwnAppearance(art && account !== null);
+  const ownAppearance = useOwnAppearance((state) => state.own);
 
   const load = async (): Promise<void> => {
     setFailure(null);
@@ -93,7 +100,7 @@ export function ProfileScreen(): ReactNode {
       <ContentColumn>
         <Card>
           <div className="flex items-center gap-3">
-            <Avatar name={name} url={avatar ?? null} size={56} />
+            <Avatar name={name} url={avatar ?? null} size={56} appearance={ownAppearance?.effective} avatarPhoto={ownAppearance?.avatarPhoto} />
             <div className="min-w-0">
               <p className="truncate font-display text-lg font-bold text-text">{name}</p>
               {/* Знак у имени (T-0236) — строкой под именем. Метки «Тестер» и «Меценат» — только пока сервер знаков не отдал (старый сервер): ждём ответ, а не рисуем их и тут же меняем. Строкой и с переносом: два со словом рядом с именем на 320 px съели бы его. */}
@@ -122,11 +129,18 @@ export function ProfileScreen(): ReactNode {
               value={profile === null ? "—" : formatPlayTime(profile.totalSurvivalSec)}
             />
           </div>
-          {emblems.status !== "ready" ? null : (
-            <div className="mt-3">
-              <Button track="open_emblems" variant="secondary" block onClick={() => navigation.push("emblems")}>
-                {t("emblems.open", { count: heldCount(emblems.view.items) })}
-              </Button>
+          {emblems.status !== "ready" && !(art && account !== null) ? null : (
+            <div className={`mt-3 grid gap-2 ${emblems.status === "ready" && art && account !== null ? "grid-cols-2" : ""}`}>
+              {emblems.status !== "ready" ? null : (
+                <Button track="open_emblems" variant="secondary" block onClick={() => navigation.push("emblems")}>
+                  {t("emblems.open", { count: heldCount(emblems.view.items) })}
+                </Button>
+              )}
+              {art && account !== null ? (
+                <Button track="open_appearance" variant="secondary" block onClick={() => navigation.push("appearance")}>
+                  {t("appearance.open")}
+                </Button>
+              ) : null}
             </div>
           )}
           {progress === null ? null : (

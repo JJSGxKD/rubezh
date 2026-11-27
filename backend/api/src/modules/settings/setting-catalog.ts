@@ -200,6 +200,8 @@ const SEASONS_GROUP = "Сезоны рейтинга";
 
 const RATING_GROUP = "Рейтинг";
 
+const REPLAY_GROUP = "Перепроверка забегов";
+
 const BOT_MENTION_GROUP = "Юзернейм бота";
 
 const ACHIEVEMENTS_GROUP = "Достижения";
@@ -219,6 +221,7 @@ const MAX_BOT_GROUP = "Бот MAX";
 const PAYMENTS_GROUP = "Платежи";
 
 const TELEGRAM_AFFILIATE_GROUP = "Партнёрка Telegram";
+const CONTENT_GROUP = "Баланс игры";
 
 /** Имя бота MAX в ссылке `max.ru/<имя>`: латиница, цифры, знак подчёркивания, точка и дефис; без «@» и без адреса. */
 const MAX_BOT_USERNAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$/;
@@ -733,6 +736,30 @@ export const SETTINGS = {
     { min: 0, max: 100_000, unit: ["очко", "очка", "очков"] },
     800,
   ),
+  /**
+   * Перепроверка забегов повтором на сервере (docs/35-stage4-plan.md WP5, tasks/T-0319).
+   * Верх досок, высокие дивизионы, редкая добыча и победа над Стражем повторяются всегда —
+   * это правило, а не настройка; ключи — про остальные забеги и про то, чем отвечает расхождение.
+   * Редактор панели принимает только целые, поэтому доля выборки — проценты (5 — это 0,05).
+   */
+  replaySampleRate: integer(
+    "replay.sample-rate",
+    REPLAY_GROUP,
+    "Повтор выборкой, процентов забегов",
+    "Какая доля остальных рейтинговых забегов повторяется на сервере для наблюдения за детерминизмом движка, проценты: 5 — это 0,05. Верх досок, рубин и золото, эпическая добыча и победа над Стражем повторяются всегда. 0 — выборки нет",
+    { min: 0, max: 100, unit: ["процент", "процента", "процентов"] },
+    5,
+  ),
+  replayMismatchVerdict: {
+    key: "replay.mismatch-verdict",
+    group: REPLAY_GROUP,
+    title: "Вердикт при расхождении повтора",
+    hint: "Чем отвечает сервер, когда повтор разошёлся с записью: observe — только наблюдение (исход, тик расхождения и событие пишутся, вердикт и рейтинг забега не меняются), suspicious — подозрительный (забег уходит из рейтинга в разбор), rejected — отклонённый. Пока не измерено, насколько движок сервера расходится с iPhone, — observe: ложное расхождение не должно снимать честного игрока с доски",
+    kind: "text",
+    schema: z.enum(["observe", "suspicious", "rejected"], { message: "observe, suspicious или rejected" }),
+    fromEnv: () => null,
+    fallback: "observe",
+  } satisfies SettingDefinition<string>,
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",
@@ -1002,6 +1029,16 @@ export const SETTINGS = {
     ),
     group: BOT_MESSAGES_GROUP,
   } satisfies SettingDefinition<boolean>,
+  botTeamEphemeralEnabled: {
+    ...feature(
+      "bot.team-ephemeral.enabled",
+      "Эфемерные ответы в чате команды",
+      "/help, меню выгрузки и отказы в чате команды видит только спросивший. Работает, когда включены сообщения нового поколения. Выключено — бот отвечает всем, как раньше",
+      () => null,
+      true,
+    ),
+    group: BOT_MESSAGES_GROUP,
+  } satisfies SettingDefinition<boolean>,
   botLoudPerDay: integer(
     "bot.loud-per-day",
     BOT_MESSAGES_GROUP,
@@ -1009,6 +1046,36 @@ export const SETTINGS = {
     "Сколько сообщений, которые бот пишет сам, приходят игроку со звуком за игровые сутки; остальные — без звука. Ответы на команды и нажатия не считаются",
     { min: 1, max: 5, unit: ["сообщение", "сообщения", "сообщений"] },
     2,
+  ),
+  /**
+   * Живые карточки бота (Р199, Р225, tasks/T-0395). Общий выключатель — выкл.: 14.11.2026 Telegram
+   * отключил виджеты у всех, и сценарии идут обычным сообщением. Ключи видов — у задач видов.
+   */
+  botWidgetEnabled: {
+    ...feature(
+      "bot.widget.enabled",
+      "Живые карточки",
+      "Карточки-виджеты в личке бота. Выключено — те же сценарии приходят обычным сообщением. 14.11.2026 Telegram отключил виджеты: включать, когда вернёт и проверка на проде пройдёт",
+      () => null,
+      false,
+    ),
+    group: BOT_MESSAGES_GROUP,
+  } satisfies SettingDefinition<boolean>,
+  botWidgetRetryMinutes: integer(
+    "bot.widget.retry-minutes",
+    BOT_MESSAGES_GROUP,
+    "Пауза карточек после отказа площадки",
+    "Площадка отказала в методе карточек — столько минут всё идёт обычными сообщениями, потом карточка пробуется снова",
+    { min: 5, max: 1440, unit: ["минута", "минуты", "минут"] },
+    30,
+  ),
+  botWidgetEditMinMinutes: integer(
+    "bot.widget.edit-min-minutes",
+    BOT_MESSAGES_GROUP,
+    "Правка карточки — не чаще раза в",
+    "Бот правит одну живую карточку не чаще; финальная правка периода — сразу",
+    { min: 1, max: 120, unit: ["минута", "минуты", "минут"] },
+    10,
   ),
   linksAutoDailyCap: integer(
     "links.auto-daily-cap",
@@ -1289,6 +1356,20 @@ export const SETTINGS = {
     { min: 0, max: 120, unit: ["месяц", "месяца", "месяцев"] },
     0,
   ),
+   * Рельс публикации баланса (docs/19-content-admin.md §4.3, tasks/T-0306): без свежей зелёной проверки черновик не
+   * публикуется. Выключение — осознанное и временное, например когда sim-worker недоступен, а баланс нужно
+   * поправить срочно: каждая публикация в обход проверки помечается в аудите. Только из панели — в `.env` ключа нет.
+   */
+  contentPublishRequireCheck: {
+    key: "content.publish-require-check",
+    group: CONTENT_GROUP,
+    title: "Публиковать баланс только после проверки",
+    hint: "Включено — черновик баланса публикуется, только если по его нынешнему состоянию есть свежая зелёная проверка: схема, проверки контента и симуляция в коридорах. Выключено — проверка не требуется, а каждая такая публикация помечается в аудите. Держать включённым: выключают на время, когда проверку не запустить",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
 } as const;
 
 export const SETTING_LIST: readonly SettingDefinition[] = Object.values(SETTINGS);

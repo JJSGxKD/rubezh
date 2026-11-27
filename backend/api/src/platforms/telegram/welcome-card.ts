@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
-import { HERO_PORTRAITS, PORTRAIT_RATIO, WORDMARK_RATIO, WORDMARK_SVG } from "../../common/card/brand-art.js";
-import { estimateWidth, PALETTE, rect, renderPng, svgDocument, svgImage, text, twilightBackdrop, wrapWords } from "../../common/card/svg.js";
+import { cardCacheKey } from "../../common/card/card-cache.js";
+import { SCENE_HEIGHT, SCENE_PAD, SCENE_WIDTH, sceneLayers } from "../../common/card/scene.js";
+import { estimateWidth, PALETTE, rect, renderPng, svgDocument, text, wrapWords } from "../../common/card/svg.js";
 import { WELCOME_TEXTS, type WelcomeLanguage } from "./welcome-texts.js";
 
 /**
@@ -11,12 +11,17 @@ import { WELCOME_TEXTS, type WelcomeLanguage } from "./welcome-texts.js";
  * шаблона — смена `CARD_VERSION`, иначе старые картинки отдавались бы из кэша.
  * Сменой версии сбрасываются и картинки, нарисованные без шрифта: их
  * `file_id` Telegram отдаёт так же охотно, как хорошие.
+ *
+ * Мир, облик и знак — общая сцена картинок бота (`common/card/scene.ts`), а
+ * здесь только колонка приветствия; заголовки и числа — шрифтом игры.
  */
-export const CARD_VERSION = 6;
+export const CARD_VERSION = 7;
 
-const WIDTH = 1200;
-const HEIGHT = 675;
-const PAD = 72;
+const WIDTH = SCENE_WIDTH;
+const HEIGHT = SCENE_HEIGHT;
+/** Левое поле — как у сцены; вертикальные отступы колонки считаются от `TOP`. */
+const LEFT = SCENE_PAD;
+const TOP = 72;
 const NAME_MAX = 18;
 
 export interface WelcomeProgress {
@@ -55,8 +60,8 @@ function formatNumber(value: number): string {
 /** Ключ кэша: имени в открытом виде в Redis нет — только хэш. */
 export function welcomeCacheKey(card: WelcomeCard): string {
   const best = card.progress.best;
-  const payload = JSON.stringify([
-    CARD_VERSION,
+  return cardCacheKey(CARD_VERSION, [
+    "welcome",
     card.language,
     card.name,
     card.progress.runs,
@@ -64,57 +69,50 @@ export function welcomeCacheKey(card: WelcomeCard): string {
     // дали бы две копии одной карточки.
     best === null ? null : [best.points, Math.round(best.survivalSec), best.rank, best.total],
   ]);
-  return createHash("sha256").update(payload).digest("hex");
 }
 
-/** Герой справа и колонка текста слева: ширина колонки — то, что осталось от героя. */
-const HERO_WIDTH = 300;
-const COLUMN = WIDTH - PAD * 2 - HERO_WIDTH - 24;
+/** Колонка текста слева: правый край — до облика, который стоит справа от x 830. */
+const COLUMN = 760;
 
 export function renderWelcomeSvg(card: WelcomeCard): string {
   const texts = WELCOME_TEXTS[card.language];
-  // Мир игры: небо, жар очага, частокол — и хранитель перед частоколом. Знак
-  // вместо подписи «РУБЕЖ»: картинка в чате узнаётся по нему.
-  const heroHeight = HERO_WIDTH * PORTRAIT_RATIO;
-  const parts: string[] = [
-    ...twilightBackdrop(WIDTH, HEIGHT, { starsFrom: (PAD + COLUMN) / WIDTH }),
-    svgImage(HERO_PORTRAITS.keeper ?? "", WIDTH - PAD - HERO_WIDTH + 20, HEIGHT - heroHeight - 6, HERO_WIDTH, heroHeight),
-    svgImage(WORDMARK_SVG, PAD - 12, PAD - 34, 290, 290 * WORDMARK_RATIO),
-  ];
+  // Мир игры, хранитель перед частоколом и знак — общая сцена: картинка в чате
+  // узнаётся по ним. Звёзды правее колонки: над текстом они ложились бы на буквы.
+  const parts: string[] = sceneLayers("keeper", { starsFrom: (LEFT + COLUMN) / WIDTH });
 
   const greeting = texts.greeting(card.name);
   const greetingSize = estimateWidth(greeting, 64, true) > COLUMN ? 48 : 64;
-  parts.push(text(PAD, PAD + 140, greeting, { size: greetingSize, fill: PALETTE.text, weight: 800 }));
+  parts.push(text(LEFT, TOP + 140, greeting, { size: greetingSize, fill: PALETTE.text, heading: true }));
 
   const best = card.progress.best;
   if (best === null) {
     const lead = wrapWords(texts.newcomerLead, 26, COLUMN).slice(0, 2);
-    lead.forEach((line, index) => parts.push(text(PAD, PAD + 192 + index * 34, line, { size: 26, fill: PALETTE.muted })));
+    lead.forEach((line, index) => parts.push(text(LEFT, TOP + 192 + index * 34, line, { size: 26, fill: PALETTE.muted })));
     texts.newcomerPoints.forEach((point, index) => {
-      const y = PAD + 282 + index * 54;
-      parts.push(rect(PAD, y - 26, 34, 34, { fill: PALETTE.raised, stroke: PALETTE.border, radius: 10 }));
-      parts.push(text(PAD + 17, y - 1, String(index + 1), { size: 22, fill: PALETTE.accent, weight: 700, anchor: "middle" }));
-      parts.push(text(PAD + 56, y, point, { size: estimateWidth(point, 28) > COLUMN - 56 ? 24 : 28, fill: PALETTE.text }));
+      const y = TOP + 282 + index * 54;
+      parts.push(rect(LEFT, y - 26, 34, 34, { fill: PALETTE.raised, stroke: PALETTE.border, radius: 10 }));
+      parts.push(text(LEFT + 17, y - 1, String(index + 1), { size: 22, fill: PALETTE.accent, heading: true, anchor: "middle" }));
+      parts.push(text(LEFT + 56, y, point, { size: estimateWidth(point, 28) > COLUMN - 56 ? 24 : 28, fill: PALETTE.text }));
     });
     const call = wrapWords(texts.newcomerCall, 28, COLUMN, true);
-    call.forEach((line, index) => parts.push(text(PAD, HEIGHT - PAD - 46 - (call.length - 1 - index) * 36, line, { size: 28, fill: PALETTE.elite, weight: 700 })));
+    call.forEach((line, index) => parts.push(text(LEFT, HEIGHT - TOP - 46 - (call.length - 1 - index) * 36, line, { size: 28, fill: PALETTE.elite, heading: true })));
   } else {
-    const panelY = PAD + 176;
-    parts.push(rect(PAD, panelY, COLUMN, 236, { fill: PALETTE.surface, stroke: PALETTE.border, radius: 24 }));
+    const panelY = TOP + 176;
+    parts.push(rect(LEFT, panelY, COLUMN, 236, { fill: PALETTE.surface, stroke: PALETTE.border, radius: 24 }));
     const score = formatNumber(best.points);
     // Справа от очков стоит место, поэтому длинное число уменьшается, а не наезжает на него.
     const scoreSize = estimateWidth(score, 120, true) > COLUMN * 0.6 ? 96 : 120;
-    parts.push(text(PAD + 36, panelY + 140, score, { size: scoreSize, fill: PALETTE.accent, weight: 800 }));
-    parts.push(text(PAD + 40, panelY + 196, texts.pointsLabel(best.survivalSec), { size: 28, fill: PALETTE.muted, spacing: 1 }));
+    parts.push(text(LEFT + 36, panelY + 140, score, { size: scoreSize, fill: PALETTE.accent, heading: true }));
+    parts.push(text(LEFT + 40, panelY + 196, texts.pointsLabel(best.survivalSec), { size: 28, fill: PALETTE.muted, spacing: 1 }));
 
-    const right = PAD + COLUMN - 32;
+    const right = LEFT + COLUMN - 32;
     const rank = texts.rank(best.rank, best.total);
     const chipWidth = estimateWidth(rank, 36) + 52;
     parts.push(rect(right - chipWidth, panelY + 64, chipWidth, 64, { fill: PALETTE.raised, stroke: PALETTE.border, radius: 32 }));
-    parts.push(text(right - chipWidth / 2, panelY + 108, rank, { size: 36, fill: PALETTE.text, weight: 700, anchor: "middle" }));
+    parts.push(text(right - chipWidth / 2, panelY + 108, rank, { size: 36, fill: PALETTE.text, heading: true, anchor: "middle" }));
     parts.push(text(right, panelY + 186, texts.runs(card.progress.runs), { size: 28, fill: PALETTE.muted, anchor: "end" }));
     const call = wrapWords(texts.veteranCall, 32, COLUMN, true);
-    call.forEach((line, index) => parts.push(text(PAD, HEIGHT - PAD - 46 - (call.length - 1 - index) * 40, line, { size: 32, fill: PALETTE.elite, weight: 700 })));
+    call.forEach((line, index) => parts.push(text(LEFT, HEIGHT - TOP - 46 - (call.length - 1 - index) * 40, line, { size: 32, fill: PALETTE.elite, heading: true })));
   }
 
   return svgDocument(WIDTH, HEIGHT, parts);

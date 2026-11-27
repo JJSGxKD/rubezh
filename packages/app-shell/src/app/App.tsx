@@ -41,6 +41,7 @@ import {
   FeedbackScreen,
   GuideScreen,
   EmblemsScreen,
+  AppearanceScreen,
   HistoryScreen,
   LevelScreen,
   MainMenu,
@@ -305,6 +306,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <HistoryScreen />;
     case "emblems":
       return <EmblemsScreen />;
+    case "appearance":
+      return <AppearanceScreen />;
     case "notifications":
       return <NotificationsScreen />;
     case "changelog":

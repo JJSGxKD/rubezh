@@ -3,6 +3,7 @@ import { IDENTITY_SOURCES, PublicIdentity, PublicIdentityModule } from "../../co
 import { EMBLEMS_REPOSITORY, PrismaEmblemsRepository } from "../achievements/emblems.repository.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { TasksModule } from "../tasks/tasks.module.js";
+import { APPEARANCE_GRANTS_REPOSITORY, PrismaAppearanceGrantsRepository } from "./appearance-grants.repository.js";
 import { AppearanceController } from "./appearance.controller.js";
 import { APPEARANCE_REPOSITORY, PrismaAppearanceRepository } from "./appearance.repository.js";
 import { AppearanceService } from "./appearance.service.js";
@@ -17,7 +18,9 @@ import { AppearanceService } from "./appearance.service.js";
  * достижений. Сбой одного источника не стирает метки другого.
  *
  * Репозиторий знаков подключён здесь же вторым экземпляром: он без состояния, а VIP и лучшее
- * место в сезоне читаются его методами (T-0235), запросы не копируются.
+ * место в сезоне читаются его методами (T-0235), запросы не копируются. Так же подключён
+ * репозиторий выдач (T-0245): строки в него пишет магазин, а читает владение — оба держат по
+ * своему экземпляру, чтобы модуль магазина не тянул за собой модуль заданий.
  */
 @Module({
   imports: [AuthModule, TasksModule, PublicIdentityModule],
@@ -25,6 +28,7 @@ import { AppearanceService } from "./appearance.service.js";
   providers: [
     AppearanceService,
     { provide: APPEARANCE_REPOSITORY, useClass: PrismaAppearanceRepository },
+    { provide: APPEARANCE_GRANTS_REPOSITORY, useClass: PrismaAppearanceGrantsRepository },
     { provide: EMBLEMS_REPOSITORY, useClass: PrismaEmblemsRepository },
   ],
   exports: [AppearanceService],

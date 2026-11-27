@@ -38,6 +38,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   AuditEntry: keep("журнал действий команды"),
   AccountRestriction: keep("ограничения действуют и после вайпа"),
   Purchase: keep("журнал покупок не стирается никогда; по нему возвращается купленное"),
+  AppearanceGrant: keep("облик, выданный разово (T-0245), куплен за звёзды в наборе хранителя: журнал покупок вайп не стирает, и выданное за них не отбирается; возврат покупки снимает облик сам"),
   PurchaseCompensation: keep("компенсации за сбой оплаты — история денег, как покупки"),
   PaymentReconcileRun: keep("сверки с выпиской площадки — история денег"),
   PaymentDiscrepancy: keep("расхождения сверки и их разбор — история денег"),
@@ -67,6 +68,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   TelegramAffiliateMark: keep("метка партнёрки Telegram — слот источника игрока навсегда (Р97, T-0072)"),
   ExternalIdentity: keep("связь с аккаунтом MAX или VK постоянна (Р188, T-0377): id площадки не освобождается и второй раз никому не достаётся, как привязки приглашения и источника"),
   Partner: keep("партнёры команды"),
+  PartnerMaterial: keep("материалы для партнёров — выкладывает команда, к игрокам и их прогрессу не относятся (Р136)"),
   StakeholderShare: keep("доли участников проекта — решения владельца о деньгах, а не игровой прогресс (Р217)"),
   LedgerAccount: keep("план счетов учёта — настройка команды (Р219)"),
   LedgerArticle: keep("статьи учёта — настройка команды, на них ссылаются счета журнала (Р220)"),
@@ -115,6 +117,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   ContentVersion: keep("версии контента игры — правила, а не данные игроков (T-0303)"),
   ContentDraft: keep("черновики контента команды (T-0303)"),
   ContentCheck: keep("проверки черновиков контента (T-0303)"),
+  ContentCurrent: keep("какая версия контента в игре у команды и у всех — правила игры, а не данные игроков (T-0306)"),
 
   // --- остаются: курсы валют ---
   FxQuote: keep("курсы валют — не данные игрока"),
@@ -138,6 +141,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
 
   // --- стираются: игровой прогресс ---
   RunAdContinue: wipe("второй шанс за рекламу — часть забега"),
+  RunAdChest: wipe("второй сундук клада за рекламу (T-0327) — часть забега: свой шаг, а не каскад с забегом"),
   RunAdReroll: wipe("рекламный переброс карточек (T-0199) — часть забега: свой шаг, а не каскад с забегом"),
   RunGemContinue: wipe("второй шанс за самоцветы (Р162) — часть забега: свой шаг, а не каскад с забегом"),
   RunProof: wipe("запись забега для проверки (T-0317) — часть забега: свой шаг, а не каскад с забегом"),
@@ -160,12 +164,14 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   AccountProgress: wipe("уровень и опыт; уровень уходит в снимок (T-0040)"),
   FriendGift: wipe("подарки друзьям — валюта"),
   DailyReward: wipe("награда дня начинается заново"),
+  DailyDouble: wipe("удвоение награды дня за ролик (T-0242) идёт вместе с самой наградой дня: она начинается заново, кошелёк обнулён"),
   WheelSpin: wipe("крутки колеса"),
   VipDaily: wipe("день забора самоцветов VIP"),
   Notification: wipe("лента уведомлений"),
   PassProgress: wipe("очки батл-пасса (T-0311) — прогресс того же рода, что задания; кошелёк после вайпа обнулён, очки не оставляем"),
   PassClaim: wipe("журнал забранных наград пасса (T-0311) — идёт вместе с очками и кошельком, которые вайп обнуляет"),
   BoostCredit: wipe("бусты-подарки пасса (T-0311) — часть добычи игрока, как осколки и снаряжение"),
+  BotCard: wipe("живые карточки бота (Р199): после вайпа состояние другое; карточки в чатах отвечают «устарела»"),
   BotMentionTask: wipe("серия и награждённые сутки задания «юзернейм бота» — прогресс того же рода, что награда дня; кошелёк после вайпа обнулён, серию не продолжают"),
 };
 
@@ -174,6 +180,7 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "RunAdContinue",
   "RunGemContinue",
   "RunAdReroll",
+  "RunAdChest",
   "RunProof",
   "RunReward",
   "RunBoost",
@@ -192,6 +199,7 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "AccountProgress",
   "FriendGift",
   "DailyReward",
+  "DailyDouble",
   "WheelSpin",
   "VipDaily",
   "Notification",
@@ -201,4 +209,5 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "BoostCredit",
   "CodexEntry",
   "SecretFound",
+  "BotCard",
 ];
