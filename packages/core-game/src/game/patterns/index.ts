@@ -1,6 +1,7 @@
 import type { EnemyPattern } from "@bh/shared-types";
 import type { World } from "../sim/world";
 import type { PatternBehavior } from "./behavior";
+import { blink } from "./blink";
 import { chase } from "./chase";
 import { cordon } from "./cordon";
 import { dash } from "./dash";
@@ -28,6 +29,7 @@ export const PATTERNS: Record<EnemyPattern, PatternBehavior> = {
   exploder,
   splitter,
   rush,
+  blink,
   cordon,
   stalker,
 };
@@ -54,6 +56,7 @@ export { DASH_PHASE } from "./dash";
 export { ORBIT_PHASE } from "./orbit";
 export { EXPLODER_PHASE } from "./exploder";
 export { RUSH_PHASE } from "./rush";
+export { BLINK_APPEAR_SEC, BLINK_FADE_SEC, BLINK_MIN_DISTANCE, BLINK_PHASE } from "./blink";
 export { CORDON_FORM_SEC, CORDON_PHASE } from "./cordon";
 export {
   BOSS_RADIUS_MUL,

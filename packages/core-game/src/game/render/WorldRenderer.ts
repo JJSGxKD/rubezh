@@ -6,9 +6,10 @@ import { CORDON_INNER_SEC } from "../sim/cordon";
 import { siegeWarning } from "../sim/siege";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { CORDON_FORM_SEC, CORDON_PHASE, DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
+import { BLINK_PHASE, CORDON_FORM_SEC, CORDON_PHASE, DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
 import { isTimeFrozen } from "../sim/freeze";
 import { ORBITER_RADIUS, type OrbiterPoint } from "../weapons";
+import { blinkAlpha, blinkMarkFrame, blinkMarkProgress } from "./blink-look";
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
 import { orbiterRenderPoints } from "./orbiter-points";
@@ -437,6 +438,16 @@ export class WorldRenderer {
 
       const typeIndex = enemies.type[i];
       const type = this.world.enemyTypes[typeIndex];
+      // Скрытого нет на поле: спрайт прячется, а на его месте — метка, где он встанет. Метка — чтение боя,
+      // поэтому она до выключателя телеграфов: без неё урон пришёл бы из ниоткуда.
+      if (type.hiddenPhase >= 0 && enemies.phase[i] === type.hiddenPhase) {
+        if (sprite.visible) sprite.setVisible(false);
+        this.enemySpriteLook[i] = LOOK_NONE;
+        const progress = blinkMarkProgress(enemies.phaseTimer[i], type.params.telegraphSec);
+        const marks = this.art.markArt(type.id);
+        this.telegraphs.mark(enemies.x[i], enemies.y[i], type.radius, progress, marks === null ? null : (marks[blinkMarkFrame(progress)] ?? null), this.art.scale);
+        continue;
+      }
       const texture = typeIndex * this.stageCount + Math.min(enemies.stage[i], this.stageCount - 1);
       if (this.art.applyEnemy(sprite, i, texture, tick, enemies.vx[i], enemies.vy[i])) {
         this.enemySpriteType[i] = -1;
@@ -486,6 +497,12 @@ export class WorldRenderer {
       if (type.unkillable) {
         // Растворение — прозрачность тела; вид слота сбрасывается, чтобы следующий враг в нём не унаследовал её.
         sprite.setAlpha(stalkerFadeAlpha(this.world));
+        this.enemySpriteLook[i] = LOOK_NONE;
+      }
+      // Тает и проявляется: прозрачность каждый кадр, а вид слота сбрасывается — вернувшись в chase, он
+      // восстановит прозрачность и заливку, как у растворяющегося Карачуна.
+      if (type.pattern === "blink" && enemies.phase[i] !== BLINK_PHASE.chase) {
+        sprite.setAlpha(blinkAlpha(enemies.phase[i], enemies.phaseTimer[i]));
         this.enemySpriteLook[i] = LOOK_NONE;
       }
       sprite.setVisible(true);
