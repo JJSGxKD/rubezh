@@ -44,6 +44,8 @@ export interface RunStartRecord {
   startingWeaponId: string;
   contentHash: string;
   startedAt: Date | null;
+  /** модификатор забега, названный в старте (T-0122); нет — забег без модификатора */
+  modifierId?: string | null | undefined;
 }
 
 export interface RunFinishRecord {
@@ -74,6 +76,8 @@ export interface RunFinishRecord {
   rubezhReached: boolean;
   /** секунда победы со слов итога; `null` — страж не пал */
   rubezhClearedSec: number | null;
+  /** модификатор забега, названный в итоге (T-0122); нет — забег без него */
+  modifierId?: string | null | undefined;
   /** очки эффективности (T-0293); `null` — пролог, обучение или сбой подсчёта */
   score?: StoredScore | null | undefined;
   /** исходные числа для пересчёта очков; `null` — нерейтинговая сложность */
@@ -96,6 +100,8 @@ export interface StoredRun {
   cheats: boolean;
   rubezhReached: boolean;
   rubezhClearedSec: number | null;
+  /** модификатор забега, записанный со старта или итогом (T-0122); `null` — без модификатора */
+  modifierId: string | null;
   /** записанные очки; `null` — очков нет */
   score: StoredScore | null;
 }
@@ -186,6 +192,11 @@ export const RUNS_REPOSITORY = Symbol("RUNS_REPOSITORY");
 
 export interface RunsRepository {
   find(runId: string): Promise<StoredRun | null>;
+  /**
+   * Уровень аккаунта на сервере (`account_progress.level`); записи нет — первый.
+   * По нему открываются модификаторы забега: уровню из тела клиента верить нельзя.
+   */
+  accountLevel(accountId: string): Promise<number>;
   start(record: RunStartRecord): Promise<StartOutcome>;
   finish(record: RunFinishRecord): Promise<FinishOutcome>;
   stats(accountId: string): Promise<{ runs: number; totalKills: number; totalSurvivalSec: number }>;
@@ -246,6 +257,7 @@ export class PrismaRunsRepository implements RunsRepository {
         cheats: true,
         rubezhReached: true,
         rubezhClearedSec: true,
+        modifierId: true,
         points: true,
         axes: true,
         style: true,
@@ -257,9 +269,14 @@ export class PrismaRunsRepository implements RunsRepository {
     return { ...rest, ratingRestricted: ratingRestrictedOf(row.ratingRestricted), score: storedScoreOf({ points, axes, style, band }) };
   }
 
+  async accountLevel(accountId: string): Promise<number> {
+    const row = await this.prisma.accountProgress.findUnique({ where: { accountId }, select: { level: true } });
+    return row?.level ?? 1;
+  }
+
   async start(record: RunStartRecord): Promise<StartOutcome> {
     try {
-      await this.prisma.run.create({ data: { ...record, status: "started", verdictReasons: [] } });
+      await this.prisma.run.create({ data: { ...record, modifierId: record.modifierId ?? null, status: "started", verdictReasons: [] } });
       return "created";
     } catch (error: unknown) {
       if (!isUniqueViolation(error)) throw error;
@@ -293,6 +310,7 @@ export class PrismaRunsRepository implements RunsRepository {
       verdictReasons: record.verdictReasons,
       rubezhReached: record.rubezhReached,
       rubezhClearedSec: record.rubezhClearedSec,
+      modifierId: record.modifierId ?? null,
       points: record.score?.points ?? null,
       axes: record.score?.axes ?? Prisma.DbNull,
       style: record.score?.style ?? null,

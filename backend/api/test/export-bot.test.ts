@@ -12,9 +12,13 @@ import type { ExportArtifact, ExportRequest, ExportService } from "../src/module
 import { chatTargetOf } from "../src/platforms/ports/chat-target.js";
 import type { TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
+import { TeamEphemeral } from "../src/platforms/telegram/team-ephemeral.js";
+import { TelegramApiError } from "../src/platforms/telegram/telegram-bot-api.js";
+import type { SettingValue } from "../src/modules/settings/setting-catalog.js";
+import { panelSettings } from "./helpers/settings.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { switchesOf } from "./helpers/notify-targets.js";
+import { switchesOf, targetsOf } from "./helpers/notify-targets.js";
 
 // Выгрузка через бота (docs/28-diagnostics.md §6.1.5).
 
@@ -40,9 +44,12 @@ class MemoryLocks implements ExportBotLocks {
   }
 }
 
-type Call = { method: string; chatId?: string; text?: string; keyboard?: unknown; name?: string };
+type Call = { method: string; chatId?: string; text?: string; keyboard?: unknown; name?: string; ephemeral?: unknown };
 
-function setup(env: Record<string, string> = {}, parts = 1) {
+const TEAM_CHAT = -1004251205331;
+const TEAM_ON: Record<string, SettingValue> = { "bot.formats.enabled": true, "bot.team-ephemeral.enabled": true };
+
+function setup(env: Record<string, string> = {}, parts = 1, panel: Record<string, SettingValue> = TEAM_ON) {
   const config = loadAppConfig({
     NODE_ENV: "test",
     TELEGRAM_BOT_TOKEN: "123:TEST",
@@ -51,12 +58,16 @@ function setup(env: Record<string, string> = {}, parts = 1) {
     EXPORT_PSEUDONYM_KEY: "a".repeat(64),
     DATABASE_URL: "postgresql://unused",
     ADMIN_TELEGRAM_IDS: String(ADMIN),
+    ADMIN_CHAT_ID: String(TEAM_CHAT),
     ...env,
   });
   const calls: Call[] = [];
+  const failDirect = new Set<string>();
   const api: ExportBotApi = {
     async sendMessage(chat, text, _signal, options) {
-      calls.push({ method: "sendMessage", chatId: chatTargetOf(chat).chatId, text, keyboard: options?.keyboard });
+      const chatId = chatTargetOf(chat).chatId;
+      if (options?.ephemeral === undefined && failDirect.has(chatId)) throw new TelegramApiError("sendMessage", 403, "Forbidden: bot can't initiate conversation", null);
+      calls.push({ method: "sendMessage", chatId, text, keyboard: options?.keyboard, ...(options?.ephemeral === undefined ? {} : { ephemeral: options.ephemeral }) });
       return calls.length;
     },
     async editMessageText(chat, _messageId, text) {
@@ -101,7 +112,7 @@ function setup(env: Record<string, string> = {}, parts = 1) {
   } as unknown as ExportService;
   const locks = new MemoryLocks();
   const router = new BotRouter();
-  const command = new ExportBotCommand(config, switchesOf(config), router, locks, api, exports, rolesService(config));
+  const command = new ExportBotCommand(config, switchesOf(config), router, locks, api, exports, rolesService(config), new TeamEphemeral(panelSettings(panel), targetsOf(config), api));
   const jobs: ExportJob[] = [];
   command.jobs = { add: async (job) => void jobs.push(job) };
   command.onModuleInit();
@@ -113,6 +124,7 @@ function setup(env: Record<string, string> = {}, parts = 1) {
     builds,
     journal,
     locks,
+    failDirect,
     cleaned: () => cleaned,
     failBuild: (error: Error) => (failBuild = error),
   };
@@ -214,5 +226,69 @@ describe("выгрузка через бота", () => {
     expect(periodOf("day", now)).toEqual({ from: new Date("2026-09-14T12:00:00Z"), to: now });
     expect(periodOf("all", now)).toEqual({ from: null, to: now });
     expect(periodOf("since", now)).toBeNull();
+  });
+
+  describe("эфемерные ответы в чате команды", () => {
+    const team = { id: TEAM_CHAT, type: "supergroup" };
+
+    it("/export с правом — меню только нажавшему, задания нет", async () => {
+      const bot = setup();
+      await bot.router.dispatch(message(ADMIN, "/export", team));
+      expect(bot.calls).toHaveLength(1);
+      expect(bot.calls[0]).toMatchObject({ method: "sendMessage", chatId: String(TEAM_CHAT), ephemeral: { receiverUserId: ADMIN } });
+      const keyboard = bot.calls[0]?.keyboard as { callback_data: string }[][];
+      expect(keyboard.flat().map((button) => button.callback_data)).toEqual(["export:day", "export:week", "export:since", "export:all"]);
+      expect(bot.jobs).toEqual([]);
+    });
+
+    it("при выключенном ключе — прежний публичный отказ", async () => {
+      const bot = setup({}, 1, {});
+      await bot.router.dispatch(message(ADMIN, "/export", team));
+      expect(bot.calls).toEqual([{ method: "sendMessage", chatId: String(TEAM_CHAT), text: expect.stringContaining("только в личном чате"), keyboard: undefined }]);
+    });
+
+    it("без права — эфемерный отказ; в чужой группе — вызовов нет", async () => {
+      const bot = setup();
+      await bot.router.dispatch(message(STRANGER, "/export", team));
+      expect(bot.calls).toHaveLength(1);
+      expect(bot.calls[0]).toMatchObject({ text: "Выгрузка — только с правом на выгрузку данных.", ephemeral: { receiverUserId: STRANGER } });
+      const other = setup();
+      await other.router.dispatch(message(STRANGER, "/export", { id: -100500, type: "supergroup" }));
+      expect(other.calls).toEqual([]);
+    });
+
+    it("нажатие в чате команды: статус в личку, эфемерный ответ, задание на личку", async () => {
+      const bot = setup();
+      await bot.router.dispatch(press(ADMIN, "export:day", team));
+      expect(bot.calls).toContainEqual(expect.objectContaining({ method: "sendMessage", chatId: String(ADMIN), text: expect.stringContaining("Готовлю выгрузку") }));
+      expect(bot.calls).toContainEqual(
+        expect.objectContaining({ method: "sendMessage", chatId: String(TEAM_CHAT), text: "Готовлю выгрузку — пришлю в личку.", ephemeral: expect.objectContaining({ receiverUserId: ADMIN }) }),
+      );
+      expect(bot.jobs).toHaveLength(1);
+      expect(bot.jobs[0]).toMatchObject({ adminId: String(ADMIN), chatId: String(ADMIN) });
+    });
+
+    it("нет лички с ботом (403) — задания нет, лок снят, подсказка открыть чат", async () => {
+      const bot = setup();
+      bot.failDirect.add(String(ADMIN));
+      await bot.router.dispatch(press(ADMIN, "export:day", team));
+      expect(bot.jobs).toEqual([]);
+      expect(bot.locks.held.size).toBe(0);
+      expect(bot.calls).toContainEqual(expect.objectContaining({ text: expect.stringContaining("Откройте личный чат с ботом"), ephemeral: expect.anything() }));
+    });
+
+    it("нажатие при выключенном ключе — пустой answerCallbackQuery, задания нет", async () => {
+      const bot = setup({}, 1, {});
+      await bot.router.dispatch(press(ADMIN, "export:day", team));
+      expect(bot.jobs).toEqual([]);
+      expect(bot.calls).toEqual([{ method: "answerCallbackQuery" }]);
+    });
+
+    it("нажатие без права — пустой answerCallbackQuery, задания нет", async () => {
+      const bot = setup();
+      await bot.router.dispatch(press(STRANGER, "export:day", team));
+      expect(bot.jobs).toEqual([]);
+      expect(bot.calls).toEqual([{ method: "answerCallbackQuery" }]);
+    });
   });
 });
