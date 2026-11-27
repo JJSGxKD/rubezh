@@ -382,7 +382,7 @@ describe("клиент контента", () => {
   const summary = { draftId: ID, baseVersionNo: 3, title: "Волки", author: "8f7c1c1e-7f0a-4b8e-9d7e-1c2b3a4d5e6f", updatedAt: "2026-11-01T10:00:00.000Z", archivedAt: null };
 
   it("версии и черновики — по своим адресам; последняя версия — с наибольшим номером", async () => {
-    const version = { versionNo: 3, contentHash: "abc", schemaVersion: 1, source: "repo", createdBy: null, createdAt: "2026-10-21T18:04:00.000Z", publishedAt: null };
+    const version = { versionNo: 3, contentHash: "abc", schemaVersion: 1, source: "repo", createdBy: null, createdAt: "2026-10-21T18:04:00.000Z", publishedAt: null, releasedAllAt: null };
     const { fetch, calls } = fakeFetch(
       json(200, { data: [{ ...version, versionNo: 1 }, version, { ...version, versionNo: 2 }] }),
       json(200, { data: { ...version, snapshot: {}, jsonSchema: {}, names: NAMES } }),

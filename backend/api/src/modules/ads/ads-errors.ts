@@ -25,6 +25,13 @@ export class AdCooldownError extends DomainError {
   }
 }
 
+/** Игрок досмотрел за игровые сутки все ролики, что положены во всех местах вместе, — до завтра «за ролик» не предлагается. */
+export class AdDailyCapError extends DomainError {
+  constructor() {
+    super("ad_daily_cap", "Ролики за награду на сегодня кончились — загляни завтра", 409);
+  }
+}
+
 /** Сети или блока с таким идентификатором нет — панель перечитывает каталог. */
 export class AdCatalogNotFoundError extends DomainError {
   constructor(what: "network" | "block") {

@@ -115,6 +115,7 @@ describe.skipIf(DATABASE_URL === "")("пролог на живом Postgres", ()
       continues: [],
       boosts: [],
       passives: [],
+      adChests: 0,
       prologue: { won: true, sec: 170 },
       ...patch,
     };

@@ -1,10 +1,11 @@
-import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { NotifyTargets } from "../../modules/settings/notify-targets.js";
 import type { ChatTarget } from "../ports/chat-target.js";
-import type { TelegramBotApi, TelegramUpdate } from "./telegram-bot-api.js";
+import type { BotCommand, TelegramBotApi, TelegramUpdate } from "./telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "./telegram-bot-api.js";
 import { BotRouter, type BotUpdateHandler } from "./bot-router.js";
+import { teamChatsOf, type TeamEphemeral } from "./team-ephemeral.js";
 
 /**
  * Команды бота в одном месте: меню Telegram и ответ на `/help`
@@ -27,7 +28,9 @@ export type CommandsBotApi = Pick<TelegramBotApi, "sendMessage" | "setMyCommands
 @Injectable()
 export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   readonly name = "help";
-  readonly commands = [{ command: "help", description: "Что умеет бот", descriptionEn: "What the bot can do", audience: "everyone" as const }];
+  readonly commands = [
+    { command: "help", description: "Что умеет бот", descriptionEn: "What the bot can do", audience: "everyone" as const, ephemeral: true },
+  ];
   private readonly logger = new Logger("bot");
   private readonly stop = new AbortController();
 
@@ -36,6 +39,7 @@ export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicatio
     private readonly targets: NotifyTargets,
     private readonly router: BotRouter,
     @Inject(TELEGRAM_BOT_API) private readonly api: CommandsBotApi,
+    @Optional() private readonly team?: TeamEphemeral,
   ) {}
 
   onModuleInit(): void {
@@ -44,9 +48,12 @@ export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicatio
     // Чат администраторов поменяли в панели — меню команд администратора
     // переезжает туда без перезапуска. Старый чат своё меню сохранит: снять
     // его можно, только зная прежний адрес, а команды там всё равно не ответят.
-    this.targets.onChatsChange(() => {
+    const republish = (): void => {
       void this.publish().catch((error: unknown) => this.log("warn", "commands_not_set", { reason: reasonOf(error) }));
-    });
+    };
+    this.targets.onChatsChange(republish);
+    // Ключи эфемерных ответов переключили в панели — пометка команд в меню чата команды меняется сразу.
+    this.team?.onSwitchChange(republish);
   }
 
   /**
@@ -68,7 +75,9 @@ export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicatio
     await this.api.setMyCommands(everyone, null, this.stop.signal);
     // Английский интерфейс Telegram получает те же команды со своими описаниями.
     await this.api.setMyCommands(this.englishMenu(), null, this.stop.signal, "en");
-    for (const chat of this.adminChats()) await this.api.setMyCommands(admin, chat, this.stop.signal);
+    // Пометку получают только чаты команды: в личке эфемерность ни к чему.
+    const teamMenu = this.team?.enabled() === true ? this.menuFor(true, true) : admin;
+    for (const chat of this.adminChats()) await this.api.setMyCommands(teamMenu, chat, this.stop.signal);
     for (const adminId of this.config.adminTelegramIds) await this.api.setMyCommands(admin, adminId, this.stop.signal);
     this.log("log", "commands_published", { everyone: everyone.length, admin: admin.length });
   }
@@ -80,11 +89,9 @@ export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicatio
 
     const chatId = String(message.chat.id);
     const forAdmin = this.isAdminChat(chatId) || (message.chat.type === "private" && this.config.adminTelegramIds.has(String(message.from.id)));
-    await this.api.sendMessage(
-      { chatId, threadId: message.message_thread_id ?? null },
-      helpText(this.router.commands(), forAdmin),
-      this.stop.signal,
-    );
+    const text = helpText(this.router.commands(), forAdmin);
+    if (await this.team?.tryReply(message, text)) return true;
+    await this.api.sendMessage({ chatId, threadId: message.message_thread_id ?? null }, text, this.stop.signal);
     return true;
   }
 
@@ -95,20 +102,16 @@ export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicatio
       .map(({ command, description, descriptionEn }) => ({ command, description: descriptionEn ?? description }));
   }
 
-  private menuFor(admin: boolean): { command: string; description: string }[] {
+  private menuFor(admin: boolean, markEphemeral = false): BotCommand[] {
     return this.router
       .commands()
       .filter((spec) => admin || spec.audience === "everyone")
-      .map(({ command, description }) => ({ command, description }));
+      .map(({ command, description, ephemeral }) => ({ command, description, ...(markEphemeral && ephemeral === true ? { is_ephemeral: true } : {}) }));
   }
 
   /** Чаты, где команды администратора видны всем участникам. */
   private adminChats(): ChatTarget[] {
-    const chats = this.targets.chats();
-    const targets = [chats.general, chats.stats, chats.stressReports, chats.runReports].filter(
-      (chat): chat is ChatTarget => chat !== null,
-    );
-    return targets.filter((chat, index) => targets.findIndex((other) => other.chatId === chat.chatId) === index);
+    return this.team?.teamChats() ?? teamChatsOf(this.targets);
   }
 
   private isAdminChat(chatId: string): boolean {

@@ -2,6 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
+import { BROADCAST_NOT_TESTED_MESSAGE, editionHash } from "./broadcast-rich.js";
+import { BroadcastStateError } from "./broadcasts-errors.js";
 import { segmentSchema, type Milestone, type Segment } from "./segment.js";
 
 /**
@@ -12,12 +14,18 @@ import { segmentSchema, type Milestone, type Segment } from "./segment.js";
 
 export type BroadcastStatus = "draft" | "sending" | "paused" | "done" | "cancelled";
 
+/** `plain` — простой текст; `rich` — ограниченный Markdown (`broadcast-rich.ts`, Р199). */
+export type BroadcastFormat = "plain" | "rich";
+
 export interface BroadcastRecord {
   broadcastId: string;
   title: string;
   platform: PlatformId;
+  format: BroadcastFormat;
   text: string;
   buttonText: string | null;
+  /** отпечаток редакции, ушедшей тестом себе оформленной; `null` — теста не было или текст правили после него */
+  testedHash: string | null;
   buttonUrl: string | null;
   linkCode: string | null;
   segment: Segment;
@@ -36,6 +44,7 @@ export interface NewBroadcast {
   broadcastId: string;
   title: string;
   platform: PlatformId;
+  format: BroadcastFormat;
   text: string;
   buttonText: string | null;
   buttonUrl: string | null;
@@ -44,8 +53,8 @@ export interface NewBroadcast {
   createdBy: string;
 }
 
-/** Что меняется в черновике: текст, кнопка без ссылки — ссылка заводится при создании, аудитория. */
-export type DraftPatch = Pick<NewBroadcast, "title" | "text" | "segment"> & { buttonText: string | null };
+/** Что меняется в черновике: формат и текст, кнопка без ссылки — ссылка заводится при создании, аудитория. */
+export type DraftPatch = Pick<NewBroadcast, "title" | "format" | "text" | "segment"> & { buttonText: string | null };
 
 export interface Recipient {
   accountId: string;
@@ -67,8 +76,10 @@ export const BROADCASTS_REPOSITORY = Symbol("BROADCASTS_REPOSITORY");
 
 export interface BroadcastsRepository {
   create(input: NewBroadcast): Promise<BroadcastRecord>;
-  /** Правка черновика; одобрение при этом снимается. `null` — не черновик или нет такой. */
+  /** Правка черновика; одобрение и отметка теста при этом снимаются. `null` — не черновик или нет такой. */
   updateDraft(broadcastId: string, patch: DraftPatch): Promise<BroadcastRecord | null>;
+  /** Записать отпечаток редакции, ушедшей тестом себе; `false` — уже не черновик. */
+  markTested(broadcastId: string, hash: string): Promise<boolean>;
   byId(broadcastId: string): Promise<BroadcastRecord | null>;
   list(limit: number): Promise<BroadcastRecord[]>;
   /** Одобрить черновик; `false` — уже не черновик. */
@@ -78,6 +89,9 @@ export interface BroadcastsRepository {
   /**
    * Старт: черновик становится отправляемым и набирает получателей одной
    * транзакцией. `null` — уже не черновик: второй старт никого не добавит.
+   * Оформленную без отпечатка текущей редакции не запускает — сверка под
+   * блокировкой строки, чтобы правка между проверкой сервиса и стартом не
+   * пропустила непроверенный текст (`BroadcastStateError`).
    */
   start(broadcastId: string, startedBy: string, at: Date): Promise<number | null>;
   /** Сменить состояние, если оно сейчас одно из `from`. */
@@ -151,9 +165,14 @@ export class PrismaBroadcastsRepository implements BroadcastsRepository {
   async updateDraft(broadcastId: string, patch: DraftPatch): Promise<BroadcastRecord | null> {
     const { count } = await this.prisma.broadcast.updateMany({
       where: { broadcastId, status: "draft" },
-      data: { title: patch.title, text: patch.text, buttonText: patch.buttonText, segment: patch.segment, approvedBy: null },
+      data: { title: patch.title, format: patch.format, text: patch.text, buttonText: patch.buttonText, segment: patch.segment, approvedBy: null, testedHash: null },
     });
     return count === 0 ? null : await this.byId(broadcastId);
+  }
+
+  async markTested(broadcastId: string, hash: string): Promise<boolean> {
+    const { count } = await this.prisma.broadcast.updateMany({ where: { broadcastId, status: "draft" }, data: { testedHash: hash } });
+    return count > 0;
   }
 
   async byId(broadcastId: string): Promise<BroadcastRecord | null> {
@@ -177,10 +196,12 @@ export class PrismaBroadcastsRepository implements BroadcastsRepository {
 
   async start(broadcastId: string, startedBy: string, at: Date): Promise<number | null> {
     return await this.prisma.$transaction(async (tx) => {
-      const draft = await tx.$queryRaw<{ platform: PlatformId; segment: unknown }[]>`
-        SELECT platform, segment FROM broadcast WHERE broadcast_id = ${broadcastId}::uuid AND status = 'draft' FOR UPDATE`;
+      const draft = await tx.$queryRaw<{ platform: PlatformId; segment: unknown; format: string; text: string; buttonText: string | null; testedHash: string | null }[]>`
+        SELECT platform, segment, format, text, button_text AS "buttonText", tested_hash AS "testedHash"
+        FROM broadcast WHERE broadcast_id = ${broadcastId}::uuid AND status = 'draft' FOR UPDATE`;
       const row = draft[0];
       if (row === undefined) return null;
+      if (row.format === "rich" && row.testedHash !== editionHash(row)) throw new BroadcastStateError(BROADCAST_NOT_TESTED_MESSAGE);
       const segment = segmentSchema.parse(row.segment);
       const audience = await tx.$executeRaw`
         INSERT INTO broadcast_delivery (broadcast_id, account_id)
@@ -259,8 +280,11 @@ function toRecord(row: BroadcastRow): BroadcastRecord {
     broadcastId: row.broadcastId,
     title: row.title,
     platform: row.platform,
+    // Неизвестное значение (колонка — строка) читается как простой текст: рассылка не должна уйти разметкой, которой не знаем.
+    format: row.format === "rich" ? "rich" : "plain",
     text: row.text,
     buttonText: row.buttonText,
+    testedHash: row.testedHash,
     buttonUrl: row.buttonUrl,
     linkCode: row.linkCode,
     // JSON из базы — данные с границы: разбирается той же схемой, что и ввод панели.

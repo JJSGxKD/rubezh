@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
 
 /**
@@ -35,9 +36,18 @@ export const SERIES = ["#5ccfff", "#ffd15c", "#8ee86b", "#c47dff", "#ff8f3f", "#
  */
 export const FONT = "Segoe UI, Roboto, DejaVu Sans, Arial, sans-serif";
 
+/**
+ * Гарнитура заголовков и крупных чисел — шрифт игры (docs/12-ip-and-licensing.md §6).
+ * Файл едет с бэкендом, поэтому в прод-образе она есть всегда; запасная —
+ * DejaVu Sans из образа, чтобы кириллица не пропала, если файл потерялся.
+ */
+export const HEADING_FONT = "Russo One, DejaVu Sans, sans-serif";
+
 export interface TextStyle {
   size: number;
   fill: string;
+  /** заголовок и крупное число — гарнитурой игры (`HEADING_FONT`), а не системной */
+  heading?: boolean;
   weight?: number;
   spacing?: number;
   anchor?: "start" | "middle" | "end";
@@ -47,7 +57,7 @@ export function text(x: number, y: number, value: string, style: TextStyle): str
   const attributes = [
     `x="${round(x)}"`,
     `y="${round(y)}"`,
-    `font-family="${FONT}"`,
+    `font-family="${style.heading === true ? HEADING_FONT : FONT}"`,
     `font-size="${style.size}"`,
     `fill="${style.fill}"`,
     style.weight === undefined ? "" : `font-weight="${style.weight}"`,
@@ -148,10 +158,17 @@ export function twilightBackdrop(width: number, height: number, options: { stake
   return parts;
 }
 
-/** Каталог шрифтов Debian — туда ставит DejaVu пакет из Dockerfile. */
-const FONT_DIRS = ["/usr/share/fonts"];
+/**
+ * Каталог шрифтов, которые едут с бэкендом (Russo One и лицензия OFL). Путь
+ * считается от этого модуля: и из `src` под тестами, и из `dist` в образе до
+ * каталога `backend/api/assets` три уровня вверх.
+ */
+export const BUNDLED_FONT_DIR = fileURLToPath(new URL("../../../assets/fonts", import.meta.url));
 
-export function renderPng(svg: string): Buffer {
+/** Каталог шрифтов Debian — туда ставит DejaVu пакет из Dockerfile — и свой каталог шрифтов. */
+export const FONT_DIRS = ["/usr/share/fonts", BUNDLED_FONT_DIR];
+
+function rasterize(svg: string): ReturnType<Resvg["render"]> {
   const resvg = new Resvg(svg, {
     // Системные шрифты resvg в Linux ищет через конфигурацию fontconfig, а в
     // slim-образе её нет: без явного каталога DejaVu из Dockerfile не находится,
@@ -161,7 +178,17 @@ export function renderPng(svg: string): Buffer {
     font: { loadSystemFonts: true, fontDirs: FONT_DIRS, defaultFontFamily: "DejaVu Sans" },
     fitTo: { mode: "original" },
   });
-  return resvg.render().asPng();
+  return resvg.render();
+}
+
+export function renderPng(svg: string): Buffer {
+  return rasterize(svg).asPng();
+}
+
+/** Сырые пиксели RGBA — для проверок: что нарисовалось и где. */
+export function renderPixels(svg: string): { width: number; height: number; pixels: Buffer } {
+  const image = rasterize(svg);
+  return { width: image.width, height: image.height, pixels: image.pixels };
 }
 
 export function round(value: number): number {

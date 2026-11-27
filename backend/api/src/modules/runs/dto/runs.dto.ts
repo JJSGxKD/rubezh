@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ELEMENT_KEYS } from "../run-counters.js";
 import { DIFFICULTIES, RUN_MODES } from "../run-rules.js";
+import { RUN_MODIFIER_IDS } from "../run-verdict.js";
 
 /**
  * Тела запросов забегов (docs/34-stage3-plan.md, WP4). Границы здесь — форма
@@ -12,6 +13,13 @@ const runId = z.string().min(8).max(64);
 const weaponId = z.string().min(1).max(64);
 const enemyId = z.string().min(1).max(64);
 
+/**
+ * Модификатор забега (T-0122, Р105): не больше одного из известных. Неизвестный
+ * id и второй модификатор — ошибка формы, как кривое тело. Нет поля — забег без
+ * модификатора: сборки до него его не шлют.
+ */
+const modifierIds = z.array(z.enum(RUN_MODIFIER_IDS)).max(1);
+
 /** Сообщение о старте: уходит в начале забега, в очередь, не на горячем пути. */
 export const runStartSchema = z.object({
   runId,
@@ -20,6 +28,7 @@ export const runStartSchema = z.object({
   mode: z.enum(RUN_MODES).optional(),
   startingWeaponId: weaponId,
   contentHash: z.string().max(32),
+  modifierIds: modifierIds.optional(),
   // Сколько секунд забега прошло к отправке: сообщение могло пролежать в
   // очереди без сети. Сервер вычитает это из своего времени приёма
   // (run-verdict.ts, trustedStartMs).
@@ -86,6 +95,8 @@ export const runFinishSchema = z
     // Урон оружия — для листа забега в профиле; сборки до листа его не шлют.
     weapons: z.array(z.object({ id: weaponId, level: z.number().int().min(1).max(99), damage: z.number().min(0).max(1e12).optional() })).max(16),
     contentHash: z.string().max(32),
+    // Какой модификатор шёл в забеге. Сверяется со стартом и с уровнем аккаунта на сервере (`run-verdict.ts`).
+    modifierIds: modifierIds.optional(),
     deathCause: z.string().min(1).max(64).nullable().default(null),
     cheats: z.boolean().default(false),
     countInRating: z.boolean().default(false),
@@ -100,6 +111,9 @@ export const runFinishSchema = z
     // Переброс карточек за рекламу: не больше одного за забег (T-0199). Нет поля — не брали: сборки
     // до переброса его не шлют. Сколько показов подтверждено, решает сверка с книгой.
     adRerolls: z.number().int().min(0).max(1).optional(),
+    // Второй сундук клада за рекламу: не больше одного за забег (T-0327). Нет поля — не брали. Сколько показов
+    // подтверждено, решает сверка с книгой; был ли в забеге клад, проверит повтор забега.
+    adChests: z.number().int().min(0).max(1).default(0),
     // Подробности для листа забега в профиле (docs/35-stage4-plan.md, WP4):
     // на вердикт не влияют. Сборки до листа их не шлют.
     passives: z.array(z.object({ id: weaponId, level: z.number().int().min(1).max(99) })).max(16).default([]),
