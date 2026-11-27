@@ -341,6 +341,12 @@ export interface RunGraphicsOptions {
   damageNumbers: boolean;
   /** черновой арт «Новый облик боя» вместо фигур; режим листа разработчика включает его независимо */
   art: boolean;
+  /**
+   * Облик героя (id из каталога обликов): кадры его атласа вместо Хранителя в
+   * режиме арта. Только вид — хитбокс, симуляция и `CONTENT_HASH` не меняются.
+   * Пусто, `keeper`, неизвестный или неполный облик — Хранитель.
+   */
+  appearance?: string;
 }
 
 export interface RunDiagnosticsOptions {

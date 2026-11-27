@@ -3,8 +3,8 @@ id: T-0239
 title: Облик в забеге — герой кадрами выбранного облика из его атласа в режиме арта
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0238, T-0229, T-0230]
@@ -16,6 +16,7 @@ shared:
   - packages/core-game/src/game/render/WorldRenderer.ts
   - packages/app-shell/src/state/graphics.ts
   - packages/app-shell/src/state/run.ts
+  - packages/app-shell/test/graphics.test.ts
   - docs/27-design-system-and-app-shell.md
 runner: any
 executor: sonnet-5.5

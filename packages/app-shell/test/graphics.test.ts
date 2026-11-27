@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter } from "@bh/shared-types";
 import { useFlags } from "../src/state/flags";
+import { resetOwnAppearance, rememberOwnAppearance } from "../src/state/appearance-api";
 import { DEFAULT_GRAPHICS, runGraphics, useGraphics } from "../src/state/graphics";
 import { initShell } from "../src/state/shell";
 
@@ -103,6 +104,16 @@ describe("настройки графики", () => {
     it("с доступом по умолчанию включён и уходит в забег", () => {
       grant();
       expect(runGraphics().art).toBe(true);
+    });
+
+    it("действующий облик уходит в забег только с артом", () => {
+      grant();
+      expect(runGraphics().appearance).toBeUndefined();
+      rememberOwnAppearance({ effective: "vityaz", avatarPhoto: false });
+      expect(runGraphics().appearance).toBe("vityaz");
+      useGraphics.getState().toggle("art");
+      expect(runGraphics().appearance).toBeUndefined();
+      resetOwnAppearance();
     });
 
     it("игрок выключает его: выбор живёт на устройстве, идёт в аналитику и переживает перезапуск", () => {
