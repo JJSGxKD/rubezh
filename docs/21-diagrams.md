@@ -175,6 +175,7 @@ erDiagram
     PARTNER |o--o{ LINK : "ссылки партнёра: владелец задаётся при создании"
     PARTNER |o--o{ PARTNER_MATERIAL : "материалы команды для одного партнёра; пусто — для всех"
     LINK |o--o{ PARTNER_BINDING : "по какой ссылке; ссылка удалена — код пуст"
+    ACCOUNT ||--o| TELEGRAM_AFFILIATE_MARK : "пришёл по партнёрке Telegram"
     ACCOUNT ||--o{ ACCOUNT_RESTRICTION : "ограничения игрока"
     ACCOUNT |o--o{ ACCOUNT_RESTRICTION : "наложил и снял — команда"
     ACCOUNT ||--o{ BOT_MENTION_TASK : "задания «юзернейм бота»: имя и bio"
@@ -1056,7 +1057,7 @@ erDiagram
     }
 
     PARTNER_BINDING {
-        uuid account_id PK,FK "слот источника один: либо это, либо REFERRAL_BINDING"
+        uuid account_id PK,FK "слот источника один: либо это, либо REFERRAL_BINDING, либо TELEGRAM_AFFILIATE_MARK"
         uuid partner_id FK "партнёра с игроками не удалить"
         uuid campaign_id FK "nullable: каким кодом"
         string link_code FK "nullable: по какой ссылке партнёра; у привязки кодом пусто"
@@ -1619,6 +1620,11 @@ erDiagram
         datetime updated_at
     }
 
+    TELEGRAM_AFFILIATE_MARK {
+        uuid account_id PK,FK "каскадом: удалённый аккаунт уносит метку; слот источника один с REFERRAL_BINDING и PARTNER_BINDING"
+        string start_param "параметр запуска целиком, как пришёл: _tgr_<id>; до 64 знаков"
+        string ref "идентификатор внутри параметра; индекса нет — он появится вместе с отчётом по аффилиатам"
+        datetime marked_at "время входа, поставившего метку"
     BOT_CARD {
         uuid id PK
         uuid account_id FK "каскадом: удалённый аккаунт уносит карточки"
@@ -2191,10 +2197,10 @@ erDiagram
 - **`PARTNER`, `PARTNER_BINDING` — партнёры и приведённые ими игроки**
   (`35-stage4-plan.md`, WP41, часть 2): код партнёра (`PROMO_CAMPAIGN.partner_id`)
   при активации привязывает новичка к партнёру — в той же транзакции, что
-  и активация. Слот источника у игрока один на две таблицы двух модулей:
-  `REFERRAL_BINDING` или `PARTNER_BINDING`, кто первый
-  (`23-referral-and-partner-program.md` §5). Внешним ключом это не
-  выразить, поэтому обе записи идут под одной блокировкой аккаунта
+  и активация. Слот источника у игрока один на три таблицы трёх модулей:
+  `REFERRAL_BINDING`, `PARTNER_BINDING` или `TELEGRAM_AFFILIATE_MARK`, кто
+  первый (`23-referral-and-partner-program.md` §5). Внешним ключом это не
+  выразить, поэтому записи идут под одной блокировкой аккаунта
   (`attribution/source-slot.ts`). Выплат партнёрам нет — они после лонча
   (§1.3). Ссылка партнёра (`LINK.partner_id`, T-0067) привязывает так же,
   но по первому входу: сессия вида `click` или `link` после записи зовёт
@@ -2203,6 +2209,15 @@ erDiagram
   аккаунтом (кнопка «Открыть кабинет» выдаёт ему роль `partner`, T-0217), и
   привязать самого себя он не может ни ссылкой, ни кодом; связь остаётся и
   после закрытия кабинета.
+- **`TELEGRAM_AFFILIATE_MARK` — метка партнёрки Telegram**
+  (`35-stage4-plan.md` Р97, WP49, T-0072): игрок пришёл по ссылке программы
+  бота (`_tgr_<id>`). Одна строка на аккаунт, навсегда, отдельной таблицей, а не
+  колонкой в горячем `ACCOUNT` (так же устроены `REFERRAL_BINDING` и
+  `PARTNER_BINDING`). Метку ставит слушатель входа после ответа игроку: при
+  запуске на Telegram и свободном слоте источника, в транзакции под той же
+  блокировкой аккаунта, что у реферала и партнёра; занятый слот метку не
+  пускает, поставленная метка не пускает ни реферала, ни партнёра. Ничего игроку
+  не выдаёт. Вайп таблицу не стирает.
 - **`PARTNER_MATERIAL` — материалы для партнёров** (`35-stage4-plan.md` Р136,
   T-0221): баннеры (`banner`, картинка профиля `partner_material` модуля
   картинок), тексты постов (`post`) и правила программы (`rules`), которые

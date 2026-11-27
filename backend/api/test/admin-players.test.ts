@@ -30,6 +30,7 @@ import { memoryNotifications } from "./helpers/memory-notifications.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { MemoryTelegramAffiliate } from "./helpers/memory-telegram-affiliate.js";
 
 /**
  * Карточка игрока и блокировка в панели (docs/29-admin-panel.md §3.3, §3.4).
@@ -103,8 +104,9 @@ function setup() {
   const restrictions = new RestrictionsService(restrictionsRepository, accounts, roles, restrictionsGate(restrictionsRepository), new RestrictionsHooks());
   // Что поддержка может сделать с покупкой, решает сервис оплаты (T-0037); здесь важно, кому карточка это показывает.
   const support = { actionsFor: () => ["refund"] } as never;
-  const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service, testNotice, restrictions, support);
-  return { accounts, rolesRepository, purchases, store, roles, service, gameSessionsRevoked, feed: notifications.repository, restrictionsRepository, restrictions };
+  const telegramAffiliate = new MemoryTelegramAffiliate();
+  const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service, testNotice, restrictions, support, telegramAffiliate);
+  return { accounts, telegramAffiliate, rolesRepository, purchases, store, roles, service, gameSessionsRevoked, feed: notifications.repository, restrictionsRepository, restrictions };
 }
 
 async function player(accounts: MemoryAccountRepository, platformUserId = String(500_000 + Math.floor(Math.random() * 1000))) {
@@ -187,6 +189,28 @@ describe("карточка игрока", () => {
 
   it("неизвестный аккаунт — 404", async () => {
     await expect(s.service.card(owner, randomUUID())).rejects.toBeInstanceOf(AccountNotFoundError);
+  });
+
+  it("метка партнёрки Telegram (Р97, T-0072): без метки — null, с меткой — параметр, код и время", async () => {
+    const target = await player(s.accounts);
+    expect((await s.service.card(owner, target.accountId)).telegramAffiliate).toBeNull();
+
+    s.telegramAffiliate.marks.set(target.accountId, { startParam: "_tgr_x9Y-z", ref: "x9Y-z", markedAt: NOW });
+
+    expect((await s.service.card(owner, target.accountId)).telegramAffiliate).toEqual({ startParam: "_tgr_x9Y-z", ref: "x9Y-z", markedAt: NOW });
+  });
+
+  it("метка — не персональные данные: модератор видит её так же, журнал просмотров молчит", async () => {
+    const moderator = await player(s.accounts, "600003");
+    await s.rolesRepository.grant(moderator.accountId, "moderator", null);
+    const target = await player(s.accounts);
+    s.telegramAffiliate.marks.set(target.accountId, { startParam: "_tgr_x9Y-z", ref: "x9Y-z", markedAt: NOW });
+
+    const card = await s.service.card({ accountId: moderator.accountId, platform: "telegram", platformUserId: "600003" }, target.accountId);
+
+    expect(card.telegramAffiliate).toEqual({ startParam: "_tgr_x9Y-z", ref: "x9Y-z", markedAt: NOW });
+    expect(card.account.pii).toBeNull();
+    expect(s.rolesRepository.entries).toEqual([]);
   });
 
   it("поиск: по идентификатору, юзернейму и имени; без права на ПДн — строки без идентификаторов", async () => {

@@ -65,6 +65,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   FriendReturn: keep("пара за возвращение награждается однажды"),
   FriendBonus: keep("ступень бонуса за друзей — один раз навсегда"),
   PartnerBinding: keep("слот источника игрока навсегда"),
+  TelegramAffiliateMark: keep("метка партнёрки Telegram — слот источника игрока навсегда (Р97, T-0072)"),
   ExternalIdentity: keep("связь с аккаунтом MAX или VK постоянна (Р188, T-0377): id площадки не освобождается и второй раз никому не достаётся, как привязки приглашения и источника"),
   Partner: keep("партнёры команды"),
   PartnerMaterial: keep("материалы для партнёров — выкладывает команда, к игрокам и их прогрессу не относятся (Р136)"),

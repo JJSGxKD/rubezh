@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
 import type { AcquisitionView, SessionsRepository } from "../attribution/sessions.repository.js";
 import { SESSIONS_REPOSITORY } from "../attribution/sessions.repository.js";
+import { TELEGRAM_AFFILIATE_REPOSITORY, type TelegramAffiliateMark, type TelegramAffiliateRepository } from "../attribution/telegram-affiliate.repository.js";
 import { ACCOUNT_REPOSITORY, type Account, type AccountRepository } from "../auth/account.repository.js";
 import { AuthService } from "../auth/auth.service.js";
 import { FUNNEL_REPOSITORY, type FunnelMilestones, type FunnelRepository } from "../funnel/funnel.repository.js";
@@ -64,6 +65,8 @@ export interface PlayerCard {
   roles: Role[];
   funnel: FunnelMilestones | null;
   acquisition: AcquisitionView | null;
+  /** метка партнёрки Telegram (Р97): слот источника занят ею; `null` — игрок не по ссылке программы */
+  telegramAffiliate: TelegramAffiliateMark | null;
   messaging: MessagingState | null;
   progress: ProgressView;
   runs: ProfileView;
@@ -109,6 +112,7 @@ export class AdminPlayersService {
     private readonly testNotice: TestNoticeService,
     private readonly restrictions: RestrictionsService,
     private readonly support: PurchaseSupport,
+    @Inject(TELEGRAM_AFFILIATE_REPOSITORY) private readonly telegramAffiliate: TelegramAffiliateRepository,
   ) {}
 
   async search(actor: AccountRef, query: string, limit: number): Promise<PlayerRow[]> {
@@ -133,10 +137,11 @@ export class AdminPlayersService {
     ]);
     const target: AccountRef = { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
 
-    const [roles, funnel, acquisition, messaging, progress, runs, balances, entries, purchases, testNotice] = await Promise.all([
+    const [roles, funnel, acquisition, telegramAffiliate, messaging, progress, runs, balances, entries, purchases, testNotice] = await Promise.all([
       this.roles.rolesFor(target),
       this.funnel.milestones(accountId),
       this.sessions.acquisition(accountId),
+      this.telegramAffiliate.byAccount(accountId),
       this.messaging.state(accountId),
       this.progress.view(accountId),
       this.runs.profile(accountId, "team"),
@@ -153,6 +158,7 @@ export class AdminPlayersService {
       roles,
       funnel,
       acquisition,
+      telegramAffiliate,
       messaging,
       progress,
       runs,

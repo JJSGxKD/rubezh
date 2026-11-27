@@ -103,6 +103,14 @@ describe("раздел «Игроки»", () => {
     expect(playerCardSchema.parse(FULL_CARD).testNotice).toBeUndefined();
   });
 
+  it("метка партнёрки Telegram (Р97, T-0072): есть, нет, сервер старее панели", () => {
+    const mark = { startParam: "_tgr_x9Y-z", ref: "x9Y-z", markedAt: AT };
+    expect(playerCardSchema.parse({ ...FULL_CARD, telegramAffiliate: mark }).telegramAffiliate).toEqual(mark);
+    expect(playerCardSchema.parse({ ...FULL_CARD, telegramAffiliate: null }).telegramAffiliate).toBeNull();
+    expect(playerCardSchema.parse(FULL_CARD).telegramAffiliate).toBeUndefined();
+    expect(playerCardSchema.safeParse({ ...FULL_CARD, telegramAffiliate: { ...mark, ref: 5 } }).success).toBe(false);
+  });
+
   it("карточка модератора: без персональных данных, платежей и вех — тоже карточка", () => {
     const card = playerCardSchema.parse({
       ...FULL_CARD,

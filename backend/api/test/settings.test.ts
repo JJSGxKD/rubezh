@@ -122,6 +122,39 @@ describe("каталог настроек", () => {
     expect(SETTINGS.interstitialGapMin.schema.safeParse(0).error?.issues[0]?.message).toBe("не меньше 1");
   });
 
+  it("партнёрка Telegram (Р97, T-0072): процент в промилле 0–1000, срок в месяцах 0–120, умолчание 0 — «программы нет» и «без срока»", () => {
+    const commission = SETTINGS.telegramAffiliateCommission;
+    expect(commission).toMatchObject({
+      key: "telegram-affiliate.commission-permille",
+      group: "Партнёрка Telegram",
+      kind: "number",
+      fallback: 0,
+      range: { min: 0, max: 1000, unit: ["промилле", "промилле", "промилле"] },
+    });
+    for (const value of [0, 150, 1000]) expect(commission.schema.safeParse(value).success, String(value)).toBe(true);
+    expect(commission.schema.safeParse(1001).error?.issues[0]?.message).toBe("не больше 1000");
+    expect(commission.schema.safeParse(-1).error?.issues[0]?.message).toBe("не меньше 0");
+    expect(commission.schema.safeParse(15.5).error?.issues[0]?.message).toBe("целое число");
+    expect(commission.schema.safeParse("150").success).toBe(false);
+
+    const duration = SETTINGS.telegramAffiliateDuration;
+    expect(duration).toMatchObject({
+      key: "telegram-affiliate.duration-months",
+      group: "Партнёрка Telegram",
+      kind: "number",
+      fallback: 0,
+      range: { min: 0, max: 120, unit: ["месяц", "месяца", "месяцев"] },
+    });
+    expect(duration.schema.safeParse(0).success && duration.schema.safeParse(120).success).toBe(true);
+    expect(duration.schema.safeParse(121).error?.issues[0]?.message).toBe("не больше 120");
+  });
+
+  it("партнёрка Telegram: переменной окружения нет — число правят в панели, секретов нет", () => {
+    const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv);
+    expect(SETTINGS.telegramAffiliateCommission.fromEnv(config)).toBeNull();
+    expect(SETTINGS.telegramAffiliateDuration.fromEnv(config)).toBeNull();
+  });
+
   it("адрес чата — id или id:тема, пусто допустимо, мусор — нет", () => {
     expect(SETTINGS.chatGeneral.schema.safeParse("-1001234567890:57").success).toBe(true);
     expect(SETTINGS.chatGeneral.schema.safeParse("").success).toBe(true);
@@ -391,6 +424,17 @@ describe("настройки в панели", () => {
     await expect(admin.save(owner, "ads.interstitial.every-runs", 0)).rejects.toMatchObject({ code: "validation_failed", message: "Межстраничная: каждые N забегов: не меньше 1" });
     await expect(admin.save(owner, "ads.interstitial.every-runs", "4")).rejects.toMatchObject({ code: "validation_failed" });
     expect((await admin.list(owner)).find((view) => view.key === "notify.reports")?.range).toBeNull();
+  });
+
+  it("партнёрка Telegram: сохранение из панели — число с единицей, в аудит; повторное чтение — из базы (T-0072)", async () => {
+    const { admin, rolesRepository, owner } = await panel();
+    const saved = await admin.save(owner, "telegram-affiliate.commission-permille", 150);
+    expect(saved).toMatchObject({ value: 150, source: "base", fallback: 0, kind: "number", group: "Партнёрка Telegram" });
+    expect(await admin.save(owner, "telegram-affiliate.duration-months", 12)).toMatchObject({ value: 12, source: "base", fallback: 0 });
+    await expect(admin.save(owner, "telegram-affiliate.commission-permille", 1001)).rejects.toMatchObject({ code: "validation_failed", message: "Партнёрка Telegram: процент программы: не больше 1000" });
+    await expect(admin.save(owner, "telegram-affiliate.commission-permille", "150")).rejects.toMatchObject({ code: "validation_failed" });
+    const [entry] = await rolesRepository.recentAudit(10);
+    expect(entry).toMatchObject({ action: "settings.save", target: "telegram-affiliate.duration-months", after: { value: 12, source: "base" } });
   });
 
   describe("старт сезонов не в прошлом", () => {
