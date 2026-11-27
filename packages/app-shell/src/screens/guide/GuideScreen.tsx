@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Crosshair, Flame, History, Hourglass, Lightbulb, Lock, Shuffle, ShieldAlert, Swords } from "lucide-react";
+import { Crosshair, Flame, History, Hourglass, Lightbulb, Lock, Shuffle, ShieldAlert, Swords, Zap } from "lucide-react";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { PASSIVE_CATEGORIES, type WeaponDef } from "@bh/shared-types";
 import { DROPS, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN } from "@bh/core-game";
@@ -25,6 +25,7 @@ import {
   enemyStages,
   evolutionRecipes,
   guideBoosts,
+  guideModifiers,
   passiveCategories,
   passiveRange,
   regularEnemies,
@@ -217,7 +218,19 @@ function Basics(): ReactNode {
         </ul>
       </Topic>
 
-      <Topic index={10} icon={<CoinIcon size={20} />} title={t("guide.basics.reward.title")} text={t("guide.basics.reward.text")} />
+      {/* Модификаторы — после бустов: оба выбираются в листе «Перед забегом». */}
+      <Topic index={10} icon={<Zap size={20} aria-hidden="true" />} title={t("guide.basics.modifiers.title")} text={t("guide.basics.modifiers.text")}>
+        <ul className="grid gap-2">
+          {guideModifiers().map((modifier) => (
+            <li key={modifier.id} className="surface-sunken rounded-md px-3 py-2">
+              <span className="block font-display text-sm font-semibold text-text">{t(modifier.nameKey)}</span>
+              <span className="block text-xs text-text-muted">{t(modifier.descriptionKey)}</span>
+            </li>
+          ))}
+        </ul>
+      </Topic>
+
+      <Topic index={11} icon={<CoinIcon size={20} />} title={t("guide.basics.reward.title")} text={t("guide.basics.reward.text")} />
     </>
   );
 }

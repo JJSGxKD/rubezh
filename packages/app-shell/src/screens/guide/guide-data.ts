@@ -7,12 +7,13 @@ import {
   type EnemyStageDef,
   type PassiveCategory,
   type PassiveDef,
+  type RunModifierDef,
   type StatusElement,
   type UpgradeChange,
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ACCOUNT_UNLOCKS, PATTERN_TRAITS, STALKER, BOOSTS, CONTENT_SNAPSHOT, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, RUBEZH, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, RUN_MODIFIERS, PATTERN_TRAITS, STALKER, BOOSTS, CONTENT_SNAPSHOT, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, RUBEZH, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -319,4 +320,13 @@ export function evolutionRecipes(accountLevel: number): EvolutionRecipe[] {
  */
 export function guideBoosts(): readonly BoostDef[] {
   return BOOSTS;
+}
+
+/**
+ * Модификаторы забега для гайдбука (T-0123) — из контента, в его порядке: новый
+ * модификатор, добавленный данными, сам встаёт в список. Тест гайдбука падает на
+ * модификаторе без ключа имени или описания.
+ */
+export function guideModifiers(): readonly RunModifierDef[] {
+  return RUN_MODIFIERS;
 }
