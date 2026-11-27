@@ -324,6 +324,7 @@ describe("RunsService.setRanked: слушатели узнают о смене �
       continues: [],
       boosts: [],
       passives: [],
+      adChests: 0,
     };
     await service.finish(target, run);
     const seen: string[] = [];

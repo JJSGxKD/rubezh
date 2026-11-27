@@ -17,13 +17,13 @@ import { appearanceChoiceSchema, effectiveAppearance, heldAppearances, type Appe
  * чтении по состоянию аккаунта — ничего не хранится и не снимается.
  */
 
-const NOBODY: AppearanceState = { level: 1, vipActive: false, bestSeasonPlace: null, doneAchievements: new Set<string>(), weeklyTopClaimed: false };
+const NOBODY: AppearanceState = { level: 1, vipActive: false, bestSeasonPlace: null, doneAchievements: new Set<string>(), weeklyTopClaimed: false, grants: new Set<string>() };
 const held = (patch: Partial<AppearanceState>) => [...heldAppearances({ ...NOBODY, ...patch })].sort();
 
 describe("каталог обликов", () => {
-  it("десять обликов с уникальными id, порядок как в задаче", () => {
-    expect(APPEARANCES.map((def) => def.id)).toEqual(["keeper", "frost", "herbalist", "gilded", "vityaz", "vedunya", "ohotnitsa", "skomoroh", "knyaz", "navi"]);
-    expect(new Set(APPEARANCES.map((def) => def.id)).size).toBe(10);
+  it("одиннадцать обликов с уникальными id, порядок как в задачах", () => {
+    expect(APPEARANCES.map((def) => def.id)).toEqual(["keeper", "frost", "herbalist", "gilded", "dawn", "vityaz", "vedunya", "ohotnitsa", "skomoroh", "knyaz", "navi"]);
+    expect(new Set(APPEARANCES.map((def) => def.id)).size).toBe(11);
   });
 
   it("архетип и редкость по таблице", () => {
@@ -100,7 +100,7 @@ describe("heldAppearances", () => {
   });
 
   it("Скоморох не держится ни при каком состоянии", () => {
-    const everything: AppearanceState = { level: 100, vipActive: true, bestSeasonPlace: 1, doneAchievements: new Set(["ach_elite_50"]), weeklyTopClaimed: true };
+    const everything: AppearanceState = { level: 100, vipActive: true, bestSeasonPlace: 1, doneAchievements: new Set(["ach_elite_50"]), weeklyTopClaimed: true, grants: new Set<string>() };
     expect(held(everything)).not.toContain("skomoroh");
     expect(held(everything)).toHaveLength(9);
   });

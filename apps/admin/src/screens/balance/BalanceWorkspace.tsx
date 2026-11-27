@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createDraft, patchDraft, type ContentVersion, type DraftChange, type DraftDetail, type DraftDiff, type DraftSummary, type VersionSummary } from "../../api/content";
+import { createDraft, patchDraft, type ContentVersion, type CurrentState, type DraftChange, type DraftDetail, type DraftDiff, type DraftSummary, type VersionSummary } from "../../api/content";
 import { formatDateTime, plural } from "../../format";
 import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
@@ -19,6 +19,8 @@ import { BalanceTable } from "./BalanceTable";
 import { EditsSheet } from "./EditsSheet";
 import { PricesTab } from "./prices/PricesTab";
 import { PRICES_TAB, isPricesTab, withPricesTab } from "./prices/prices-rules";
+import { HistoryDialog } from "./publish/HistoryDialog";
+import { PublishBar } from "./publish/PublishBar";
 
 const DRAFT_TITLE_MAX = 80;
 
@@ -39,23 +41,39 @@ function authorText(author: string, meId: string): string {
  */
 export function BalanceWorkspace({
   latest,
+  versions,
+  pointers,
   drafts,
   reloadDrafts,
+  reloadPublication,
+  onMerged,
   version,
   draft,
   diff,
   canEdit,
+  canPublish,
   meId,
   initialTab,
 }: {
+  /** последняя заведённая версия: от неё создаётся черновик */
   latest: VersionSummary;
+  /** все версии: «История и откат» */
+  versions: readonly VersionSummary[];
+  /** какая версия в игре у команды и у всех, и нужна ли проверка для публикации */
+  pointers: CurrentState;
   drafts: readonly DraftSummary[];
   reloadDrafts: () => void;
+  /** публикация или откат прошли: версии и указатели читаются заново */
+  reloadPublication: () => void;
+  /** «Взять из кода» пополнил черновик: экран собирается заново */
+  onMerged: () => void;
   /** версия-основа: из неё имена, а без черновика — и сами числа */
   version: ContentVersion;
   draft: DraftDetail | null;
   diff: DraftDiff | null;
   canEdit: boolean;
+  /** право content.publish: кнопки «Команде» и «Всем», откат */
+  canPublish: boolean;
   meId: string;
   initialTab: string | undefined;
 }) {
@@ -67,6 +85,7 @@ export function BalanceWorkspace({
   const [editor, setEditor] = useState<EditorState>(() => ({ snapshot: draft === null ? version.snapshot : draft.snapshot, errors: {} }));
   const [changes, setChanges] = useState<DraftChange[]>(() => diff?.changes ?? []);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [busyPath, setBusyPath] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
@@ -153,8 +172,14 @@ export function BalanceWorkspace({
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-2 rounded-sm bg-surface px-2.5 py-1 text-sm">
           <i aria-hidden="true" className="inline-block size-2 rounded-full bg-success" />
-          В игре: v{latest.versionNo} · {formatDateTime(latest.createdAt)}
+          {pointers.all === null ? "В игре: встроенный контент" : `В игре: v${String(pointers.all.versionNo)} · ${formatDateTime(pointers.all.setAt)}`}
         </span>
+        {pointers.team === null || pointers.team.versionNo === pointers.all?.versionNo ? null : (
+          <span className="inline-flex items-center gap-2 rounded-sm bg-surface px-2.5 py-1 text-sm">
+            <i aria-hidden="true" className="inline-block size-2 rounded-full bg-info" />
+            Команде: v{pointers.team.versionNo} · {formatDateTime(pointers.team.setAt)}
+          </span>
+        )}
         {draft === null ? null : (
           <span className="inline-flex items-center gap-2 rounded-sm bg-surface px-2.5 py-1 text-sm">
             <i aria-hidden="true" className="inline-block size-2 rounded-full bg-warning" />
@@ -193,7 +218,11 @@ export function BalanceWorkspace({
             Правки · {changeCount}
           </Button>
         )}
+        <Button onClick={() => setHistoryOpen(true)}>История и откат</Button>
         {draft === null ? null : <CheckRails rails={check.rails} />}
+        {draft === null ? null : (
+          <PublishBar draftId={draft.draftId} rails={check.rails} canPublish={canPublish} requireCheck={pointers.requireCheck} narrow={narrow} snapshot={editor.snapshot} names={names} onChanged={reloadPublication} />
+        )}
       </div>
 
       {narrow && !onPrices ? <Notice tone="info">На телефоне баланс только читается: править таблицу чисел на узком экране — способ ошибиться.</Notice> : null}
@@ -243,6 +272,19 @@ export function BalanceWorkspace({
           )}
         </div>
       )}
+
+      <HistoryDialog
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        versions={versions}
+        current={pointers}
+        canPublish={canPublish}
+        canEdit={canEdit && !narrow}
+        draftId={draft?.draftId ?? null}
+        meId={meId}
+        onChanged={reloadPublication}
+        onMerged={onMerged}
+      />
 
       <Dialog
         open={creating}

@@ -40,11 +40,14 @@ export interface ImageProfile {
  * Квадрат слайда главной — 56 px, на плотности 3 — 168 точек.
  * Снимок чека — фотография или скриншот документа, не квадрат: короткая сторона от 300 px, чтобы читались
  * цифры, длинная до 1600 px; грузит тот, кто вносит операции, видит тот, кто видит учёт (tasks/T-0462).
+ * Баннер для партнёров — не квадрат (пост 1080×1080, обложка 1200×628): стороны от 200 до 2048 px, грузит тот, кто
+ * ведёт партнёров; картинка открытая — она нужна партнёру в кабинете и лежит под хэшем, как остальные (tasks/T-0221).
  */
 export const IMAGE_PROFILES = {
   task: { title: "картинка задания", square: true, minSide: 96, maxSide: 512, permission: "tasks.edit" },
   home_slide: { title: "картинка слайда главной", square: true, minSide: 112, maxSide: 512, permission: "home.edit" },
   finance_receipt: { title: "снимок чека", square: false, minSide: 300, maxSide: 1_600, permission: "finance.entry.create", viewPermission: "ledger.view" },
+  partner_material: { title: "баннер для партнёров", square: false, minSide: 200, maxSide: 2_048, permission: "partners.edit" },
 } as const satisfies Record<string, ImageProfile>;
 
 export type ImageProfileId = keyof typeof IMAGE_PROFILES;

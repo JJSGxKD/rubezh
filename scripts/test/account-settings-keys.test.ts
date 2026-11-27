@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ACCOUNT_SETTINGS, ACCOUNT_SETTINGS_VERSION as SERVER_VERSION, ACCOUNT_SETTING_KEYS as SERVER_KEYS } from "../../backend/api/src/modules/account-settings/account-settings.catalog.js";
+import { BOT_CARD_CHOICES } from "../../backend/api/src/modules/bot-cards/bot-card-choices.js";
 import { BOT_NOTIFY } from "../../backend/api/src/modules/notifications-bot/bot-notify-rules.js";
 
 // Настройки аккаунта (docs/35-stage4-plan.md WP29): ключи живут и на сервере,
@@ -47,6 +48,19 @@ describe("ключи настроек аккаунта", () => {
       expect(clientKey, rule.setting).toBeDefined();
       expect(new RegExp(`${String(clientKey)}: (true|false)`).exec(defaults)?.[1], rule.setting).toBe(String(rule.byDefault));
       expect(SERVER_KEYS).toContain(rule.setting);
+    }
+  });
+
+  it("выбор игрока у карточек бота (T-0395): ключи и умолчания клиента — те же, что у вида; пустой список проходит", () => {
+    // Строки в `BOT_CARD_CHOICES` добавляют задачи видов: клиент показывает переключатель
+    // по ключу из своего списка, а решает по этому же ключу сервер.
+    const defaults = /export const BOT_NOTIFY_DEFAULTS = \{([^}]*)\}/.exec(botNotifications)?.[1] ?? "";
+    const accountKeys = /export const BOT_NOTIFY_ACCOUNT_KEYS = \{([^}]*)\}/.exec(botNotifications)?.[1] ?? "";
+    for (const [kind, choice] of Object.entries(BOT_CARD_CHOICES)) {
+      const clientKey = new RegExp(`(\\w+): "${choice.setting.replace(".", "\\.")}"`).exec(accountKeys)?.[1];
+      expect(clientKey, `${kind}: ${choice.setting}`).toBeDefined();
+      expect(new RegExp(`${String(clientKey)}: (true|false)`).exec(defaults)?.[1], choice.setting).toBe(String(choice.byDefault));
+      expect(SERVER_KEYS, choice.setting).toContain(choice.setting);
     }
   });
 

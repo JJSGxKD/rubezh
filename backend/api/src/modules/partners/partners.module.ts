@@ -1,10 +1,13 @@
 import { Module } from "@nestjs/common";
 import { PARTNER_FUNNEL, PrismaFunnelRepository } from "../funnel/funnel.repository.js";
 import { LINKS_REPOSITORY, PrismaLinksRepository } from "../links/links.repository.js";
+import { MediaModule } from "../media/media.module.js";
 import { PROMO_CODES_REPOSITORY, PrismaPromoCodesRepository } from "../promo-codes/promo-codes.repository.js";
 import { PARTNER_ACCOUNTS, PARTNER_PROMOS, PartnerCabinet, PrismaPartnerAccounts, PrismaPartnerPromos } from "./partner-cabinet.js";
 import { CABINET_FUNNEL, PrismaCabinetFunnel } from "./partner-cabinet-funnel.js";
 import { PartnerLinkBinder } from "./partner-links.js";
+import { PartnerMaterialsService } from "./partner-materials.js";
+import { PARTNER_MATERIALS, PrismaPartnerMaterialsRepository } from "./partner-materials.repository.js";
 import { PARTNER_LINKS, PrismaPartnerLinksSource } from "./partner-links.repository.js";
 import { PARTNERS_REPOSITORY, PrismaPartnersRepository } from "./partners.repository.js";
 import { PartnersService } from "./partners.service.js";
@@ -23,13 +26,17 @@ import { PartnersService } from "./partners.service.js";
  * запросами, что в списке ссылок, чтобы числа совпадали, — а контроллер
  * переходника и сервис ссылок ей ни к чему. Так же — репозиторий воронки:
  * карточке нужен только отчёт по игрокам партнёра (T-0068). Воронка кабинета (T-0219) читает привязки и клики
- * сама: ей нужны вехи с порогом группы, а не отчёт карточки для команды.
+ * сама: ей нужны вехи с порогом группы, а не отчёт карточки для команды. Материалы (T-0221) выкладывает команда,
+ * картинки баннеров проверяет модуль картинок.
  */
 @Module({
+  imports: [MediaModule],
   providers: [
     PartnersService,
     PartnerLinkBinder,
     PartnerCabinet,
+    PartnerMaterialsService,
+    { provide: PARTNER_MATERIALS, useClass: PrismaPartnerMaterialsRepository },
     { provide: PARTNER_ACCOUNTS, useClass: PrismaPartnerAccounts },
     { provide: PARTNERS_REPOSITORY, useClass: PrismaPartnersRepository },
     { provide: LINKS_REPOSITORY, useClass: PrismaLinksRepository },
@@ -39,6 +46,6 @@ import { PartnersService } from "./partners.service.js";
     { provide: PARTNER_PROMOS, useClass: PrismaPartnerPromos },
     { provide: CABINET_FUNNEL, useClass: PrismaCabinetFunnel },
   ],
-  exports: [PartnersService, PartnerLinkBinder, PartnerCabinet],
+  exports: [PartnersService, PartnerLinkBinder, PartnerCabinet, PartnerMaterialsService],
 })
 export class PartnersModule {}
