@@ -1,14 +1,19 @@
-import { Controller, Get, Inject, Query, Req, UseGuards } from "@nestjs/common";
+import { Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
+import { DisabledError, RateLimitedError } from "../../common/domain-error.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { REWARDED_VIDEO_PLACES } from "../ads/interstitial-gate.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { FlagsService } from "../flags/flags.service.js";
+import { RateLimiter } from "../ingest/rate-limiter.js";
 import { RolesService } from "../roles/roles.service.js";
 import { FlagNotFoundError } from "./admin-errors.js";
 import type { FlagSplit, FlagSplitGroup } from "../funnel/flag-split-report.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
+import type { ReplayState } from "../runs/run-replay-rules.js";
+import { RunReplayService, type ReplayView } from "../runs/run-replay.service.js";
 import { RunsViewService } from "../runs/runs-view.service.js";
 import type { ReviewRow } from "../runs/runs.repository.js";
 import { FUNNEL_REPOSITORY, type FunnelRepository } from "../funnel/funnel.repository.js";
@@ -16,6 +21,7 @@ import type { FunnelMarked, FunnelRow } from "../funnel/funnel-report.js";
 import { HIDDEN_KIND_PERMISSION } from "../restrictions/restriction-visibility.js";
 import { BOARD_MARK_READER, type BoardMarkReader } from "./board-mark.reader.js";
 import { parse, periodOf } from "./admin-parse.js";
+import { ADMIN_LIMITS } from "./admin-limits.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
 import { flagSplitQuerySchema, periodQuerySchema, reviewLimitSchema } from "./dto/admin.dto.js";
 
@@ -52,7 +58,15 @@ const YEAR_MS = 365 * 86_400_000;
  * uuid. `boardMarked` приходит держателю права `players.board.restrict` и
  * только ему (T-0115): у остальных ключа в строке нет.
  */
-export type ReviewView = ReviewRow & { displayName: string | null; boardMarked?: boolean };
+export type ReviewView = ReviewRow & {
+  displayName: string | null;
+  boardMarked?: boolean;
+  /** исход перепроверки повтором и тик расхождения (T-0319); у забега, которому повтор не назначали, поля нет */
+  replay?: { verdict: ReplayState; divergedTick: number | null };
+};
+
+const runIdSchema = z.string().min(8).max(64);
+
 @Controller("admin")
 @UseGuards(AdminSessionGuard, PermissionGuard)
 export class AdminReviewController {
@@ -63,6 +77,9 @@ export class AdminReviewController {
     private readonly flags: FlagsService,
     private readonly roles: RolesService,
     @Inject(BOARD_MARK_READER) private readonly boardMarks: BoardMarkReader,
+    // Перепроверка повтором (T-0319): нет сервиса (старый состав приложения) — очередь без исходов, ручки отвечают «недоступно».
+    @Optional() private readonly replay?: RunReplayService,
+    @Optional() private readonly limiter?: RateLimiter,
   ) {}
 
   /** Подозрительные и отклонённые забеги, свежие первыми. */
@@ -74,15 +91,46 @@ export class AdminReviewController {
     // Имена — одним запросом на всю очередь: игроков в ней меньше, чем забегов.
     const names = await this.accounts.displayNames([...new Set(runs.map((run) => run.accountId))]);
     const marked = (await this.roles.can(accountOf(request), HIDDEN_KIND_PERMISSION)) ? await this.markedIn(runs) : null;
+    // Исходы повтора — одним запросом на всю очередь.
+    const replays = this.replay === undefined ? new Map<string, { verdict: ReplayState; divergedTick: number | null }>() : await this.replay.outcomes(runs.map((run) => run.runId));
     return {
       data: {
         runs: runs.map((run) => ({
           ...run,
           displayName: names.get(run.accountId) ?? null,
           ...(marked === null ? {} : { boardMarked: marked.has(run.accountId) }),
+          ...(replays.has(run.runId) ? { replay: replays.get(run.runId) } : {}),
         })),
       },
     };
+  }
+
+  /** Исход перепроверки забега: тик расхождения и таблица «заявлено / повтор» для страницы отчёта. */
+  @Get("runs/:runId/replay")
+  @RequirePermission("players.view")
+  async replayOutcome(@Param("runId") runId: string): Promise<{ data: ReplayView }> {
+    const id = parse(() => runIdSchema.parse(runId), "Некорректный идентификатор забега");
+    return { data: await this.replayService().view(id) };
+  }
+
+  /**
+   * «Повторить снова»: забег снова ждёт исхода, задание уходит в очередь с высоким
+   * приоритетом, действие пишется в журнал. Повтор уже идёт или записи нет — 409.
+   */
+  @Post("runs/:runId/replay")
+  @HttpCode(200)
+  @RequirePermission("players.restrict")
+  async repeatReplay(@Req() request: unknown, @Param("runId") runId: string): Promise<{ data: ReplayView }> {
+    const replay = this.replayService();
+    const actor = accountOf(request);
+    if (this.limiter !== undefined && !(await this.limiter.consume(ADMIN_LIMITS.mutate, actor.accountId))) throw new RateLimitedError("Слишком много действий — подождите минуту");
+    const id = parse(() => runIdSchema.parse(runId), "Некорректный идентификатор забега");
+    return { data: await replay.repeat(actor, id) };
+  }
+
+  private replayService(): RunReplayService {
+    if (this.replay === undefined) throw new DisabledError("Перепроверка забегов недоступна");
+    return this.replay;
   }
 
   /**

@@ -14,6 +14,7 @@ import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { RestrictDialog } from "../players/RestrictDialog";
+import { ReplayBlock } from "./ReplayBlock";
 import {
   annulChanges,
   AXIS_ORDER,
@@ -157,6 +158,9 @@ function ReportPanel({ report, onDecided, onRefresh }: { report: Report; onDecid
           </Section>
           <Section title="Итог">
             <KeyValue items={summaryItems(report)} />
+          </Section>
+          <Section title="Повтор на сервере">
+            <ReplayBlock runId={report.runId} subject={subject} />
           </Section>
           <Section title="Очки">
             <ScoreBlock report={report} />

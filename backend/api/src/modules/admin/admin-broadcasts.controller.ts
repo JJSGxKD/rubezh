@@ -6,7 +6,7 @@ import type { SendOutcome } from "../../platforms/ports/messenger.js";
 import { PLATFORM_IDS } from "../../platforms/ports/platform.js";
 import { accountOf } from "../auth/auth.guard.js";
 import type { BroadcastRecord } from "../broadcasts/broadcasts.repository.js";
-import { BroadcastsService, type BroadcastView } from "../broadcasts/broadcasts.service.js";
+import { BroadcastsService, type BroadcastPreview, type BroadcastView } from "../broadcasts/broadcasts.service.js";
 import { segmentSchema } from "../broadcasts/segment.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
@@ -19,14 +19,19 @@ import { AdminSessionGuard } from "./admin-session.guard.js";
  * `broadcast.edit`, старт, пауза и отмена — `broadcast.send`, одобрение —
  * `broadcast.approve`. Решает сервис, гвард — первая дверь.
  */
+/** 4096 — потолок сообщения Telegram; у оформленной это длина исходника Markdown */
+const textSchema = z.string().trim().min(1).max(4096);
+const FORMATS = ["plain", "rich"] as const;
 const editSchema = z.object({
   title: z.string().trim().min(1).max(120),
-  /** 4096 — потолок сообщения Telegram */
-  text: z.string().trim().min(1).max(4096),
+  text: textSchema,
   buttonText: z.string().trim().min(1).max(64).nullable().default(null),
   segment: segmentSchema,
+  /** в правке не задан — формат рассылки остаётся прежним */
+  format: z.enum(FORMATS).optional(),
 });
-const createSchema = editSchema.extend({ platform: z.enum(PLATFORM_IDS).default("telegram") });
+const createSchema = editSchema.extend({ platform: z.enum(PLATFORM_IDS).default("telegram"), format: z.enum(FORMATS).default("plain") });
+const previewSchema = z.object({ text: textSchema });
 const estimateSchema = z.object({ platform: z.enum(PLATFORM_IDS).default("telegram"), segment: segmentSchema });
 const idSchema = z.string().uuid();
 
@@ -61,6 +66,15 @@ export class AdminBroadcastsController {
     const actor = await this.limited(request);
     const input = parse(() => estimateSchema.parse(body), "Некорректная аудитория");
     return { data: await this.broadcasts.estimate(actor, input.platform, input.segment) };
+  }
+
+  /** Разбор Markdown без сохранения: предпросмотр и ошибки с номером строки по ходу набора. */
+  @Post("preview")
+  @RequirePermission("broadcast.edit")
+  async preview(@Req() request: unknown, @Body() body: unknown): Promise<{ data: BroadcastPreview }> {
+    const actor = await this.limited(request);
+    const input = parse(() => previewSchema.parse(body), "Нужен текст до 4096 знаков");
+    return { data: await this.broadcasts.preview(actor, input.text) };
   }
 
   @Get(":id")

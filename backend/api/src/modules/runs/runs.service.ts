@@ -17,6 +17,7 @@ import { isRatedDifficulty, type Difficulty, type RunMode } from "./run-rules.js
 import { judgeRun, rubezhClaimsWin, rubezhWinOf, trustedStartMs, unlockedModifiers, type RunVerdict, type VerdictReason } from "./run-verdict.js";
 import { RatingRestrictions, boardsOf } from "./rating-restrictions.js";
 import { RUNS_REPOSITORY, type RatingRestricted, type RunsRepository } from "./runs.repository.js";
+import { RunAdChestService } from "./run-ad-chest.service.js";
 import { RunAdRerollService } from "./run-ad-reroll.service.js";
 import { RunContinues } from "./run-continues.js";
 import { RunLoadouts } from "./run-loadouts.js";
@@ -107,6 +108,8 @@ export class RunsService {
     @Optional() @Inject(RunScorer) private readonly scorer: RunScorer | null = null,
     // Книга рекламных перебросов (T-0199). Без неё заявленный переброс — без подтверждения.
     @Optional() private readonly adRerolls?: RunAdRerollService,
+    // Книга вторых сундуков клада (T-0327). Без неё заявленный второй сундук — без подтверждения.
+    @Optional() private readonly adChests?: RunAdChestService,
   ) {}
 
   /** Старт забега: сервер ставит свою отметку времени. Повтор из очереди — не ошибка. */
@@ -135,13 +138,16 @@ export class RunsService {
     if (existing?.status === "finished") return await this.replay(account, run.runId);
 
     const adRerolls = run.adRerolls ?? 0;
+    const adChests = run.adChests;
     const modifierId = run.modifierIds?.[0] ?? null;
-    const [paid, loadout, boosts, paidAdRerolls, accountLevel] = await Promise.all([
+    const [paid, loadout, boosts, paidAdRerolls, paidAdChests, accountLevel] = await Promise.all([
       this.continues.check(run.runId, run.continues),
       this.loadouts.check(account.accountId, run.loadout),
       this.loadouts.checkBoosts(account.accountId, run.runId, run.boosts),
       // Заявлен рекламный переброс — сверяем с книгой показов; без сервиса книги подтверждённых нет.
       adRerolls === 0 ? Promise.resolve(0) : (this.adRerolls?.paid(run.runId, adRerolls) ?? Promise.resolve(0)),
+      // То же для второго сундука клада: заявлен — сверяем с книгой показов.
+      adChests === 0 ? Promise.resolve(0) : (this.adChests?.paid(run.runId, adChests) ?? Promise.resolve(0)),
       // Уровень нужен только забегу с модификатором: остальные не ходят за ним в базу.
       modifierId === null ? Promise.resolve(0) : this.runs.accountLevel(account.accountId),
     ]);
@@ -166,6 +172,8 @@ export class RunsService {
         underpaidContinues: paid.underpaid,
         adRerolls,
         paidAdRerolls,
+        adChests,
+        paidAdChests,
         cheats: run.cheats,
         loadout,
         boosts,
@@ -294,6 +302,25 @@ export class RunsService {
     const changed = await this.runs.setRanked(runId, ranked, since);
     if (changed === null) throw new RunRankingConflictError(ranked);
 
+    await this.refreshBoards(changed);
+    await this.roles.audit({
+      actorAccountId: actor.accountId,
+      action: ranked ? "players.run.rerank" : "players.run.unrank",
+      target: changed.accountId,
+      // Направление — в названии действия; в записи — какой забег и почему, чтобы журнал читался без карточки.
+      after: { runId, difficulty: changed.difficulty, survivalSec: changed.survivalSec, comment },
+    });
+    this.logger.log(JSON.stringify({ module: "runs", event: ranked ? "run_reranked" : "run_unranked", runId, accountId: changed.accountId, actor: actor.accountId }));
+    return { accountId: changed.accountId, ranked };
+  }
+
+  /**
+   * Доски игрока по базе после того, как его забег снят с рейтинга или возвращён. Доска
+   * сложности пересчитывается по лучшему оставшемуся рейтинговому забегу; игроку с закрытым
+   * рейтингом её не трогаем — вернётся по сроку уже без снятого.
+   */
+  private async refreshBoards(changed: { accountId: string; difficulty: Difficulty }): Promise<void> {
+    const since = this.rating.since();
     if ((await this.rating.hold(changed.accountId)) === null) {
       // Правится то, что положено аккаунту: отдельная доска — только полная, остальные — обе.
       const boards = await this.rating.boardsFor(changed.accountId);
@@ -305,17 +332,21 @@ export class RunsService {
       const after = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false, since);
       if (after?.points != null && after.points !== best?.points) await this.leaderboard.submit(changed.difficulty, changed.accountId, after.points, boards);
     }
-    // Недельная таблица сезона и другие проекции пересчитываются по базе: решение модератора они узнают отсюда.
+    // Недельная таблица сезона и другие проекции пересчитываются по базе: решение они узнают отсюда.
     await this.hooks.emitRankingChanged({ accountId: changed.accountId, difficulty: changed.difficulty });
-    await this.roles.audit({
-      actorAccountId: actor.accountId,
-      action: ranked ? "players.run.rerank" : "players.run.unrank",
-      target: changed.accountId,
-      // Направление — в названии действия; в записи — какой забег и почему, чтобы журнал читался без карточки.
-      after: { runId, difficulty: changed.difficulty, survivalSec: changed.survivalSec, comment },
-    });
-    this.logger.log(JSON.stringify({ module: "runs", event: ranked ? "run_reranked" : "run_unranked", runId, accountId: changed.accountId, actor: actor.accountId }));
-    return { accountId: changed.accountId, ranked };
+  }
+
+  /**
+   * Повтор забега разошёлся с записью, и перепроверка сама сняла забег с рейтинга
+   * (tasks/T-0319): строка уже обновлена, остаётся привести доски и таблицу недели к базе.
+   * Тот же путь, что у «Не учитывать…» модератора, но без человека: ни права, ни аудита,
+   * причину — `replay_mismatch` — несёт сам забег.
+   */
+  async syncBoardsAfterReplay(runId: string): Promise<void> {
+    const stored = await this.runs.find(runId);
+    if (stored === null || stored.status !== "finished") return;
+    await this.refreshBoards({ accountId: stored.accountId, difficulty: stored.difficulty });
+    this.logger.log(JSON.stringify({ module: "runs", event: "run_unranked_by_replay", runId, accountId: stored.accountId }));
   }
 
   /**

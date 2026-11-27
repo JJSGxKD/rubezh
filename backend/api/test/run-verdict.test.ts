@@ -137,6 +137,29 @@ describe("рекламный переброс в вердикте (tasks/T-0199)
   });
 });
 
+describe("второй сундук клада в вердикте (tasks/T-0327)", () => {
+  it("заявлен без записи показа — отказ с нейтральной причиной unpaid_ad_chest", () => {
+    expect(judgeRun(run({ adChests: 1, paidAdChests: 0 }), limits)).toEqual({ verdict: "rejected", reasons: ["unpaid_ad_chest"] });
+  });
+
+  it("заявлен и записан, не заявлен вовсе, поля нет — честный забег", () => {
+    expect(judgeRun(run({ adChests: 1, paidAdChests: 1 }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run({ adChests: 0, paidAdChests: 0 }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run(), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+
+  it("забег с читами разработчика этой причиной не отклоняется", () => {
+    expect(judgeRun(run({ adChests: 1, paidAdChests: 0, cheats: true }), limits).reasons).not.toContain("unpaid_ad_chest");
+  });
+
+  it("причина стоит рядом с причиной неоплаченного рекламного переброса, а не подменяет её", () => {
+    expect(judgeRun(run({ adRerolls: 1, paidAdRerolls: 0, adChests: 1, paidAdChests: 0 }), limits)).toEqual({
+      verdict: "rejected",
+      reasons: ["unpaid_ad_reroll", "unpaid_ad_chest"],
+    });
+  });
+});
+
 describe("второй шанс в вердикте", () => {
   it("продолжение без оплаты — отказ: честный клиент продолжает только после подтверждения сервером", () => {
     expect(judgeRun(run({ continues: 1, paidContinues: 0 }), limits)).toEqual({ verdict: "rejected", reasons: ["unpaid_continue"] });
