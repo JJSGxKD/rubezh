@@ -354,6 +354,14 @@ WP28). Пишет в бота сервер, у получателя нет ус�
 параметром `n-<вид>`. Выбор игрока, что дублировать, — `settings_changed` с
 `setting` вида `bot.friendRequest` и `scope = account`.
 
+**Сообщения участнику проекта о его отчёте — тоже без событий** (`37-accounting.md` §13, Р222, T-0469).
+Виды `finance_report` (отчёт месяца готов или отозван) и `finance_payout` (выплата проведена) идут
+уведомлениями игрока и дублем в бота по ключу игрока «Сообщения команды» (`bot.teamMessage`), без кнопки
+«Открыть игру»: сообщение про панель «Мой проект». Исход дубля — `notification.bot_outcome`, повтор события
+не пишет второй строки: ключи `finance:report:<месяц>:<аккаунт>:<N>`, `…:<N>:recalled` и
+`finance:payout:<операция>`. Решения участника и выплаты — таблицы `ledger_confirmation` и
+`ledger_operation`, аудит — `ledger.period.confirm`, `ledger.period.dispute`.
+
 **Напоминания бота — те же таблицы, событий не вводим** (`35-stage4-plan.md`,
 `39-retention-mechanics.md` П5, T-0128). Три вида — `season_overtaken`,
 `season_closing`, `daily_reward_ready` — идут дублем в бота и пишут исход в

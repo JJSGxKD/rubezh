@@ -69,6 +69,8 @@ erDiagram
     LEDGER_OPERATION ||--o| LEDGER_LOAN : "заём: условия появляются вместе с проводкой"
     LEDGER_ACCOUNT ||--o{ LEDGER_LOAN : "счёт-обязательство займа: у займов одного кредитора в одной валюте общий"
     LEDGER_PERIOD |o..o{ LEDGER_ENTRY : "месяц запирает журнал: проводка с period закрытого месяца отклоняется; связь по значению period, без внешнего ключа (Р222)"
+    LEDGER_PERIOD |o..o{ LEDGER_CONFIRMATION : "решения участников по отчёту закрытого месяца; связь по значению period, без внешнего ключа (Р222, T-0469)"
+    LEDGER_PERIOD |o..o{ LEDGER_OPERATION : "выплата за закрытый месяц: payout_period; первая выплата запрещает снятие закрытия (Р222, T-0469)"
     ACCOUNT ||--o{ RUN : "играет"
     ACCOUNT ||--o{ PURCHASE : "оплачивает"
     RUN |o--o{ PURCHASE : "продолжен за; вайп обнуляет ссылку"
@@ -402,7 +404,7 @@ erDiagram
     NOTIFICATION {
         uuid notification_id PK
         uuid account_id FK
-        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, purchase_support, app_update, task_unsubscribed, pass_closed"
+        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, purchase_support, app_update, task_unsubscribed, pass_closed, finance_report, finance_payout"
         json payload "данные вида, по его схеме"
         string dedupe_key "одно событие — одно уведомление: уникален у аккаунта"
         datetime created_at
@@ -1564,7 +1566,7 @@ erDiagram
 
     LEDGER_OPERATION {
         uuid operation_id PK
-        enum kind "transfer | exchange | expense | income | loan | reversal"
+        enum kind "transfer | exchange | expense | income | loan | reversal | payout"
         enum status "draft | pending | posted | rejected: pending — ждёт второго ключа владельца (T-0462), остальное проводится сразу"
         json input "поля вида без причины и ссылки: суммы десятичными строками в валюте места, дата события; читается той же схемой, что тело запроса"
         string note "причина или описание, 3…500 знаков; становится описанием проводки"
@@ -1579,6 +1581,9 @@ erDiagram
         string decision_note "nullable: причина решения, до 500 знаков"
         string template_id "nullable: шаблон повторяющегося расхода, из которого создан черновик (T-0463)"
         string template_period "nullable: ГГГГ-ММ; (template_id, template_period) уникальны — на период один черновик; CHECK: только парой и в этом формате"
+        string payee "nullable, varchar(96): у выплаты — кому: stakeholder:<аккаунт>, owner, tax или loan:<заём> (T-0469)"
+        string payout_period "nullable, char(7): у выплаты — месяц отчёта, за который платят; индекс; CHECK: payee и payout_period только парой, месяц в формате"
+        string override_reason "nullable, varchar(500): причина решения владельца — участник молчит дольше срока или оспорил отчёт; CHECK: только вместе с payee"
     }
 
     LEDGER_TEMPLATE {
@@ -1619,6 +1624,12 @@ erDiagram
         datetime updated_at
     }
 
+    LEDGER_CONFIRMATION {
+        string period PK "ГГГГ-ММ, char(7); CHECK: формат"
+        uuid account_id PK "участник проекта; без внешнего ключа, как в журнале"
+        enum status "confirmed | disputed"
+        string comment "nullable, до 1000 знаков; у спора обязателен, от трёх знаков (CHECK)"
+        datetime decided_at "когда решил: решение старше последнего закрытия месяца не считается"
     BOT_CARD {
         uuid id PK
         uuid account_id FK "каскадом: удалённый аккаунт уносит карточки"
@@ -2396,6 +2407,24 @@ erDiagram
   убирается. Номер раза в ключах и отдельный префикс `reopen:` — поэтому
   повторное закрытие не конфликтует со сторнированным первым. При вайпе таблица
   остаётся.
+- **`LEDGER_CONFIRMATION` и выплаты за месяц** (Р222, T-0469; `37-accounting.md` §13).
+  Участник подтверждает или оспаривает **свой** отчёт закрытого месяца: одна строка
+  на `(period, account_id)`, решение можно поменять, пока ему не выплачено.
+  Выплата — вид операции `payout` (`LEDGER_OPERATION`): колонки `payee`,
+  `payout_period` и `override_reason` лежат в самой операции, проводка —
+  `op:<id>`: место `−сумма`, обязательство получателя `+сумма` (у владельца —
+  `equity.owner_draw.<валюта>`). Сумма платежа ограничена остатком долга месяца
+  по снимку закрытия и сальдо счёта обязательства; участнику — только после
+  подтверждения (решение старше последнего закрытия `ledger_period.closed_at`
+  не считается), владельцу с причиной — если участник молчит дольше
+  `finance.confirm-days` или оспорил. Проверка остатка и запись проводки идут под
+  замком месяца — `pg_advisory_xact_lock` на ключ `ledger_payouts:<месяц>`; тот же
+  замок берут решение участника и снятие закрытия, поэтому выплата и снятие не
+  расходятся: после первой проводки выплаты по месяцу снять закрытие нельзя
+  (409 `ledger_period_has_payouts`). Снятие закрытия стирает подтверждения
+  месяца. Сообщения участнику — уведомления игрока `finance_report` (готов,
+  отозван) и `finance_payout` с ключами `finance:report:<месяц>:<аккаунт>:<N>`
+  (`…:<N>:recalled` у отзыва) и `finance:payout:<операция>`. При вайпе таблица остаётся.
 - **`LEDGER_TEMPLATE` — шаблоны повторяющихся расходов** (Р220, T-0463;
   `37-accounting.md` §8). Шаблон хранит статью, место, обычную сумму и график
   (каждый месяц или месяц года) и **сам ничего не проводит**: «Расходы месяца»

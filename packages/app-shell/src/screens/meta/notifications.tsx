@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, CalendarCheck, Gem, Gift, LogOut, Megaphone, Newspaper, PackageOpen, Sparkles, Trophy, Undo2, UserPlus } from "lucide-react";
+import { Bell, CalendarCheck, FileText, Gem, Gift, LogOut, Megaphone, Newspaper, PackageOpen, Sparkles, Trophy, Undo2, UserPlus, Wallet } from "lucide-react";
 import { DIFFICULTY_IDS, type DifficultyId } from "@bh/shared-types";
 import { Button, Card, ContentColumn, EmptyState, ErrorState, Screen } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
@@ -14,7 +14,8 @@ import { track } from "../../state/shell";
  * Лента уведомлений (docs/35-stage4-plan.md Р51, §3.17): всё, что случилось с
  * игроком, — заявка и подарок друга, редкая добыча, возврат бустов, списание
  * награды за отписку от канала, сообщение команды, извинение команды за сбой
- * оплаты и возврат звёзд, выход версии. Открыл
+ * оплаты и возврат звёзд, выход версии, а участнику проекта — отчёт месяца учёта
+ * (готов, отозван) и проведённая выплата (T-0469). Открыл
  * ленту — увиденное прочитано; пришедшее, пока лента открыта, останется
  * новым. Вид, которого экран не знает, не показывается: сервер новее клиента.
  */
@@ -125,6 +126,11 @@ export function describeNotification(item: NotificationItem): Described | null {
     // Команде (T-0309): заявка на правку цены ждёт подтверждения; решается в панели, поэтому касание никуда не ведёт.
     case "change_request_pending":
       return { icon: <Megaphone size={20} />, title: t("notification.change_request_pending.title"), text: t("notification.change_request_pending", { name: typeof item.data.authorName === "string" ? item.data.authorName : t("notifications.someone") }), target: null };
+    // Участнику проекта (T-0469): отчёт месяца готов или отозван, выплата проведена; тот же текст, что в сообщении бота.
+    case "finance_report":
+      return financeReport(item.data);
+    case "finance_payout":
+      return financePayout(item.data);
     default:
       return null;
   }
@@ -186,6 +192,39 @@ function passClosed(data: Record<string, unknown>): Described | null {
   const month = PASS_MONTH.formatToParts(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1))).find((part) => part.type === "month")?.value;
   if (month === undefined) return null;
   return { icon: <Gift size={20} />, text: t("notification.pass_closed", { month, amount: formatNumber(rewards), n: rewards }), target: null };
+}
+
+/** «ноябрь» в «за ноябрь»: название месяца отчёта без числа, по UTC — месяц учёта не зависит от пояса устройства. */
+const FINANCE_MONTH = new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC", month: "long" });
+
+function financeMonth(period: unknown): string | null {
+  const match = typeof period === "string" ? /^(\d{4})-(0[1-9]|1[0-2])$/.exec(period) : null;
+  if (match === null) return null;
+  return FINANCE_MONTH.formatToParts(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1))).find((part) => part.type === "month")?.value ?? null;
+}
+
+/** «15980.40» → «15 980,40 ₽»: сервер шлёт рубли десятичной строкой; не сумма — `null`. */
+function rubles(value: unknown): string | null {
+  const match = typeof value === "string" ? /^(\d{1,15})\.(\d{2})$/.exec(value) : null;
+  return match === null ? null : `${(match[1] ?? "0").replace(/\B(?=(\d{3})+(?!\d))/g, " ")},${match[2] ?? "00"} ₽`;
+}
+
+/** Отчёт месяца: готов — с долей участника, отозван — с причиной; данные не по виду дают `null`. */
+function financeReport(data: Record<string, unknown>): Described | null {
+  const month = financeMonth(data.period);
+  if (month === null) return null;
+  if (data.state === "ready") {
+    const amount = rubles(data.amountRub);
+    return amount === null ? null : { icon: <FileText size={20} />, text: t("notification.finance_report.ready", { month, amount }), target: null };
+  }
+  if (data.state !== "recalled" || typeof data.reason !== "string" || data.reason.trim() === "") return null;
+  return { icon: <FileText size={20} />, text: t("notification.finance_report.recalled", { month, reason: data.reason.replace(/[.\s]+$/, "") }), target: null };
+}
+
+function financePayout(data: Record<string, unknown>): Described | null {
+  const month = financeMonth(data.period);
+  const amount = rubles(data.amountRub);
+  return month === null || amount === null ? null : { icon: <Wallet size={20} />, text: t("notification.finance_payout", { month, amount }), target: null };
 }
 
 const PASS_MONTH = new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC", day: "numeric", month: "long" });
