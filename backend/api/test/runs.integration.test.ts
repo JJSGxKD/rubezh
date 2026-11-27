@@ -11,6 +11,7 @@ import { ALL_BOARDS, COMMON_ONLY, RedisLeaderboardStore } from "../src/modules/r
 import { PrismaRunsRepository, type RunFinishRecord } from "../src/modules/runs/runs.repository.js";
 import { secondsScore } from "./helpers/memory-runs.js";
 import { redisDatabase } from "./helpers/redis-database.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Забеги на настоящих Postgres и Redis (docs/17-testing-strategy.md §4.2).
@@ -39,7 +40,7 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
 
   async function account(name = "Дым"): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(900_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: name, username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null },
       Date.now(),
     );
     return created.accountId;
@@ -552,5 +553,46 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     await rebuildLeaderboard(runs, board, new Set(), new Set(), null);
 
     expect(await redis.sismember("lb:rubezh:hard", cheater)).toBe(0);
+  });
+  it("модификатор забега (T-0122): колонка пишется со старта, итог её подтверждает, обычный забег — null", async () => {
+    const owner = await account();
+    const [modified, plain] = [randomUUID(), randomUUID()];
+    await runs.start({ runId: modified, accountId: owner, difficulty: "hard", startingWeaponId: "knife", contentHash: "abc", startedAt: new Date(), modifierId: "hurry" });
+    expect((await runs.find(modified))?.modifierId).toBe("hurry");
+
+    await runs.finish(finished(modified, owner, { modifierId: "hurry", ranked: false }));
+    await runs.finish(finished(plain, owner));
+
+    expect((await runs.find(modified))?.modifierId).toBe("hurry");
+    expect((await runs.find(plain))?.modifierId).toBeNull();
+    expect(await prisma.run.findUnique({ where: { runId: modified }, select: { modifierId: true, ranked: true } })).toEqual({ modifierId: "hurry", ranked: false });
+  });
+
+  it("модификатор забега: итог без старта пишет колонку, а итог, назвавший другое, заменяет стартовое — расхождение ловит вердикт", async () => {
+    const owner = await account();
+    const [noStart, mismatch] = [randomUUID(), randomUUID()];
+    await runs.finish(finished(noStart, owner, { modifierId: "inverse", ranked: false }));
+    await runs.start({ runId: mismatch, accountId: owner, difficulty: "hard", startingWeaponId: "knife", contentHash: "abc", startedAt: new Date(), modifierId: "hurry" });
+    await runs.finish(finished(mismatch, owner, { modifierId: "inverse", ranked: false }));
+
+    expect((await runs.find(noStart))?.modifierId).toBe("inverse");
+    expect((await runs.find(mismatch))?.modifierId).toBe("inverse");
+  });
+
+  it("уровень аккаунта на сервере: без записи прогресса — первый, с записью — её уровень", async () => {
+    const [fresh, grown] = [await account(), await account()];
+    await prisma.accountProgress.create({ data: { accountId: grown, xp: 2_000n, level: 9, updatedAt: new Date() } });
+
+    expect(await runs.accountLevel(fresh)).toBe(1);
+    expect(await runs.accountLevel(grown)).toBe(9);
+  });
+
+  it("забег с модификатором, помеченный нерейтинговым, в доски и рекорд не попадает", async () => {
+    const owner = await account();
+    await runs.finish(finished(randomUUID(), owner, { survivalSec: 100 }));
+    await runs.finish(finished(randomUUID(), owner, { survivalSec: 900, modifierId: "hurry", ranked: false }));
+
+    expect((await runs.bestRunOf(owner, "hard", false, null))?.survivalSec).toBe(100);
+    expect((await runs.bestRuns([owner], "hard", null)).map((row) => row.survivalSec)).toEqual([100]);
   });
 });

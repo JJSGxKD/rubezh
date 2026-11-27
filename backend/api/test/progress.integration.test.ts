@@ -19,6 +19,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { PrismaNotificationsRepository } from "../src/modules/notifications/notifications.repository.js";
 import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Награды за забег на живом Postgres с настоящим кошельком
@@ -44,7 +45,7 @@ describe.skipIf(DATABASE_URL === "")("награды за забег на жив
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(730_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Награда", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Награда", username: null },
       Date.now(),
     );
     return created.accountId;
@@ -250,5 +251,68 @@ describe.skipIf(DATABASE_URL === "")("награды за забег на жив
     const run = job(owner);
     await rewards.grant(run);
     expect(await view.runReward(stranger, run.runId)).toEqual({ status: "pending" });
+  });
+  it("модификатор забега (T-0122): награда ×1,25 к базе сложности, множители складываются, повтор не платит второй раз", async () => {
+    const id = await account();
+    const run = job(id, { difficulty: "hard", modifierId: "hurry" });
+
+    const row = await rewards.grant(run);
+    await rewards.grant(run);
+
+    // База — 88 монет и 165 опыта; ×1,7 за сложность и ×1,25 за модификатор до одного округления.
+    expect(row).toMatchObject({ coins: Math.round(88 * 1.7 * 1.25), xp: Math.round(165 * 1.7 * 1.25), skipped: null });
+    expect((await progress.progress(id)).xp).toBe(Math.round(165 * 1.7 * 1.25));
+  });
+
+  it("модификатор забега: подозрительный забег платится без множителя, отклонённый и с читами — не платится", async () => {
+    const id = await account();
+    const suspicious = job(id, { difficulty: "hard", modifierId: "inverse", verdict: "suspicious" });
+    const rejected = job(id, { difficulty: "hard", modifierId: "inverse", verdict: "rejected" });
+    const cheats = job(id, { difficulty: "hard", modifierId: "inverse", cheats: true });
+
+    expect(await rewards.grant(suspicious)).toMatchObject({ coins: Math.round(88 * 1.7), skipped: null });
+    expect(await rewards.grant(rejected)).toMatchObject({ coins: 0, skipped: "rejected" });
+    expect(await rewards.grant(cheats)).toMatchObject({ coins: 0, skipped: "cheats" });
+  });
+
+  it("модификатор забега: слушатель записанного забега платит с модификатором забега, а не из тела клиента", async () => {
+    const id = await account();
+    const hooks = new RunsHooks();
+    const listening = new RunRewards(
+      { ...config, auth: { ...config.auth, enabled: true } },
+      hooks,
+      progress,
+      wallet,
+      new ItemsService(new PrismaItemsRepository(prisma), wallet, config, cryptoSeeds, new NotificationsService(new PrismaNotificationsRepository(prisma))),
+    );
+    // Очереди нет (приложение не поднималось), поэтому задание считается сразу, как при недоступном Redis.
+    listening.onModuleInit();
+    const runId = randomUUID();
+
+    await hooks.emit({
+      runId,
+      accountId: id,
+      difficulty: "hard",
+      outcome: "died",
+      survivalSec: 420,
+      level: 20,
+      enemiesKilled: 600,
+      startingWeaponId: "knife",
+      weapons: [],
+      boosts: [],
+      xpCollected: null,
+      counters: null,
+      deathCause: null,
+      cheats: false,
+      continues: 0,
+      ranked: false,
+      verdict: "ok",
+      reasons: [],
+      finishedAt: new Date(),
+      modifierId: "inverse",
+    });
+
+    expect((await view.runReward(id, runId)).status).toBe("granted");
+    expect(await prisma.runReward.findUnique({ where: { runId }, select: { coins: true, xp: true } })).toEqual({ coins: Math.round(88 * 1.7 * 1.25), xp: Math.round(165 * 1.7 * 1.25) });
   });
 });

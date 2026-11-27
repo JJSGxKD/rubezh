@@ -716,7 +716,10 @@ SOCKS-вход, порт `XRAY_SOCKS_PORT_BASE` плюс слот. Порты н
 `/xray-status/core` — том `xray-status`, у API он только для чтения; по нему панель
 показывает запущенную версию (Р202). Смена версии: тег и digest в `Dockerfile` и
 `XRAY_CORE_MAX` в `packages/proxy-kit/src/xray-core.ts` — вместе, их совпадение проверяет
-`scripts/test/xray-core-pin.test.ts`. Смена версии Xray (Р192, `tasks/T-0387`):
+`scripts/test/xray-core-pin.test.ts`. Обычно версию меняет кнопка «Обновить» во вкладке
+«Ядро Xray» (Р202): PR откроет `xray-bump.yml` (`scripts/ops/xray-bump.mjs`), шаги ниже
+нужны, когда PR вышел черновиком или обновляют руками. Смена версии Xray (Р192,
+`tasks/T-0387`):
 
 1. Открыть `https://github.com/XTLS/Xray-core/releases` и взять последний выпуск **без**
    пометки Pre-release. Он старше действующего в `Dockerfile` — не откатываться молча,

@@ -3,8 +3,8 @@ id: T-0274
 title: Редактор промо на Fabric.js — холст, слои, текст, картинки, QR, отмена и выгрузка PNG/JPEG
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0272, T-0218]
@@ -17,6 +17,9 @@ shared:
   - pnpm-workspace.yaml
   - apps/admin/src/csp.ts
   - apps/admin/src/routes.ts
+  - apps/admin/src/screens/sections.tsx
+  - apps/admin/test/csp.test.ts
+  - docs/21-diagrams.md
   - docs/16-tech-stack-decisions.md
 runner: any
 executor: sonnet-5.5
@@ -28,7 +31,7 @@ batch: 5
 
 # T-0274. Редактор промо на Fabric.js — холст, слои, текст, картинки, QR, отмена и выгрузка PNG/JPEG
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0274.json)](README.md#значки-статуса) [![T-0272](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0272.json&label=T-0272)](archive/T-0272-promo-kit-model.md) [![T-0218](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0218.json&label=T-0218)](T-0218-partner-cabinet-links-promo.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0274.json)](README.md#значки-статуса) [![T-0272](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0272.json&label=T-0272)](archive/T-0272-promo-kit-model.md) [![T-0218](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0218.json&label=T-0218)](archive/T-0218-partner-cabinet-links-promo.md)
 
 ## Зачем
 

@@ -100,6 +100,8 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   // действия по расхождениям сверки (T-0434): отказы читает сотрудник поддержки, оба текста задаёт спецификация
   { code: "purchase_action_unavailable", fragment: "нажмите «Разобрано» с причиной" },
   { code: "purchase_action_unavailable", fragment: "разберите его там" },
+  // эфемерная подсказка администратору в чате команды (T-0407): текст задаёт спецификация
+  { code: "team_feedback_hint", fragment: "напишите там /feedback" },
 ];
 
 /** Существительные и формы, похожие на повелительное «-ите/-йте/-ьте», но им не являющиеся. */

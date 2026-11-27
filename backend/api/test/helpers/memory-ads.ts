@@ -1,5 +1,5 @@
 import type { AdCreative, AdCreativeSource, AdRequester, CreativeFetch } from "../../src/modules/ads/ad-creatives.js";
-import { CLAIM_WINDOW_MIN, type AdPlace } from "../../src/modules/ads/ads-rules.js";
+import { CAPPED_PLACES, CLAIM_WINDOW_MIN, dailyCapReached, isCappedPlace, type AdPlace } from "../../src/modules/ads/ads-rules.js";
 import { formatFor, profileOf } from "../../src/modules/ads/ad-networks.js";
 import { InterstitialGate, type FlagReader } from "../../src/modules/ads/interstitial-gate.js";
 import type { InterstitialFacts } from "../../src/modules/ads/interstitial-policy.js";
@@ -43,6 +43,8 @@ type StoredSession = AdSessionRow & {
   failReason: string | null;
   creativeId: string | null;
   viewSec: number | null;
+  /** сессия пропуска VIP: блока нет, в дневной кап роликов не входит */
+  pass: boolean;
 };
 
 /** Репозиторий в памяти с теми же условиями, что SQL: открытая сессия, своя, не истёкшая. */
@@ -73,6 +75,19 @@ export class MemoryAds implements AdsRepository {
       .sort((a, b) => Number(b.claimedAt !== null) - Number(a.claimedAt !== null) || b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 500);
     return { dayStart, sessions: sessions.map((session) => ({ ...session })) };
+  }
+
+  /** Как SQL: досмотренные сессии мест под капом за московские сутки, без пропуска VIP. */
+  async rewardedWatchedToday(accountId: string, time: Date): Promise<number> {
+    return this.rewardedOf(accountId, time, "completedAt");
+  }
+
+  private rewardedOf(accountId: string, time: Date, field: "completedAt" | "claimedAt"): number {
+    const dayStart = moscowDayStart(time).getTime();
+    return this.sessions.filter((session) => {
+      const moment = session[field]?.getTime();
+      return session.accountId === accountId && !session.pass && CAPPED_PLACES.includes(session.place) && moment !== undefined && moment >= dayStart && moment < dayStart + DAY;
+    }).length;
   }
 
   async createSession(session: NewAdSession): Promise<void> {
@@ -128,6 +143,7 @@ export class MemoryAds implements AdsRepository {
       failReason,
       creativeId: session.creative?.id ?? null,
       viewSec: session.creative?.viewSec ?? null,
+      pass: false,
     });
   }
 
@@ -149,6 +165,7 @@ export class MemoryAds implements AdsRepository {
       failReason: null,
       creativeId: null,
       viewSec: null,
+      pass: true,
     });
   }
 
@@ -184,17 +201,25 @@ export class MemoryAds implements AdsRepository {
     }
   }
 
-  async claim(sessionId: string, accountId: string, place: AdPlace, time: Date, verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict): Promise<ClaimOutcome> {
-    return await this.locked(async () => await this.claimLocked(sessionId, accountId, place, time, verdict));
+  async claim(sessionId: string, accountId: string, place: AdPlace, time: Date, verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict, dailyCap = 0): Promise<ClaimOutcome> {
+    return await this.locked(async () => await this.claimLocked(sessionId, accountId, place, time, verdict, dailyCap));
   }
 
-  private async claimLocked(sessionId: string, accountId: string, place: AdPlace, time: Date, verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict): Promise<ClaimOutcome> {
+  private async claimLocked(
+    sessionId: string,
+    accountId: string,
+    place: AdPlace,
+    time: Date,
+    verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict,
+    dailyCap: number,
+  ): Promise<ClaimOutcome> {
     const session = this.sessions.find((candidate) => candidate.sessionId === sessionId && candidate.accountId === accountId && candidate.place === place);
     if (session === undefined) return { status: "not_completed" };
     if (session.claimedAt !== null) return { status: "claimed", session: { ...session }, repeat: true };
     const decision = verdict({ ...session }, await this.history(accountId, place, time));
     if (decision.kind === "not_completed") return { status: "not_completed" };
     if (decision.kind === "cooldown") return { status: "cooldown", retryAt: decision.retryAt };
+    if (!session.pass && isCappedPlace(place) && dailyCapReached(this.rewardedOf(accountId, time, "claimedAt"), dailyCap)) return { status: "capped" };
     session.claimedAt = time;
     session.status = "claimed";
     return { status: "claimed", session: { ...session }, repeat: false };

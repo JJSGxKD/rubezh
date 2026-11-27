@@ -29,6 +29,8 @@ import { RestrictedPlaque } from "./restricted-plaque";
 import { RowOpener, entryRunId } from "./run-card-link";
 import { SessionNotice, useSessionNotice } from "./session-notice";
 import { RankMark, SyncProblem } from "./sync-ui";
+import { EmblemChip } from "./emblem-chip";
+import type { EmblemFit } from "./emblem-rules";
 import { SupporterBadge } from "./supporter-badge";
 import { TesterBadge } from "./tester-badge";
 
@@ -246,7 +248,7 @@ export function YouStrip(props: { me: LeaderboardMe | null; entries: readonly Le
  * забега при очках — подписью. `place` — место на экране, если оно не место на
  * доске (внутри дивизиона).
  */
-export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; scoring?: Scoring; place?: number }): ReactNode {
+export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; scoring?: Scoring; place?: number; emblemFit?: EmblemFit }): ReactNode {
   const { entry } = props;
   const place = props.place ?? entry.rank;
   const score = scoreOf(entry, props.scoring ?? "points");
@@ -264,14 +266,15 @@ export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; 
       style={staggerStyle(Math.min(props.index, 8))}
     >
       <RankMark rank={place} />
-      <Avatar name={entry.name} url={entry.photoUrl} size={36} />
+      <Avatar name={entry.name} url={entry.photoUrl} size={36} appearance={entry.appearance} avatarPhoto={entry.avatarPhoto} />
       <div className="min-w-0 flex-1">
         {/* Метки не сжимаются, поэтому на узком экране уходят на вторую строку, а не выдавливают имя и не наезжают на время. */}
         <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm font-semibold text-text">
           {place === 1 ? <Crown size={14} aria-hidden="true" className="shrink-0 text-elite" /> : null}
           <span className="max-w-full truncate">{entry.name}</span>
-          {entry.tester === true ? <TesterBadge /> : null}
-          {entry.supporter === true ? <SupporterBadge iconOnly /> : null}
+          {/* Знак у имени (T-0236) приходит с сервера один и заменяет метки: старый сервер без `emblem` рисует прежние. */}
+          {entry.emblem === undefined && entry.tester === true ? <TesterBadge /> : null}
+          {entry.emblem === undefined && entry.supporter === true ? <SupporterBadge iconOnly /> : null}
           {entry.rubezh === true ? <RubezhMark /> : null}
           {entry.prestige !== undefined && entry.prestige > 0 ? <PrestigeMark points={entry.prestige} /> : null}
           {entry.isMe ? (
@@ -280,6 +283,11 @@ export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; 
             </span>
           ) : null}
         </p>
+        {entry.emblem === undefined ? null : (
+          <div className="mt-0.5 flex min-w-0">
+            <EmblemChip emblem={entry.emblem} {...(props.emblemFit === undefined ? {} : { fit: props.emblemFit })} />
+          </div>
+        )}
         <div className="flex min-w-0 items-center gap-1.5">
           {style === null ? null : <StyleBadge axis={style} />}
           <RatingMeta weaponId={entry.startingWeaponId} level={entry.level} kills={entry.enemiesKilled} />

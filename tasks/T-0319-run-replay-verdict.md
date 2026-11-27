@@ -3,8 +3,8 @@ id: T-0319
 title: Перепроверка забегов — кому повтор обязателен, выборка остальных, постановка в sim-worker, исход в вердикт забега и в разбор
 epic: E11
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0317, T-0318, T-0294, T-0295]
@@ -27,6 +27,16 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - apps/admin/src/screens/review/**
   - apps/admin/src/api/review.ts
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
+  - apps/admin/test/review-replay.test.ts
+  - backend/api/src/modules/runs/run-replay.repository.ts
+  - backend/api/src/modules/runs/run-replay-facts.ts
+  - backend/api/src/modules/admin-notify/run-review-card.ts
+  - backend/api/test/run-replay.test.ts
+  - backend/api/test/ledger-operations.test.ts
+  - packages/app-shell/src/state/analytics.ts
+  - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/28-diagnostics.md
   - docs/30-configuration-map.md
@@ -41,7 +51,7 @@ batch: 8
 
 # T-0319. Перепроверка забегов — кому повтор обязателен, выборка остальных, постановка в sim-worker, исход в вердикт забега и в разбор
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0319.json)](README.md#значки-статуса) [![T-0317](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0317.json&label=T-0317)](archive/T-0317-run-proof-server.md) [![T-0318](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0318.json&label=T-0318)](T-0318-sim-worker-replay.md) [![T-0294](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0294.json&label=T-0294)](archive/T-0294-rating-boards-by-points.md) [![T-0295](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0295.json&label=T-0295)](archive/T-0295-rating-divisions-and-style.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0319.json)](README.md#значки-статуса) [![T-0317](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0317.json&label=T-0317)](archive/T-0317-run-proof-server.md) [![T-0318](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0318.json&label=T-0318)](archive/T-0318-sim-worker-replay.md) [![T-0294](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0294.json&label=T-0294)](archive/T-0294-rating-boards-by-points.md) [![T-0295](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0295.json&label=T-0295)](archive/T-0295-rating-divisions-and-style.md)
 
 ## Зачем
 

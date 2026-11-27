@@ -164,6 +164,7 @@ describe("тексты витрины", () => {
     "achievements.favoriteFailed",
     "task.kind.friends",
     "task.kind.account_level",
+    "task.kind.secrets_kinds",
   ];
 
   it("все ключи шагов лежат в ru-tasks.json и не пусты", () => {

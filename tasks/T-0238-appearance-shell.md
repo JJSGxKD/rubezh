@@ -3,8 +3,8 @@ id: T-0238
 title: Облики — экран «Облик» из арсенала и профиля, портрет в арсенале, голова облика в аватаре
 epic: E16
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0237, T-0230, T-0236]
@@ -15,12 +15,20 @@ zones:
   - packages/app-shell/src/screens/meta/appearance-rules.ts
   - packages/app-shell/test/appearance-rules.test.ts
   - packages/app-shell/test/appearance-api.test.ts
+  - packages/app-shell/test/appearance-avatar.test.ts
+  - packages/app-shell/test/hero-portrait.test.ts
+  - packages/app-shell/src/screens/meta/appearance-preview.tsx
+  - packages/app-shell/src/screens/meta/appearance-head-art.ts
+  - packages/app-shell/src/state/viewer-art.ts
+  - packages/app-shell/src/i18n/appearance.ts
+  - packages/app-shell/src/i18n/ru-appearance.json
 shared:
   - packages/app-shell/src/design-system/components/Data.tsx
   - packages/app-shell/src/screens/meta/hero-portrait.ts
   - packages/app-shell/src/screens/meta/arsenal.tsx
   - packages/app-shell/src/screens/meta/profile.tsx
   - packages/app-shell/src/screens/meta/rating.tsx
+  - packages/app-shell/src/screens/meta/rating-podium.tsx
   - packages/app-shell/src/screens/meta/friends-parts.tsx
   - packages/app-shell/src/state/runs-api.ts
   - packages/app-shell/src/state/friends-api.ts
@@ -28,6 +36,9 @@ shared:
   - packages/app-shell/src/state/navigation.ts
   - packages/app-shell/src/app/lazy-screens.tsx
   - packages/app-shell/src/i18n/ru.json
+  - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/src/app/App.tsx
+  - apps/web-telegram/vite.config.ts
   - packages/app-shell/src/screens/gallery.tsx
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
@@ -37,12 +48,12 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/identity-v2.html
-batch: 4
+batch: 5
 ---
 
 # T-0238. Облики — экран «Облик» из арсенала и профиля, портрет в арсенале, голова облика в аватаре
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0238.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](T-0237-appearance-server.md) [![T-0230](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0230.json&label=T-0230)](archive/T-0230-draft-art-testers-flag.md) [![T-0236](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0236.json&label=T-0236)](T-0236-emblems-shell.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0238.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](archive/T-0237-appearance-server.md) [![T-0230](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0230.json&label=T-0230)](archive/T-0230-draft-art-testers-flag.md) [![T-0236](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0236.json&label=T-0236)](archive/T-0236-emblems-shell.md)
 
 ## Зачем
 

@@ -68,4 +68,27 @@ describe("словарь событий", () => {
       expect(MAX_PAYLOAD_KEYS).toBeGreaterThanOrEqual(48);
     });
   });
+
+  describe("запросы из живых карточек (tasks/T-0395, Р199)", () => {
+    it("bot_card_query принимает вид, действие и исход; исход вне списка отклоняет", () => {
+      const { payload } = EVENT_DICTIONARY.bot_card_query;
+      expect(payload.safeParse({ card: "daily", action: "claim_daily", outcome: "already" }).success).toBe(true);
+      expect(payload.safeParse({ card: "season", action: "refresh", outcome: "off" }).success).toBe(true);
+      expect(payload.safeParse({ card: "daily", action: "claim_daily", outcome: "stale" }).success).toBe(false);
+      expect(payload.safeParse({ card: "daily", outcome: "ok" }).success).toBe(false);
+    });
+  });
+
+  describe("сообщения бота (tasks/T-0394, Р199)", () => {
+    const sent = { kind: "season_card", format: "card", outcome: "fallback", topic: "rewards", silent: true };
+
+    it("bot_message_sent принимает вид, формат, исход, тему и звук; формат вне списка отклоняет", () => {
+      const { payload } = EVENT_DICTIONARY.bot_message_sent;
+      expect(payload.safeParse(sent).success).toBe(true);
+      expect(payload.safeParse({ ...sent, format: "html" }).success).toBe(false);
+      expect(payload.safeParse({ ...sent, outcome: "retry" }).success).toBe(false);
+      expect(payload.safeParse({ ...sent, topic: "chat" }).success).toBe(false);
+      expect(payload.safeParse({ ...sent, silent: "да" }).success).toBe(false);
+    });
+  });
 });

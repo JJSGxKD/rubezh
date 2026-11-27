@@ -3,8 +3,8 @@ id: T-0245
 title: «Набор хранителя» — сервер: 48 часов после первой победы над Рубежом, окрас и самоцветы
 epic: E1
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0237, T-0121]
@@ -25,19 +25,27 @@ shared:
   - backend/api/src/modules/appearance/appearance.module.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/src/modules/appearance/appearance.service.ts
+  - backend/api/src/modules/shop/shop-overrides.ts
+  - backend/api/test/appearance-rules.test.ts
+  - backend/api/test/home.test.ts
+  - backend/api/test/appearance.integration.test.ts
+  - backend/api/test/shop.test.ts
+  - backend/api/test/wipe-plan.test.ts
   - docs/07-monetization-and-ads.md
   - docs/21-diagrams.md
+  - docs/30-configuration-map.md
 runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
 design: design/art/meta-v2.md
-batch: 4
+batch: 5
 ---
 
 # T-0245. «Набор хранителя» — сервер: 48 часов после первой победы над Рубежом, окрас и самоцветы
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0245.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](T-0237-appearance-server.md) [![T-0121](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0121.json&label=T-0121)](archive/T-0121-rubezh-win-reward-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0245.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](archive/T-0237-appearance-server.md) [![T-0121](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0121.json&label=T-0121)](archive/T-0121-rubezh-win-reward-server.md)
 
 > **Облик готов** (`design/art/backlog.md`, п. 12, 26.10.2026): кадры
 > `hero-dawn/…` в атласе `atlas-skin-dawn`, портреты `design/art/out/portrait-hero-dawn.svg`,

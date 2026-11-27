@@ -196,6 +196,10 @@ model Account {
   prologueDoneAt DateTime? @map("prologue_done_at") @db.Timestamptz(3)
   /// знак у имени, который игрок выбрал носить (T-0235, Р149); пусто — «по умолчанию». Держит ли он знак сейчас, сервер считает при чтении
   shownEmblemId  String?   @map("shown_emblem_id") @db.VarChar(48)
+  /// облик героя, который игрок выбрал (T-0237, Р150); пусто — Хранитель. Держит ли он облик сейчас, сервер считает при чтении
+  appearanceId   String?   @map("appearance_id") @db.VarChar(24)
+  /// в кружке аватара — фото площадки, а не голова облика (T-0237, Р47); по умолчанию голова облика
+  avatarPhoto    Boolean   @default(false) @map("avatar_photo")
 
   roles         AccountRole[]
   // Знак у имени (T-0235): выбранная строка каталога; удалённая из каталога сбрасывает выбор
@@ -219,10 +223,16 @@ model Account {
   seasonRewards SeasonReward[]
   // Любимые достижения (T-0106)
   achFavorites  AchievementFavorite[]
+  // Кодекс тайников (T-0261)
+  secretsFound  SecretFound[]
+  // Кодекс врагов (T-0127)
+  codexEntries  CodexEntry[]
   // Батл-пасс (T-0311)
   passProgress  PassProgress[]
   passClaims    PassClaim[]
   boostCredits  BoostCredit[]
+  // Живые карточки бота (T-0395)
+  botCards      BotCard[]
 
   // Друзья (WP14)
   friendLink       FriendLink?
@@ -246,6 +256,7 @@ model Account {
   runBoosts        RunBoost[]
   notifications    Notification[]
   dailyReward      DailyReward?
+  dailyDoubles     DailyDouble[]
   changelogSeen    ChangelogSeen?
   wheelSpins       WheelSpin[]
   taskProgress     TaskProgress[]
@@ -260,6 +271,8 @@ model Account {
   vipDaily         VipDaily?
   showcaseOffers   ShowcaseOffer[]
   adContinues      RunAdContinue[]
+  adRerolls        RunAdReroll[]
+  adChests         RunAdChest[]
   gemContinues     RunGemContinue[]
   compensation     TesterCompensation?
   botMentionTasks  BotMentionTask[]
@@ -267,6 +280,7 @@ model Account {
   taskChannelWatch TaskChannelWatch[]
   sharesHeld       StakeholderShare[]   @relation("StakeholderShares")
   sharesSet        StakeholderShare[]   @relation("StakeholderSharesSet")
+  appearanceGrants AppearanceGrant[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -494,6 +508,8 @@ model Run {
   rubezhReached    Boolean     @default(false) @map("rubezh_reached")
   /// секунда, на которой пал страж; `null` — не пал
   rubezhClearedSec Int?        @map("rubezh_cleared_sec")
+  /// модификатор забега (T-0122, Р105): `hurry` или `inverse`; `null` — забег без него. Один на забег; такой забег не идёт в рейтинг, а награду множит сервер. Без индекса: фильтра по колонке нет
+  modifierId       String?     @map("modifier_id")
   /// очки эффективности (T-0293, Р152); `null` — пролог и обучение, сбой подсчёта или забег до очков
   points           Int?
   /// индексы пяти осей с тремя знаками: `{ t, k, h, c, b }`, 1 — ровно ожидаемое; сырые, без потолка индекса
@@ -512,9 +528,26 @@ model Run {
   reviewedBy       String?     @map("reviewed_by") @db.Uuid
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
+  /// перепроверка повтором на сервере (T-0319, WP5): `pending` — ждёт исхода, затем `match`, `mismatch`, `content_mismatch`, `not_replayable`, `broken`, `timeout` или `no_proof`; `null` — повтор забегу не нужен
+  replayVerdict      String?   @map("replay_verdict") @db.VarChar(16)
+  /// тик первого расхождения повтора с записью; `null` — не разошёлся или разошёлся только итог
+  replayDivergedTick Int?      @map("replay_diverged_tick")
+  /// когда исход повтора записан; `null` — исхода нет
+  replayedAt         DateTime? @map("replayed_at") @db.Timestamptz(3)
+  /// повтор был обязателен (верх досок, рубин и золото, эпическая добыча, победа над Стражем), а не выборкой: по нему приоритет очереди и последствия для наград (T-0320)
+  replayRequired     Boolean   @default(false) @map("replay_required")
+  /// номер попытки повтора: растёт по «Повторить снова»; входит в идентификатор задания, чтобы исход прошлой попытки не лёг на новую
+  replayAttempt      Int       @default(0) @map("replay_attempt")
+  /// когда задание поставлено в очередь `replay`; `null` — ещё не поставлено (записи нет или Redis был недоступен)
+  replayQueuedAt     DateTime? @map("replay_queued_at") @db.Timestamptz(3)
+  /// что воркер насчитал и что сказал: `{ reason, replayed: { ticks, survivalSec, level, enemiesKilled, checksum } | null, durationMs }` — для таблицы «заявлено / повтор» в разборе
+  replayResult       Json?     @map("replay_result")
+
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   purchases    Purchase[]
   adContinues  RunAdContinue[]
+  adRerolls    RunAdReroll[]
+  adChests     RunAdChest[]
   gemContinues RunGemContinue[]
   proof        RunProof?
 
@@ -528,6 +561,8 @@ model Run {
   @@index([difficulty, finishedAt])
   // Очередь разбора: подозрительные и отклонённые, свежие первыми.
   @@index([verdict, finishedAt])
+  // Перепроверка повтором (T-0319): ожидающие постановки, застрявшие и без записи — одним проходом по `replay_verdict`.
+  @@index([replayVerdict, finishedAt])
   @@map("run")
 }
 
@@ -671,6 +706,7 @@ model Purchase {
   vipPeriod       VipPeriod?
   adConversions   AdConversion[]
   compensation    PurchaseCompensation?
+  grants          AppearanceGrant[]
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).
@@ -1288,7 +1324,11 @@ model Broadcast {
   /// бот какой площадки пишет — у аккаунта канал один, бот его площадки
   platform    Platform
   text        String          @db.VarChar(4096)
+  /// `plain` — простой текст; `rich` — ограниченный Markdown, разбор — `broadcasts/broadcast-rich.ts` (Р199)
+  format      String          @default("plain") @db.VarChar(8)
   buttonText  String?         @map("button_text") @db.VarChar(64)
+  /// отпечаток редакции (формат, текст, кнопка), ушедшей тестом себе оформленной; правка его сбрасывает
+  testedHash  String?         @map("tested_hash") @db.VarChar(64)
   /// ссылка кампании рассылки: кнопка ведёт через `/r/<код>`, клики и запуски — по ней
   linkCode    String?         @map("link_code") @db.VarChar(16)
   /// адрес кнопки на момент создания: домен клиента мог смениться, а текст — нет
@@ -1837,6 +1877,10 @@ enum AdPlace {
   run_double
   task
   interstitial
+  /// значения enum в базе дописываются в конец: порядок мест в коде (`AD_PLACES`) свой
+  card_reroll
+  daily_double
+  clad_chest
 }
 
 /// Условие успеха предложения (Р6): показ, клик или целевое действие.
@@ -2220,6 +2264,7 @@ model Partner {
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
   links     Link[]
+  materials PartnerMaterial[]
 
   @@index([createdAt])
   @@index([status])
@@ -2403,8 +2448,9 @@ model MediaImage {
   /// право на показ закрытой картинки (`ledger.view` у снимка чека, T-0462); пусто — открыта игроку и панели
   viewPermission String?  @map("view_permission") @db.VarChar(64)
 
-  tasks      TaskDef[]
-  homeSlides HomeSlide[]
+  tasks            TaskDef[]
+  homeSlides       HomeSlide[]
+  partnerMaterials PartnerMaterial[]
 
   @@map("media_image")
 }
@@ -2899,10 +2945,15 @@ model ContentVersion {
   /// без внешнего ключа — запись переживает аккаунт; `null` — завёл выкат
   createdBy     String?   @map("created_by") @db.Uuid
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  /// `null` — версия ещё не публиковалась
+  /// когда версия впервые вышла в игру у кого-либо — у команды или у всех; `null` — ещё не публиковалась
   publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
+  /// когда версия впервые стала текущей у всех (`CHECK` в миграции: только вместе с `published_at`);
+  /// `null` — у всех не бывала, её видела разве что команда. Откат «Всем» и запасная выдача игроку
+  /// со старой схемой берут только такие версии
+  releasedAllAt DateTime? @map("released_all_at") @db.Timestamptz(3)
 
-  drafts ContentDraft[]
+  drafts  ContentDraft[]
+  current ContentCurrent[]
 
   @@map("content_version")
 }
@@ -3376,6 +3427,34 @@ model LedgerLoan {
   @@map("ledger_loan")
 }
 
+// Месяцы учёта: сверка, закрытие и замок (docs/37-accounting.md §13, Р222, tasks/T-0468)
+
+/// open — открыт (строки у такого месяца может не быть вовсе), review — на сверке, closed — закрыт.
+enum LedgerPeriodStatus {
+  open
+  review
+  closed
+}
+
+/// Месяц учёта по UTC, «ГГГГ-ММ». Закрытый месяц запирает журнал: проводка с его месяцем отклоняется. `snapshot` —
+/// параметры и итог закрытия (ставки, доли, займы, курсы, водопад), по нему месяц пересчитывается без базы и не
+/// зависит от того, что поменяют потом; снимается вместе с закрытием. `reopened_count` входит в ключи проводок
+/// закрытия (`close:<месяц>:r<N>:…`), поэтому повторное закрытие не конфликтует со сторнированными.
+model LedgerPeriod {
+  period        String             @id @db.Char(7)
+  status        LedgerPeriodStatus @default(open)
+  reviewAt      DateTime?          @map("review_at") @db.Timestamptz(3)
+  /// кто поставил на сверку и закрыл; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  reviewBy      String?            @map("review_by") @db.Uuid
+  closedAt      DateTime?          @map("closed_at") @db.Timestamptz(3)
+  closedBy      String?            @map("closed_by") @db.Uuid
+  reopenedCount Int                @default(0) @map("reopened_count")
+  snapshot      Json?
+  updatedAt     DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("ledger_period")
+}
+
 // Шаблоны повторяющихся расходов (docs/37-accounting.md §8, Р220, tasks/T-0463)
 
 enum LedgerTemplateSchedule {
@@ -3410,4 +3489,231 @@ model LedgerTemplate {
   @@index([articleId])
   @@index([placeAccountId])
   @@map("ledger_template")
+}
+
+// Переброс карточек за рекламу (T-0199)
+
+/// Переброс карточек за рекламу (docs/35-stage4-plan.md Р133): один на забег, выданный по сессии показа места
+/// `card_reroll` — досмотренной или пропуску VIP. Забег — хозяин места, как у второго шанса; итог сверяется с этой
+/// книгой: заявленный рекламный переброс без строки отклоняет забег. `run_id` — ключ: второй переброс на забег не
+/// записывается, а сессия показа уникальна и потому не тратится на два забега.
+model RunAdReroll {
+  runId      String   @id @map("run_id") @db.VarChar(64)
+  accountId  String   @map("account_id") @db.Uuid
+  /// сессия показа; повтор той же сессией на тот же забег дожимает ответ
+  sessionId  String   @unique @map("session_id") @db.VarChar(32)
+  /// сеть показа; у пропуска VIP — его имя
+  networkKey String   @map("network_key") @db.VarChar(32)
+  grantedAt  DateTime @map("granted_at") @db.Timestamptz(3)
+
+  run     Run     @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("run_ad_reroll")
+}
+
+// Кодекс врагов (docs/39-retention-mechanics.md К2, tasks/T-0127). Награда за
+// кодекс — три достижения лестницы `codex` в `task_def`, процент пишется в
+// `task_progress` видом `codex_percent`.
+
+/// Открытая запись кодекса: игрок встретил врага в забеге. Одна строка на пару,
+/// открытая запись не закрывается и не переписывается — повтор забега ничего
+/// не меняет (`ON CONFLICT DO NOTHING`). Список врагов — таблица сервера
+/// `CODEX_ENEMY_IDS`, внешнего ключа на врага нет: враги живут в контенте движка
+model CodexEntry {
+  accountId   String   @map("account_id") @db.Uuid
+  /// id врага из контента (`content/enemies.ts`)
+  enemyId     String   @map("enemy_id") @db.VarChar(48)
+  /// когда запись открыта: время записи забега, в котором враг встретился первым
+  firstSeenAt DateTime @map("first_seen_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, enemyId])
+  @@map("codex_entry")
+}
+
+// Кодекс тайников (design/art/meta-v2.md §5.3, tasks/T-0261). Награда — достижение
+// «Следопыт» в `task_def` с видом `secrets_kinds`, число найденных видов пишется в
+// `task_progress` по итогу забега.
+
+/// Найденный вид тайника: игрок нашёл его в забеге, который считается по правилам наград.
+/// Одна строка на пару «аккаунт — вид», найденное не закрывается и не переписывается —
+/// повтор забега ничего не меняет (`ON CONFLICT DO NOTHING`). Виды — список движка
+/// (`SECRET_KINDS`), внешнего ключа на вид нет
+model SecretFound {
+  accountId String   @map("account_id") @db.Uuid
+  /// вид тайника: shrine, hoard, stone, tree, rift или wisp
+  kind      String   @db.VarChar(16)
+  /// когда найден: время записи забега, в котором вид найден первым
+  firstAt   DateTime @map("first_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, kind])
+  @@map("secret_found")
+}
+
+// Живые карточки бота (docs/35-stage4-plan.md Р199, tasks/T-0395). Ядро помнит,
+// какие карточки отправлены и в каком состоянии, чтобы править их не чаще лимита,
+// закрывать по концу периода и отвечать на запросы из них.
+
+/// Живая карточка бота (Р199, WP52): сообщение с состоянием, которое бот правит.
+/// Живая (`closed_at IS NULL`) на вид у игрока одна — частичный уникальный индекс в миграции
+model BotCard {
+  id        String    @id @default(uuid()) @db.Uuid
+  accountId String    @map("account_id") @db.Uuid
+  platform  String    @db.VarChar(16)
+  kind      String    @db.VarChar(16)
+  chatId    String    @map("chat_id") @db.VarChar(32)
+  messageId Int       @map("message_id")
+  /// версия облика у площадки: у Telegram — первые 8 hex sha256 HTML
+  version   String    @db.VarChar(16)
+  periodKey String?   @map("period_key") @db.VarChar(16)
+  /// последнее отправленное состояние (JSON ≤ 1024 байт): из него «перенесена» и финал
+  state     String
+  stateHash String    @map("state_hash") @db.VarChar(64)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @map("updated_at") @db.Timestamptz(3)
+  closedAt  DateTime? @map("closed_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([platform, chatId, messageId])
+  @@index([kind, periodKey])
+  @@map("bot_card")
+}
+
+// Второй сундук клада за рекламу (T-0327)
+
+/// Второй сундук клада за рекламу (docs/35-stage4-plan.md Р162): один на забег, выданный по сессии показа места
+/// `clad_chest` — досмотренной или пропуску VIP. Устроена как `RunAdReroll`: итог забега сверяется с этой книгой,
+/// заявленный второй сундук без строки отклоняет забег. Был ли в забеге клад, сервер не знает — за показ он
+/// ручается, а клад проверит повтор забега. `run_id` — ключ: второй сундук на забег не записывается, а сессия показа
+/// уникальна и потому не тратится на два забега.
+model RunAdChest {
+  runId      String   @id @map("run_id") @db.VarChar(64)
+  accountId  String   @map("account_id") @db.Uuid
+  /// сессия показа; повтор той же сессией на тот же забег дожимает ответ
+  sessionId  String   @unique @map("session_id") @db.VarChar(32)
+  /// сеть показа; у пропуска VIP — его имя
+  networkKey String   @map("network_key") @db.VarChar(32)
+  grantedAt  DateTime @map("granted_at") @db.Timestamptz(3)
+
+  run     Run     @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("run_ad_chest")
+}
+
+// Награда дня ×2 за ролик (T-0242)
+
+/// Удвоение награды дня за ролик (docs/35-stage4-plan.md Р155): одна строка на игрока и игровые сутки — «в эти сутки
+/// награду дня уже удвоили». В `daily_reward` строка одна на игрока, отдельной строки забора дня нет, поэтому
+/// удвоенное лежит здесь. Хозяин места `daily_double` — модуль награды дня; сессия показа уникальна и не тратится
+/// на два удвоения. Запись идёт `ON CONFLICT DO NOTHING`: гонка двух запросов даёт одну строку.
+model DailyDouble {
+  accountId String   @map("account_id") @db.Uuid
+  /// игровые сутки (по Москве) удвоения — те же, в которые забрана награда дня
+  gameDay   DateTime @map("game_day") @db.Date
+  /// номер удвоенного дня по порядку забора (`daily_reward.claimed_days` на момент удвоения)
+  dayNumber Int      @map("day_number")
+  /// сессия показа места `daily_double`: повтор той же сессией дожимает начисление; без внешнего ключа — сессию проверяет забор модуля рекламы
+  sessionId String   @unique @map("session_id") @db.VarChar(32)
+  /// сколько монет и осколков начислено вторым разом — по тем же правилам, что забор дня (`dailyReward`)
+  coins     Int
+  shards    Int
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, gameDay])
+  @@map("daily_double")
+}
+
+// Выданные облики (docs/35-stage4-plan.md Р155, tasks/T-0245). Большинство обликов сервер
+// считает при чтении по состоянию аккаунта — уровню, VIP, достижению (`appearance/`), и в базе
+// их нет. Облик, который выдан разово — куплен в наборе, а дальше подарен или получен в
+// пассе, — состоянием не вычислить: он хранится строкой. Облик `dawn` в наборе хранителя
+// (`shop/keeper-set.ts`) — первый.
+//
+// Ключ `(account_id, appearance_id)`: облик у аккаунта один, повтор выдачи — `ON CONFLICT DO
+// NOTHING`. `source` — как облик получен (`purchase`; остальные источники приходят со своими
+// задачами). У `purchase` ссылка на покупку обязательна, и возврат снимает облик ровно по ней.
+// На покупку ссылка `Restrict`: журнал покупок не стирается никогда, а выданное за них не
+// должно остаться без следа.
+model AppearanceGrant {
+  accountId    String   @map("account_id") @db.Uuid
+  /// id облика из каталога (`appearance-catalog.ts`)
+  appearanceId String   @map("appearance_id") @db.VarChar(24)
+  /// как получен: `purchase` — набор магазина
+  source       String   @db.VarChar(16)
+  /// покупка, за которую выдан облик; у `purchase` обязательна
+  purchaseId   String?  @map("purchase_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz(3)
+
+  account  Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchase Purchase? @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+
+  @@id([accountId, appearanceId])
+  // Возврат снимает облик по покупке.
+  @@index([purchaseId])
+  @@map("appearance_grant")
+}
+
+// Материалы для партнёров (docs/35-stage4-plan.md Р136, tasks/T-0221): баннеры,
+// тексты постов и правила программы, которые выкладывает команда. Партнёр
+// забирает их во вкладке «Материалы» кабинета.
+
+/// Материал для партнёров: баннер (картинка), текст поста или правила. Общий —
+/// `partner_id` пуст, для одного партнёра — задан. Архивный партнёру не виден,
+/// но запись остаётся. Форму строки держат `CHECK` в миграции и
+/// `partners/partner-materials.ts`
+model PartnerMaterial {
+  materialId String    @id @map("material_id") @db.Uuid
+  /// banner — картинка, post — текст поста, rules — правила программы
+  kind       String    @db.VarChar(8)
+  title      String    @db.VarChar(80)
+  /// у поста и правил обязателен, у баннера — подпись, может быть пустой
+  text       String?   @db.VarChar(2000)
+  /// у баннера обязателен: картинка профиля `partner_material`; у текста пуст
+  imageId    String?   @map("image_id") @db.VarChar(64)
+  /// кому: пусто — всем партнёрам, задан — только ему
+  partnerId  String?   @map("partner_id") @db.Uuid
+  /// порядок в кабинете: меньше — раньше
+  sort       Int       @default(0)
+  /// кто выложил; без внешнего ключа — запись переживает аккаунт
+  createdBy  String    @map("created_by") @db.Uuid
+  createdAt  DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @map("updated_at") @db.Timestamptz(3)
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
+
+  image   MediaImage? @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
+  partner Partner?    @relation(fields: [partnerId], references: [partnerId], onDelete: Restrict)
+
+  @@index([partnerId, archivedAt])
+  @@map("partner_material")
+}
+
+// Публикация контента (docs/19-content-admin.md §4.4–§4.5, tasks/T-0306): какая версия
+// сейчас в игре у какой аудитории. Правила игры, а не данные игроков, — вайп не трогает.
+
+/// Указатель «какая версия в игре»: не больше одной строки на аудиторию. `team` — аккаунты с
+/// ролью, смотрят версию глазами до игроков; `all` — все. Нет строки `team` — команда играет
+/// версией «всем»; нет строки `all` — версию никто не публиковал, клиент играет встроенной.
+/// Откат — смена номера версии в строке, новой версии он не создаёт
+model ContentCurrent {
+  /// `team` или `all` (`CHECK` в миграции)
+  audience  String   @id @db.VarChar(4)
+  versionNo Int      @map("version_no")
+  /// без внешнего ключа — запись переживает аккаунт; `null` — версию поставил выкат
+  setBy     String?  @map("set_by") @db.Uuid
+  setAt     DateTime @map("set_at") @db.Timestamptz(3)
+
+  version ContentVersion @relation(fields: [versionNo], references: [versionNo], onDelete: Restrict)
+
+  @@index([versionNo])
+  @@map("content_current")
 }

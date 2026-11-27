@@ -8,6 +8,7 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { PrismaAutoSourcesRepository, UNKNOWN_KEYS_MAX } from "../src/modules/links/auto-sources.repository.js";
 import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
 import { PrismaLinksRepository } from "../src/modules/links/links.repository.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Ссылки и клики на живом Postgres: клик ложится строкой, а запуск по нему —
@@ -62,7 +63,7 @@ describe.skipIf(DATABASE_URL === "")("ссылки на живом Postgres", ()
     const accounts = new PrismaAccountRepository(prisma);
     const sessions = new PrismaSessionsRepository(prisma);
     const newAccount = async (name: string) =>
-      (await accounts.upsert({ platform: "telegram", platformUserId: String(980_000_000 + Math.floor(Math.random() * 9_000_000)), displayName: name, username: null, photoUrl: null }, Date.now())).accountId;
+      (await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now())).accountId;
     // Две сессии по кликам — два запуска; одна по прямой ссылке — один прямой.
     await launch(sessions, await newAccount("Кликнувший 1"), "click", clickIds[0] ?? "");
     await launch(sessions, await newAccount("Кликнувший 2"), "click", clickIds[1] ?? "");
@@ -101,7 +102,7 @@ describe.skipIf(DATABASE_URL === "")("ссылки на живом Postgres", ()
     const code = newLinkCode();
     await links.create({ code, platform: "telegram", campaign: "direct-only", source: null, medium: null, note: null, createdBy: null, network: null, registrationOn: "first_run", target: "bot" });
     const accounts = new PrismaAccountRepository(prisma);
-    const account = await accounts.upsert({ platform: "telegram", platformUserId: String(970_000_000 + Math.floor(Math.random() * 9_000_000)), displayName: "Прямой без клика", username: null, photoUrl: null }, Date.now());
+    const account = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Прямой без клика", username: null, photoUrl: null }, Date.now());
     await launch(new PrismaSessionsRepository(prisma), account.accountId, "link", code);
 
     expect((await links.list(500)).find((row) => row.code === code)).toMatchObject({ target: "bot", clicks: 0, launches: 0, directLaunches: 1 });
@@ -112,7 +113,7 @@ describe.skipIf(DATABASE_URL === "")("ссылки на живом Postgres", ()
     await links.create({ code, platform: "telegram", campaign: "touch", source: null, medium: null, note: null, createdBy: null, network: null, registrationOn: "first_run" });
     const accounts = new PrismaAccountRepository(prisma);
     const sessions = new PrismaSessionsRepository(prisma);
-    const account = await accounts.upsert({ platform: "telegram", platformUserId: String(960_000_000 + Math.floor(Math.random() * 9_000_000)), displayName: "Касание", username: null, photoUrl: null }, Date.now());
+    const account = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Касание", username: null, photoUrl: null }, Date.now());
     await launch(sessions, account.accountId, "link", code);
 
     await expect(sessions.acquisition(account.accountId)).resolves.toMatchObject({ firstStartKind: "link", firstStartRef: code, lastStartKind: "link", lastStartRef: code });
@@ -161,7 +162,7 @@ describe.skipIf(DATABASE_URL === "")("ссылки на живом Postgres", ()
     it("скрытый источник остаётся в list со счётом запусков и hiddenAt; повторный ensure его не заводит заново", async () => {
       const code = await autoSource("b");
       const accounts = new PrismaAccountRepository(prisma);
-      const account = await accounts.upsert({ platform: "telegram", platformUserId: String(950_000_000 + Math.floor(Math.random() * 9_000_000)), displayName: "Пришёл по метке", username: null, photoUrl: null }, Date.now());
+      const account = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Пришёл по метке", username: null, photoUrl: null }, Date.now());
       await new PrismaSessionsRepository(prisma).record({
         sessionId: randomUUID(),
         accountId: account.accountId,

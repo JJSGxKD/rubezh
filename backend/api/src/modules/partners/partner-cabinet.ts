@@ -26,7 +26,11 @@ import { PROMO_CODES_REPOSITORY, type PromoCodesRepository } from "../promo-code
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { SETTINGS, type SettingDefinition } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
+import { CABINET_FUNNEL, buildCabinetFunnel, checkFunnelPeriod, type CabinetFunnel, type CabinetFunnelSource } from "./partner-cabinet-funnel.js";
+import { CAMPAIGN_SLUG_MAX, campaignSlug } from "./partner-cabinet-slug.js";
 import { PartnerNotFoundError } from "./partner-errors.js";
+import { cabinetMaterials, type CabinetMaterials } from "./partner-materials.js";
+import { PARTNER_MATERIALS, type PartnerMaterialsRepository } from "./partner-materials.repository.js";
 import { withTerms, type PartnerStatus } from "./partner-rules.js";
 import { PARTNERS_REPOSITORY, type PartnersRepository } from "./partners.repository.js";
 
@@ -42,7 +46,9 @@ import { PARTNERS_REPOSITORY, type PartnersRepository } from "./partners.reposit
  * - ссылки и промокоды кабинета (T-0218): партнёр заводит свои ссылки и копии своих общих кодов с новым
  *   словом, в пределах лимитов из настроек, без прав `links.manage` и `promo.edit`: право кабинета проверено
  *   в `partnerOf`, а владелец записи — всегда партнёр кабинета. Награду копии партнёр не выбирает — она
- *   берётся у исходной кампании; игроков, их имён и ID в ответах нет (docs/23 §4.4).
+ *   берётся у исходной кампании; игроков, их имён и ID в ответах нет (docs/23 §4.4);
+ * - воронка (T-0219): вехи игроков партнёра по ссылкам, кодам и дням — в `partner-cabinet-funnel.ts`, где и порог группы;
+ * - материалы (T-0221): общие и свои, без архивных, — в `partner-materials.ts`; партнёр — только из `partnerOf`.
  */
 
 /** Состояние кабинета в карточке партнёра: с каким аккаунтом связан и есть ли у аккаунта роль. */
@@ -85,6 +91,8 @@ export class PartnerAccountTakenError extends DomainError {
 }
 
 const DB_TIMEOUT_MS = 3_000;
+/** отчёт воронки считает вехи по всем привязкам окна: дольше обычного чтения, но не бесконечно */
+const FUNNEL_TIMEOUT_MS = 15_000;
 
 @Injectable()
 export class PrismaPartnerAccounts implements PartnerAccounts {
@@ -153,7 +161,9 @@ export interface CabinetOverview {
 export const CABINET_LINK_SOURCES = ["channel", "post", "stream", "chat", "other"] as const;
 export type CabinetLinkSource = (typeof CABINET_LINK_SOURCES)[number];
 
-export const CABINET_LIMITS = { campaignMin: 2, campaignMax: 64, noteMax: 120, codeMax: 48 } as const;
+export { campaignSlug };
+
+export const CABINET_LIMITS = { campaignMin: 2, campaignMax: CAMPAIGN_SLUG_MAX, noteMax: 120, codeMax: 48 } as const;
 
 /** Что партнёр задаёт у новой ссылки: остальное (цель, сеть, постбэк) — не его выбор. */
 export interface CabinetLinkInput {
@@ -212,26 +222,6 @@ export class CabinetCodeTakenError extends DomainError {
   constructor(display: string) {
     super("promo_code_taken", `Код ${display} уже занят: нужно другое слово`, 409);
   }
-}
-
-const TRANSLIT: Readonly<Record<string, string>> = {
-  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r",
-  с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
-};
-
-/**
- * Название ссылки словами партнёра — в кампанию ссылки: латиница в нижнем регистре, цифры, дефис и
- * подчёркивание, как у ссылок команды (они уходят в разрезы аналитики). Кириллица пишется латиницей, любой
- * другой знак — дефисом. `null` — в названии нет ни буквы, ни цифры.
- */
-export function campaignSlug(name: string): string | null {
-  const latin = [...name.normalize("NFC").toLowerCase()].map((char) => TRANSLIT[char] ?? char).join("");
-  const slug = latin
-    .replace(/[^a-z0-9_]+/g, "-")
-    .replace(/^[-_]+/, "")
-    .slice(0, CABINET_LIMITS.campaignMax)
-    .replace(/-+$/, "");
-  return /^[a-z0-9]/.test(slug) ? slug : null;
 }
 
 const DB_LIST_LIMIT = 200;
@@ -293,6 +283,8 @@ export class PartnerCabinet {
     @Optional() @Inject(PROMO_CODES_REPOSITORY) private readonly promoStore: PromoCodesRepository | null = null,
     @Optional() @Inject(PARTNER_PROMOS) private readonly partnerPromos: PartnerPromos | null = null,
     @Optional() @Inject(SETTINGS_READER) private readonly settings: SettingsReader | null = null,
+    @Optional() @Inject(CABINET_FUNNEL) private readonly funnelSource: CabinetFunnelSource | null = null,
+    @Optional() @Inject(PARTNER_MATERIALS) private readonly materialStore: PartnerMaterialsRepository | null = null,
   ) {}
 
   /**
@@ -320,6 +312,23 @@ export class PartnerCabinet {
     if (row === null) throw new PartnerNotFoundError();
     const { partnerId, name, status, sharePercent, payoutCurrency } = withTerms(row);
     return { partner: { partnerId, name, status, sharePercent, payoutCurrency } };
+  }
+
+  /**
+   * Воронка игроков партнёра за период по дате привязки, порог группы — из настроек. Партнёр — только из
+   * `partnerOf`: запрос не называет его сам. Партнёра нет — 404 до обращения к отчёту.
+   */
+  async funnel(actor: AccountRef, query: CabinetQuery, period: { from: Date; to: Date }, at = new Date()): Promise<CabinetFunnel> {
+    const scope = await this.partnerOf(actor, query);
+    checkFunnelPeriod(period);
+    if ((await this.db(this.partners.byId(scope.partnerId, at))) === null) throw new PartnerNotFoundError();
+    const raw = await withTimeout(this.need(this.funnelSource, "воронка").report(scope.partnerId, period.from, period.to), FUNNEL_TIMEOUT_MS, "воронка кабинета партнёра");
+    return buildCabinetFunnel(raw, period, this.setting(SETTINGS.partnersCabinetMinGroup));
+  }
+
+  async materials(actor: AccountRef, query: CabinetQuery): Promise<CabinetMaterials> {
+    const scope = await this.partnerOf(actor, query);
+    return await this.db(cabinetMaterials(this.need(this.materialStore, "материалы"), scope));
   }
 
   /** Ссылки партнёра с переходами и запусками — те же числа, что в разделе «Ссылки» команды. */

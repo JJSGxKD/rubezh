@@ -4,19 +4,23 @@ import { api } from "../../services";
 import { HELP } from "../../ui/help";
 import { Help, Loading, Notice } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
+import { FunnelTab } from "./FunnelTab";
 import { LinksTab } from "./LinksTab";
+import { MaterialsTab } from "./MaterialsTab";
 import { PromosTab } from "./PromosTab";
 
 const TABS = [
   { id: "links", title: "Ссылки" },
   { id: "promos", title: "Промокоды" },
+  { id: "funnel", title: "Воронка" },
+  { id: "materials", title: "Материалы" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
 /**
- * Кабинет партнёра (docs/35-stage4-plan.md Р136, tasks/T-0218): свои ссылки и промокоды. `partnerId` из адреса
+ * Кабинет партнёра (docs/35-stage4-plan.md Р136, tasks/T-0218, T-0219, T-0221): свои ссылки, промокоды, воронка и материалы команды. `partnerId` из адреса
  * (`#/cabinet/<id>`) — команда смотрит кабинет глазами партнёра, только чтение; без него — собственный кабинет.
- * Вкладки следующих задач (воронка, начисления, материалы) добавятся вместе с ними: пустых вкладок нет.
+ * Вкладки следующих задач (начисления) добавятся вместе с ними: пустых вкладок нет.
  */
 export function CabinetScreen({ partnerId }: { partnerId: string | null }) {
   const [tab, setTab] = useState<TabId>("links");
@@ -57,7 +61,15 @@ export function CabinetScreen({ partnerId }: { partnerId: string | null }) {
           <Help text={HELP.cabinet.section} />
         </span>
       </div>
-      {tab === "links" ? <LinksTab partnerId={partnerId} /> : <PromosTab partnerId={partnerId} />}
+      {tab === "links" ? (
+        <LinksTab partnerId={partnerId} />
+      ) : tab === "promos" ? (
+        <PromosTab partnerId={partnerId} />
+      ) : tab === "funnel" ? (
+        <FunnelTab partnerId={partnerId} />
+      ) : (
+        <MaterialsTab partnerId={partnerId} />
+      )}
     </div>
   );
 }

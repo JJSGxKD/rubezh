@@ -3,8 +3,8 @@ id: T-0395
 title: Живые карточки бота — ядро — порт, таблица bot_card, отправка, прореженные правки, финал, ответы на запросы
 epic: E5
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0393, T-0394]
@@ -24,9 +24,12 @@ zones:
   - backend/api/test/bot-cards.integration.test.ts
 shared:
   - backend/api/src/modules/bot-cards/bot-card-choices.ts
+  - backend/api/src/modules/bot-cards/bot-cards.updater.ts
   - backend/api/prisma/schema.prisma
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/test/wipe-runner.integration.test.ts
   - backend/api/src/modules/notifications-bot/bot-notify-queue.ts
   - backend/api/src/modules/notifications-bot/notifications-bot.module.ts
   - backend/api/src/platforms/platforms.module.ts
@@ -50,7 +53,7 @@ batch: 5
 
 # T-0395. Живые карточки бота — ядро — порт, таблица bot_card, отправка, прореженные правки, финал, ответы на запросы
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0395.json)](README.md#значки-статуса) [![T-0393](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0393.json&label=T-0393)](T-0393-bot-api-v10-layer.md) [![T-0394](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0394.json&label=T-0394)](T-0394-rich-message-port.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0395.json)](README.md#значки-статуса) [![T-0393](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0393.json&label=T-0393)](archive/T-0393-bot-api-v10-layer.md) [![T-0394](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0394.json&label=T-0394)](archive/T-0394-rich-message-port.md)
 
 ## Зачем
 

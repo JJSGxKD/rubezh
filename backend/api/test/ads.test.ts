@@ -677,7 +677,7 @@ describe("межстраничная по площадкам (WP12, часть 1
     repository.purchases.push({ accountId: ME, paidAt: at(NOON, -60) });
     expect((await service.offer(viewer, "interstitial", NOON)).available).toBe(false);
     expect((await service.offer(viewer, "interstitial", at(NOON, 23 * 60))).available).toBe(true);
-    expect(REWARDED_VIDEO_PLACES).toEqual(["second_chance", "wheel_spin", "run_double"]);
+    expect(REWARDED_VIDEO_PLACES).toEqual(["second_chance", "wheel_spin", "run_double", "card_reroll", "daily_double", "clad_chest"]);
   });
 
   it("ролик за награду на экране держит паузу, а невыданный — нет", async () => {
@@ -816,8 +816,8 @@ describe("реклама без ролика (VIP)", () => {
 
   it("экран хозяина места знает, что ролик не нужен; у межстраничной пропуска нет", async () => {
     const { service } = withPass([]);
-    expect(await service.readiness(TELEGRAM, "wheel_spin", NOON)).toEqual({ available: true, readyAt: null, pass: "vip" });
-    expect(await service.readiness(TELEGRAM, "interstitial", NOON)).toEqual({ available: false, readyAt: null, pass: null });
+    expect(await service.readiness(TELEGRAM, "wheel_spin", NOON)).toEqual({ available: true, readyAt: null, pass: "vip", capped: false });
+    expect(await service.readiness(TELEGRAM, "interstitial", NOON)).toEqual({ available: false, readyAt: null, pass: null, capped: false });
   });
 
   it("VIP кончился — снова сети по кругу, а награда без ролика в истории круг не ломает", async () => {

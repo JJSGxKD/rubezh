@@ -3,8 +3,8 @@ id: T-0252
 title: Картинки бота — основа: шрифт Russo One, общая сцена с обликом, кэш file_id, публичный адрес картинки
 epic: E5
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0237]
@@ -22,6 +22,7 @@ shared:
   - backend/api/src/platforms/telegram/welcome.command.ts
   - backend/api/src/platforms/ports/prepared-message.ts
   - backend/api/src/platforms/telegram/telegram-message-preparer.ts
+  - backend/api/src/platforms/telegram/telegram-bot-api.ts
   - backend/api/src/app.module.ts
   - backend/api/Dockerfile
   - docs/12-ip-and-licensing.md
@@ -32,12 +33,12 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/bot-images-v2.html
-batch: 4
+batch: 5
 ---
 
 # T-0252. Картинки бота — основа: шрифт Russo One, общая сцена с обликом, кэш file_id, публичный адрес картинки
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0252.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](T-0237-appearance-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0252.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](archive/T-0237-appearance-server.md)
 
 ## Зачем
 

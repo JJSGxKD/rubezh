@@ -124,7 +124,7 @@ export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter 
 }
 
 /**
- * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 27 таблиц плана в порядке
+ * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 31 таблица плана в порядке
  * `WIPE_ORDER`, затем `purchase` (из неё снимок берёт покупки и ссылку на забег обнуляет стирание)
  * и `tester_compensation` (по ней снимок проверяет, не было ли вайпа). Полноту против `WIPE_ORDER`
  * проверяет тест: таблица, добавленная в план без строки здесь, роняет его.
@@ -132,6 +132,8 @@ export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter 
 export const WIPE_LOCK_TABLES: readonly string[] = [
   "run_ad_continue",
   "run_gem_continue",
+  "run_ad_reroll",
+  "run_ad_chest",
   "run_proof",
   "run_reward",
   "run_boost",
@@ -150,6 +152,7 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "account_progress",
   "friend_gift",
   "daily_reward",
+  "daily_double",
   "wheel_spin",
   "vip_daily",
   "notification",
@@ -157,6 +160,9 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "pass_progress",
   "pass_claim",
   "boost_credit",
+  "codex_entry",
+  "secret_found",
+  "bot_card",
   "purchase",
   "tester_compensation",
 ];
@@ -178,7 +184,7 @@ async function lockTables(tx: Prisma.TransactionClient, timeoutMs: number): Prom
 }
 
 /**
- * Стереть все строки модели плана. Ветка на каждую из 27 стираемых моделей — явная,
+ * Стереть все строки модели плана. Ветка на каждую из 31 стираемых моделей — явная,
  * без обращения к делегату по имени: стирание не должно зависеть от опечатки.
  * Модель, которой тут нет, — отказ; тест проверяет, что ветка есть у каждой модели `WIPE_ORDER`.
  */
@@ -188,6 +194,10 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.runAdContinue.deleteMany({});
     case "RunGemContinue":
       return await tx.runGemContinue.deleteMany({});
+    case "RunAdReroll":
+      return await tx.runAdReroll.deleteMany({});
+    case "RunAdChest":
+      return await tx.runAdChest.deleteMany({});
     case "RunProof":
       return await tx.runProof.deleteMany({});
     case "RunReward":
@@ -206,6 +216,10 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.taskChannelWatch.deleteMany({});
     case "AchievementFavorite":
       return await tx.achievementFavorite.deleteMany({});
+    case "CodexEntry":
+      return await tx.codexEntry.deleteMany({});
+    case "SecretFound":
+      return await tx.secretFound.deleteMany({});
     case "ShowcaseOffer":
       return await tx.showcaseOffer.deleteMany({});
     case "ItemEvent":
@@ -224,6 +238,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.friendGift.deleteMany({});
     case "DailyReward":
       return await tx.dailyReward.deleteMany({});
+    case "DailyDouble":
+      return await tx.dailyDouble.deleteMany({});
     case "WheelSpin":
       return await tx.wheelSpin.deleteMany({});
     case "VipDaily":
@@ -238,6 +254,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.passClaim.deleteMany({});
     case "BoostCredit":
       return await tx.boostCredit.deleteMany({});
+    case "BotCard":
+      return await tx.botCard.deleteMany({});
     default:
       throw new Error(`Модель ${model} не входит в план стирания`);
   }

@@ -3,8 +3,8 @@ id: T-0407
 title: Эфемерные ответы в чате команды — /help, меню выгрузки и отказы видит только спросивший
 epic: E5
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0393, T-0394]
@@ -16,6 +16,9 @@ zones:
   - backend/api/test/export-bot.test.ts
 shared:
   - backend/api/src/platforms/telegram/telegram-bot-api.ts
+  - backend/api/src/platforms/telegram/telegram-api-call.ts
+  - backend/api/src/platforms/telegram/telegram-update-schema.ts
+  - backend/api/test/player-address.test.ts
   - backend/api/src/platforms/telegram/bot-router.ts
   - backend/api/src/platforms/telegram/bot-commands.ts
   - backend/api/src/platforms/telegram/bot.module.ts
@@ -33,7 +36,7 @@ batch: 5
 
 # T-0407. Эфемерные ответы в чате команды — /help, меню выгрузки и отказы видит только спросивший
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0407.json)](README.md#значки-статуса) [![T-0393](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0393.json&label=T-0393)](T-0393-bot-api-v10-layer.md) [![T-0394](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0394.json&label=T-0394)](T-0394-rich-message-port.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0407.json)](README.md#значки-статуса) [![T-0393](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0393.json&label=T-0393)](archive/T-0393-bot-api-v10-layer.md) [![T-0394](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0394.json&label=T-0394)](archive/T-0394-rich-message-port.md)
 
 ## Зачем
 
