@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import { t } from "../i18n";
 import type { WidgetId, WidgetSize } from "./home-widget-rules";
-import { DailyView, Frame, FriendsView, RecordView, TasksView, WheelView } from "./home-widgets";
+import { DailyView, Frame, FriendsView, PassWidgetView, RecordView, TasksView, WheelView } from "./home-widgets";
 
 /**
  * Все состояния каждого виджета на тестовых данных — для витрины
@@ -26,6 +25,10 @@ export function WidgetShowcase(props: { now: number }): ReactNode {
     // После победы в прологе (T-0280): метка «Новое» до первого открытия раздела.
     { id: "daily", size: "tile", ready: false, fresh: true, view: <DailyView face={{ state: "idle" }} size="tile" now={now} /> },
     { id: "tasks", size: "tile", ready: false, fresh: true, view: <TasksView face={{ state: "progress", done: 0, total: 3 }} size="tile" /> },
+    // Батл-пасс (T-0314): награды ждут — широкий с «Забрать»; ход пасса — плитка с очками до следующей.
+    { id: "pass", size: "hero", ready: true, view: <PassWidgetView face={{ state: "ready", tier: 7, claimable: 2, ratio: 0.6, remaining: 40 }} size="hero" /> },
+    { id: "pass", size: "tile", ready: false, view: <PassWidgetView face={{ state: "progress", tier: 7, atMax: false, ratio: 0.6, remaining: 40 }} size="tile" /> },
+    { id: "pass", size: "tile", ready: false, view: <PassWidgetView face={{ state: "progress", tier: 30, atMax: true, ratio: 1, remaining: 0 }} size="tile" /> },
     { id: "friends", size: "tile", ready: false, view: <FriendsView face={{ state: "news", count: 2 }} size="tile" /> },
     { id: "record", size: "hero", ready: false, view: <RecordView face={{ state: "gap", bestSec: 754, gapSec: 42 }} size="hero" /> },
     { id: "record", size: "tile", ready: false, view: <RecordView face={{ state: "record", bestSec: 754 }} size="tile" /> },

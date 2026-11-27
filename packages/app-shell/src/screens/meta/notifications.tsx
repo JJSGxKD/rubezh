@@ -5,7 +5,7 @@ import { Button, Card, ContentColumn, EmptyState, ErrorState, Screen } from "../
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/account";
 import type { ApiFailure } from "../../state/api-request";
-import { useNavigation, type ScreenId } from "../../state/navigation";
+import { openPass, useNavigation, type ScreenId } from "../../state/navigation";
 import { changelogAvailable } from "../../state/changelog-api";
 import { formatWhen, loadFeed, markRead, type NotificationItem } from "../../state/notifications-api";
 import { track } from "../../state/shell";
@@ -82,6 +82,8 @@ export interface Described {
   target: ScreenId | null;
   /** экран поверх ленты, а не вкладка: «назад» возвращает в ленту */
   over?: boolean;
+  /** касание открывает вкладку «Пасс» в «Заданиях», а не просто экран `target` (T-0314) */
+  pass?: boolean;
 }
 
 export function describeNotification(item: NotificationItem): Described | null {
@@ -119,7 +121,7 @@ export function describeNotification(item: NotificationItem): Described | null {
     }
     case "daily_reward_ready":
       return { icon: <CalendarCheck size={20} />, text: t("notification.daily_reward_ready"), target: "daily", over: true };
-    // Пасс месяца закрыт (T-0312): тот же текст, что в сообщении бота. Экран пасса — T-0314, пока касание никуда не ведёт.
+    // Пасс месяца закрыт (T-0312): тот же текст, что в сообщении бота; касание открывает вкладку «Пасс» (T-0314).
     case "pass_closed":
       return passClosed(item.data);
     // Команде (T-0309): заявка на правку цены ждёт подтверждения; решается в панели, поэтому касание никуда не ведёт.
@@ -185,7 +187,7 @@ function passClosed(data: Record<string, unknown>): Described | null {
   if (rewards === 0 || match === null) return null;
   const month = PASS_MONTH.formatToParts(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1))).find((part) => part.type === "month")?.value;
   if (month === undefined) return null;
-  return { icon: <Gift size={20} />, text: t("notification.pass_closed", { month, amount: formatNumber(rewards), n: rewards }), target: null };
+  return { icon: <Gift size={20} />, text: t("notification.pass_closed", { month, amount: formatNumber(rewards), n: rewards }), target: "tasks", pass: true };
 }
 
 const PASS_MONTH = new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC", day: "numeric", month: "long" });
@@ -217,13 +219,14 @@ function unsubscribedText(data: Record<string, unknown>): string {
 function NotificationRow(props: { item: NotificationItem; index: number }): ReactNode {
   const described = describeNotification(props.item);
   if (described === null) return null;
-  const { target, over } = described;
+  const { target, over, pass } = described;
   const open =
     target === null
       ? undefined
       : () => {
           track("notification_opened", { kind: props.item.kind });
-          if (over === true) useNavigation.getState().push(target);
+          if (pass === true) openPass("notification");
+          else if (over === true) useNavigation.getState().push(target);
           else useNavigation.getState().resetTo(target);
         };
   return (

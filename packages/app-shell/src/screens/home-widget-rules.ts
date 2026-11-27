@@ -1,6 +1,8 @@
 import type { DifficultyId } from "@bh/shared-types";
 import type { DailyWidget, TasksWidget, WheelWidget } from "../state/home-api";
 import type { LastRun } from "../state/meta";
+import type { PassSnapshot } from "../state/pass-api";
+import { claimableRewards, pointsToNext } from "./meta/pass-rules";
 import { msUntilReset } from "./meta/schedule";
 
 /**
@@ -19,7 +21,7 @@ import { msUntilReset } from "./meta/schedule";
  * соседнем экране знаки обновляются сразу, а ответ главной — следом.
  */
 
-export type WidgetId = "daily" | "wheel" | "tasks" | "record" | "friends";
+export type WidgetId = "daily" | "wheel" | "tasks" | "pass" | "record" | "friends";
 
 /** `hero` — во всю ширину и выше; `tile` — плитка в полряда; `row` — во всю ширину высотой плитки. */
 export type WidgetSize = "hero" | "tile" | "row";
@@ -34,14 +36,19 @@ export interface WidgetReadiness {
   daily: boolean;
   wheel: boolean;
   tasks: boolean;
+  /**
+   * Пасс: награды ждут — `true`, нет — `false`; `undefined` — пасса на главной нет
+   * (гость, сервер не ответил), и виджета в сетке тоже нет.
+   */
+  pass?: boolean | undefined;
 }
 
-const READY_ORDER = ["daily", "wheel", "tasks"] as const;
-const REST_ORDER: readonly WidgetId[] = ["record", "tasks", "daily", "wheel", "friends"];
+const READY_ORDER = ["daily", "wheel", "tasks", "pass"] as const;
+const REST_ORDER: readonly WidgetId[] = ["record", "tasks", "pass", "daily", "wheel", "friends"];
 
 export function arrangeWidgets(ready: WidgetReadiness): WidgetSlot[] {
-  const first: WidgetSlot[] = READY_ORDER.filter((id) => ready[id]).map((id) => ({ id, size: "hero" }));
-  const rest: WidgetSlot[] = REST_ORDER.filter((id) => !first.some((slot) => slot.id === id)).map((id) => ({ id, size: "tile" }));
+  const first: WidgetSlot[] = READY_ORDER.filter((id) => ready[id] === true).map((id) => ({ id, size: "hero" }));
+  const rest: WidgetSlot[] = REST_ORDER.filter((id) => !first.some((slot) => slot.id === id) && (id !== "pass" || ready.pass !== undefined)).map((id) => ({ id, size: "tile" }));
   const lead = rest[0];
   if (first.length === 0 && lead !== undefined) lead.size = "hero";
   const tiles = rest.filter((slot) => slot.size === "tile");
@@ -154,4 +161,22 @@ export type FriendsFace = { state: "news"; count: number } | { state: "idle" };
 /** Друзья: подарки и заявки ждут — числом со знака меню. */
 export function friendsFace(count: number): FriendsFace {
   return count > 0 ? { state: "news", count } : { state: "idle" };
+}
+
+export type PassFace =
+  | { state: "ready"; tier: number; claimable: number; ratio: number; remaining: number }
+  | { state: "progress"; tier: number; atMax: boolean; ratio: number; remaining: number };
+
+/**
+ * Пасс (tasks/T-0314). Ждут награды — сколько и где ступень; иначе ход пасса:
+ * ступень и очки до следующей. Ответа нет — виджета нет: у гостя пасса нет,
+ * а заглушка «ступень 0» соврала бы игроку, у которого просто не загрузилось.
+ */
+export function passFace(view: PassSnapshot | null): PassFace | null {
+  if (view === null) return null;
+  const progress = pointsToNext(view);
+  const ratio = progress.atMax ? 1 : progress.into / progress.step;
+  const claimable = claimableRewards(view).length;
+  if (claimable > 0) return { state: "ready", tier: view.tier, claimable, ratio, remaining: progress.remaining };
+  return { state: "progress", tier: view.tier, atMax: progress.atMax, ratio, remaining: progress.remaining };
 }

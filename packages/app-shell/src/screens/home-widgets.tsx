@@ -9,7 +9,8 @@ import { useBadges } from "../state/badges";
 import { RATED_DIFFICULTY_ID } from "../state/difficulty";
 import { refreshHome, useHome, type HomeWidgets as WidgetData } from "../state/home-api";
 import { useMeta } from "../state/meta";
-import { useNavigation } from "../state/navigation";
+import { openPass, useNavigation } from "../state/navigation";
+import { loadPass, usePass } from "../state/pass-api";
 import { useRuns } from "../state/runs";
 import { usePrologue, type HomeSection } from "../state/prologue";
 import { track, useShell } from "../state/shell";
@@ -17,6 +18,7 @@ import {
   arrangeWidgets,
   dailyFace,
   friendsFace,
+  passFace,
   recordFace,
   recordPointsFace,
   tasksFace,
@@ -25,6 +27,7 @@ import {
   type DailyFace,
   type DayMark,
   type FriendsFace,
+  type PassFace,
   type RecordFace,
   type RecordPointsFace,
   type TasksFace,
@@ -61,6 +64,7 @@ const TONE: Record<WidgetId, string> = {
   daily: "widget-daily",
   wheel: "widget-wheel",
   tasks: "widget-tasks",
+  pass: "widget-pass",
   record: "widget-record",
   friends: "widget-friends",
 };
@@ -76,6 +80,7 @@ export function HomeWidgets(props: { marks?: Record<HomeSection, boolean> }): Re
   const playable = useShell((state) => state.adapter.showAd !== undefined);
   const badges = useBadges();
   const data = useHome((state) => state.data);
+  const pass = usePass((state) => state.view);
   const known = useBadgesKnown(withAccount, badges.loadedAt);
   const now = useClock(true, CLOCK_STEP_MS);
   const grid = useRef<HTMLElement>(null);
@@ -85,12 +90,18 @@ export function HomeWidgets(props: { marks?: Record<HomeSection, boolean> }): Re
   useEffect(() => {
     if (withAccount) void refreshHome();
   }, [withAccount, badges.loadedAt]);
+  // Пасс спрашивается отдельно от главной: у него свой ответ (`GET /pass`), и его сбой не трогает остальные виджеты.
+  useEffect(() => {
+    if (withAccount) void loadPass();
+  }, [withAccount, badges.loadedAt]);
   useMidnightRefresh(withAccount);
 
   if (!known) return <WidgetsPlaceholder />;
 
   const widgets: WidgetData = data?.widgets ?? { daily: null, wheel: null, tasks: null };
-  const slots = arrangeWidgets({ daily: badges.daily > 0, wheel: badges.wheel > 0, tasks: badges.tasks > 0 });
+  // Пасса нет у гостя и пока ответ не пришёл: виджета тогда нет вовсе, а не заглушка «ступень 0».
+  const passState = withAccount ? passFace(pass) : null;
+  const slots = arrangeWidgets({ daily: badges.daily > 0, wheel: badges.wheel > 0, tasks: badges.tasks > 0, pass: passState === null ? undefined : passState.state === "ready" });
 
   return (
     <section ref={grid} aria-label={t("home.widgets")} data-still={still ? "" : undefined} className="mb-3 grid grid-cols-2 gap-3">
@@ -173,6 +184,7 @@ function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets:
   // Примитивы и ссылка из стора: новых объектов нет, главная не перерисовывается лишний раз.
   const bestRated = useRuns((s) => s.profile?.best[RATED_DIFFICULTY_ID] ?? null);
   const lastPoints = useRuns((s) => s.lastSubmitted?.result.score?.points ?? null);
+  const passView = usePass((s) => s.view);
   // Касание — в аналитику с видом, состоянием и местом: видно, какой крючок срабатывает и где.
   const open = (state: string, go: () => void) => (): void => {
     track("home_widget_clicked", { widget: id, state, position: index });
@@ -203,6 +215,15 @@ function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets:
       return (
         <Frame id={id} fresh={fresh} size={size} index={index} ready={face.state === "ready"} onOpen={open(face.state, () => navigation.resetTo("tasks"))}>
           <TasksView face={face} size={size} />
+        </Frame>
+      );
+    }
+    case "pass": {
+      const face = passFace(passView);
+      if (face === null) return null;
+      return (
+        <Frame id={id} size={size} index={index} ready={face.state === "ready"} onOpen={open(face.state, () => openPass("widget"))}>
+          <PassWidgetView face={face} size={size} />
         </Frame>
       );
     }
@@ -587,6 +608,46 @@ function Ring(props: { size: number; done: number; total: number | null }): Reac
         </span>
       )}
     </span>
+  );
+}
+
+/**
+ * Батл-пасс (tasks/T-0314): ступень в медальоне, полоса до следующей и «Забрать»,
+ * если награды ждут. Тап по виджету открывает вкладку «Пасс» целиком — забор там.
+ */
+export function PassWidgetView(props: { face: PassFace; size: WidgetSize }): ReactNode {
+  const { face, size } = props;
+  const px = faceSize(size);
+  const medallion = (
+    <span
+      aria-hidden="true"
+      className="inline-flex items-center justify-center rounded-full bg-surface-sunken font-display font-bold text-elite tabular-nums ring-2 ring-(--widget-tone)"
+      style={{ width: px, height: px, fontSize: Math.round(px * 0.45) }}
+    >
+      {face.tier}
+    </span>
+  );
+  const status = face.state === "ready" ? t("widget.pass.ready", { n: face.claimable }) : face.atMax ? t("widget.pass.max") : t("pass.remaining", { n: face.remaining });
+  const sub =
+    size === "tile" ? (
+      status
+    ) : (
+      <span className="flex items-center gap-2">
+        <span aria-hidden="true" className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-pill bg-surface-sunken">
+          <span className="block h-full rounded-pill bg-(--widget-tone)" style={{ width: `${String(Math.round(face.ratio * 100))}%` }} />
+        </span>
+        <span className="shrink-0">{status}</span>
+      </span>
+    );
+  return (
+    <Layout
+      size={size}
+      face={medallion}
+      label={label("pass", size)}
+      big={t(size === "tile" ? "widget.pass.tierShort" : "widget.pass.tier", { tier: face.tier })}
+      sub={sub}
+      {...(face.state === "ready" ? { action: t("widget.pass.claim") } : {})}
+    />
   );
 }
 
