@@ -200,6 +200,8 @@ model Account {
   appearanceId   String?   @map("appearance_id") @db.VarChar(24)
   /// в кружке аватара — фото площадки, а не голова облика (T-0237, Р47); по умолчанию голова облика
   avatarPhoto    Boolean   @default(false) @map("avatar_photo")
+  /// публичный id (T-0247, Р47): 12 hex-знаков, уникален и не меняется; внутренний account_id наружу не уходит. Новому аккаунту id ставит репозиторий, а запасное значение базы — для вставок мимо него
+  publicId       String    @unique @default(dbgenerated("substr(replace((gen_random_uuid())::text, '-'::text, ''::text), 1, 12)")) @map("public_id") @db.VarChar(12)
 
   roles         AccountRole[]
   // Знак у имени (T-0235): выбранная строка каталога; удалённая из каталога сбрасывает выбор

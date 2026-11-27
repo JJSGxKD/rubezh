@@ -79,6 +79,7 @@ import { VkModule } from "./platforms/vk/vk.module.js";
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
 import { CodexModule } from "./modules/codex/codex.module.js";
 import { AppearanceModule } from "./modules/appearance/appearance.module.js";
+import { PlayersModule } from "./modules/players/players.module.js";
 import { RemindersModule } from "./modules/reminders/reminders.module.js";
 import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.js";
 import { MaxModule } from "./platforms/max/max.module.js";
@@ -191,6 +192,7 @@ export const APP_MODULES = [
   AchievementsModule,
   CodexModule,
   AppearanceModule,
+  PlayersModule,
   BattlePassModule,
   RemindersModule,
   RemindersOffModule,
