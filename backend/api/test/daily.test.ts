@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { dailyReward, dayPosition, levelMul, stepMul } from "../src/modules/daily/daily-rules.js";
-import type { DailyRepository, DailyState } from "../src/modules/daily/daily.repository.js";
 import { DailyService, viewOf } from "../src/modules/daily/daily.service.js";
 import type { ProgressService } from "../src/modules/progress/progress.service.js";
+import { MemoryDaily } from "./helpers/memory-daily.js";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
 
 /**
@@ -15,26 +15,6 @@ const ME = "00000000-0000-4000-8000-00000000d001";
 const HOUR = 3_600_000;
 /** 30.09.2026, 12:00 по Москве */
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
-
-/** Московские сутки без перехода на летнее время: UTC+3. */
-function moscowDay(at: Date): number {
-  return Math.floor((at.getTime() + 3 * HOUR) / (24 * HOUR));
-}
-
-class MemoryDaily implements DailyRepository {
-  row: { claimedDays: number; lastDay: number } | null = null;
-
-  async state(_accountId: string, at: Date): Promise<DailyState> {
-    return { claimedDays: this.row?.claimedDays ?? 0, claimedToday: this.row?.lastDay === moscowDay(at) };
-  }
-
-  async advance(_accountId: string, expected: number, at: Date): Promise<boolean> {
-    const current = this.row?.claimedDays ?? 0;
-    if (current !== expected || (this.row !== null && this.row.lastDay >= moscowDay(at))) return false;
-    this.row = { claimedDays: current + 1, lastDay: moscowDay(at) };
-    return true;
-  }
-}
 
 class FakeWallet {
   readonly keys = new Map<string, number>();
@@ -119,20 +99,20 @@ describe("неделя на экране", () => {
 describe("забор награды дня", () => {
   it("день забирается один раз в московские сутки, а новые сутки — с полуночи по Москве", async () => {
     const s = setup();
-    expect(await s.service.claim(ME, NOON)).toMatchObject({ claimed: true, coins: 60, shards: 0 });
+    expect(await s.service.claim(ME, NOON)).toMatchObject({ claimed: true, coins: 63, shards: 0 });
     expect(await s.service.claim(ME, new Date(NOON.getTime() + 11 * HOUR))).toMatchObject({ claimed: false, coins: 0 });
 
     // 21:00 UTC — полночь по Москве: следующий день.
     const midnight = new Date(Date.UTC(2026, 8, 30, 21));
-    expect(await s.service.claim(ME, midnight)).toMatchObject({ claimed: true, coins: 80 });
+    expect(await s.service.claim(ME, midnight)).toMatchObject({ claimed: true, coins: 88 });
   });
 
-  it("пропуск дней не сбрасывает прогресс: после недели отсутствия — следующий день, а не первый", async () => {
+  it("пропуск дней не сбрасывает прогресс: после недели отсутствия — следующий день, а не первый, серия — не ноль", async () => {
     const s = setup();
     await s.service.claim(ME, NOON);
     await s.service.claim(ME, new Date(NOON.getTime() + 24 * HOUR));
     const later = await s.service.claim(ME, new Date(NOON.getTime() + 9 * 24 * HOUR));
-    expect(later).toMatchObject({ claimed: true, coins: 100 });
+    expect(later).toMatchObject({ claimed: true, coins: 105 });
     expect(later.view.days[2]).toMatchObject({ day: 3, claimed: true, today: true });
   });
 
@@ -140,7 +120,7 @@ describe("забор награды дня", () => {
     const s = setup();
     for (let day = 0; day < 6; day++) await s.service.claim(ME, new Date(NOON.getTime() + day * 24 * HOUR));
     const seventh = await s.service.claim(ME, new Date(NOON.getTime() + 6 * 24 * HOUR));
-    expect(seventh).toMatchObject({ claimed: true, coins: 300, shards: 10 });
+    expect(seventh).toEqual(expect.objectContaining({ claimed: true, ...dailyReward(7, 1, undefined, 7) }));
     expect([...s.wallet.keys.keys()].filter((key) => key.includes(":7"))).toEqual([`daily_reward:${ME}:7`, `daily_reward:${ME}:7:shards`]);
   });
 
@@ -148,8 +128,8 @@ describe("забор награды дня", () => {
     const s = setup();
     const results = await Promise.all([s.service.claim(ME, NOON), s.service.claim(ME, NOON), s.service.claim(ME, NOON)]);
     expect(results.filter((result) => result.claimed)).toHaveLength(1);
-    expect(results.reduce((sum, result) => sum + result.coins, 0)).toBe(60);
-    expect(s.repository.row?.claimedDays).toBe(1);
+    expect(results.reduce((sum, result) => sum + result.coins, 0)).toBe(63);
+    expect(s.repository.claimedDays).toBe(1);
   });
 
   it("начислено, но не отмечено после сбоя — повтор узнаёт день по ключу и не начисляет дважды", async () => {
@@ -157,12 +137,12 @@ describe("забор награды дня", () => {
     await s.wallet.grant({ accountId: ME, resource: "coins", amount: 60, reason: "daily_reward", idempotencyKey: `daily_reward:${ME}:1` });
     const retry = await s.service.claim(ME, NOON);
     expect(retry).toMatchObject({ claimed: true, coins: 0 });
-    expect(s.repository.row?.claimedDays).toBe(1);
+    expect(s.repository.claimedDays).toBe(1);
   });
 
   it("уровень аккаунта увеличивает монеты дня", async () => {
     const s = setup(51);
-    expect(await s.service.claim(ME, NOON)).toMatchObject({ coins: 120 });
+    expect(await s.service.claim(ME, NOON)).toMatchObject({ coins: 126 });
   });
 });
 

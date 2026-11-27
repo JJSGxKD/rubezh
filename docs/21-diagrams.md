@@ -415,6 +415,7 @@ erDiagram
         uuid account_id PK
         int claimed_days "сколько дней забрано всего: день недели и ступень — отсюда"
         date last_claim_day "игровые сутки по Москве последнего забора"
+        smallint streak "ступень серии дней 0..10: +5% к награде дня за ступень, пропуск снимает две (Р154)"
         datetime updated_at
     }
 

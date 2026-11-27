@@ -80,13 +80,13 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
   const player = (accountId: string): DailyDoublePlayer => ({ accountId, platform: "telegram" });
   const viewer = (accountId: string): AdViewer => ({ accountId, platform: "telegram", device: "android" });
 
-  /** Игрок пришёл на седьмой день недели: шесть дней забрано до вчера, сегодня забирает настоящий сервис. */
+  /** Игрок пришёл на седьмой день недели с серией в девять ступеней (после забора +50 %, T-0262): шесть дней забрано до вчера, сегодня забирает настоящий сервис. */
   async function atSeventhDay(accountId: string, daily: DailyService, time = NOON): Promise<void> {
     await prisma.$executeRaw`
-      INSERT INTO daily_reward (account_id, claimed_days, last_claim_day, updated_at)
-      VALUES (${accountId}::uuid, 6, ((${time}::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 1), ${time})`;
+      INSERT INTO daily_reward (account_id, claimed_days, last_claim_day, streak, updated_at)
+      VALUES (${accountId}::uuid, 6, ((${time}::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 1), 9, ${time})`;
     const claimed = await daily.claim(accountId, time);
-    expect(claimed).toMatchObject({ claimed: true, coins: 300, shards: 10 });
+    expect(claimed).toMatchObject({ claimed: true, coins: 450, shards: 15 });
   }
 
   /** Досмотренная сессия места: выдача показа и досмотр от SDK. */
@@ -138,17 +138,17 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
     const me = await account();
     const { daily, double } = services();
     await atSeventhDay(me, daily);
-    expect(await balances(me)).toEqual({ coins: 300, shards: 10 });
+    expect(await balances(me)).toEqual({ coins: 450, shards: 15 });
     const sessionId = await watched(me);
 
     const result = await double.double(player(me), sessionId, at(NOON, 2));
-    expect(result.credited).toEqual({ coins: 300, shards: 10 });
-    expect(result.view).toEqual({ status: "doubled", coins: 300, shards: 10 });
-    expect(await balances(me)).toEqual({ coins: 600, shards: 20 });
+    expect(result.credited).toEqual({ coins: 450, shards: 15 });
+    expect(result.view).toEqual({ status: "doubled", coins: 450, shards: 15 });
+    expect(await balances(me)).toEqual({ coins: 900, shards: 30 });
 
     const [row] = await prisma.$queryRaw<{ day_number: number; session_id: string; coins: number; shards: number; game_day: string }[]>`
       SELECT day_number, session_id, coins, shards, game_day::text FROM daily_double WHERE account_id = ${me}::uuid`;
-    expect(row).toEqual({ day_number: 7, session_id: sessionId, coins: 300, shards: 10, game_day: "2026-09-30" });
+    expect(row).toEqual({ day_number: 7, session_id: sessionId, coins: 450, shards: 15, game_day: "2026-09-30" });
     expect(await sessionStatus(sessionId)).toMatchObject({ claimed: true });
     // В журнале кошелька — причина награды дня, источник и ключ удвоения.
     const entries = await prisma.$queryRaw<{ reason: string; source: string; idempotency_key: string }[]>`
@@ -168,7 +168,7 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
     const again = await double.double(player(me), sessionId, at(NOON, 3));
 
     expect(again).toEqual(first);
-    expect(await balances(me)).toEqual({ coins: 600, shards: 20 });
+    expect(await balances(me)).toEqual({ coins: 900, shards: 30 });
     const [count] = await prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM daily_double WHERE account_id = ${me}::uuid`;
     expect(count?.n).toBe(1);
   });
@@ -182,7 +182,7 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
 
     await expect(double.double(player(me), second, at(NOON, 3))).rejects.toMatchObject({ code: "daily_already_doubled", status: 409 });
     expect(await sessionStatus(second)).toMatchObject({ claimed: false });
-    expect(await balances(me)).toEqual({ coins: 600, shards: 20 });
+    expect(await balances(me)).toEqual({ coins: 900, shards: 30 });
   });
 
   it("до забора награды — 409 daily_not_claimed, сессия не потрачена и годится после забора", async () => {
@@ -194,7 +194,7 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
     expect(await balances(me)).toEqual({ coins: 0, shards: 0 });
 
     await atSeventhDay(me, daily, at(NOON, 3));
-    await expect(double.double(player(me), sessionId, at(NOON, 4))).resolves.toMatchObject({ credited: { coins: 300, shards: 10 } });
+    await expect(double.double(player(me), sessionId, at(NOON, 4))).resolves.toMatchObject({ credited: { coins: 450, shards: 15 } });
   });
 
   it("вчерашний забор сегодня не удваивается, а новые сутки открывают новое удвоение", async () => {
@@ -232,7 +232,7 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
 
     await expect(double.double(player(me), await watched(stranger), at(NOON, 2))).rejects.toMatchObject({ code: "ad_not_completed" });
     await expect(double.double(player(me), await watched(me, "wheel_spin"), at(NOON, 2))).rejects.toMatchObject({ code: "ad_not_completed" });
-    expect(await balances(me)).toEqual({ coins: 300, shards: 10 });
+    expect(await balances(me)).toEqual({ coins: 450, shards: 15 });
     expect(await doubleRepository.today(me, NOON)).toBeNull();
   });
 
@@ -246,7 +246,7 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
     const offer = await ads.offer(viewer(me), "daily_double", NOON);
     if (!offer.available) throw new Error(`показа нет: ${offer.reason}`);
     expect(offer.pass).toBe("vip");
-    await expect(double.double(player(me), offer.sessionId, at(NOON, 1))).resolves.toMatchObject({ credited: { coins: 300, shards: 10 } });
+    await expect(double.double(player(me), offer.sessionId, at(NOON, 1))).resolves.toMatchObject({ credited: { coins: 450, shards: 15 } });
     expect(await adsRepository.rewardedWatchedToday(me, at(NOON, 2))).toBe(0);
   });
 
@@ -261,7 +261,7 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
     for (const sessionId of wheel) await adsRepository.claim(sessionId, me, "wheel_spin", at(NOON, 2), () => ({ kind: "allow" }));
     await expect(double.double(player(me), session, at(NOON, 3))).rejects.toMatchObject({ code: "ad_daily_cap", status: 409 });
     expect(await doubleRepository.today(me, NOON)).toBeNull();
-    expect(await balances(me)).toEqual({ coins: 300, shards: 10 });
+    expect(await balances(me)).toEqual({ coins: 450, shards: 15 });
   });
 
   it(
@@ -275,7 +275,7 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
 
       expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
       for (const result of results) if (result.status === "rejected") expect(result.reason).toMatchObject({ code: "daily_already_doubled" });
-      expect(await balances(me)).toEqual({ coins: 600, shards: 20 });
+      expect(await balances(me)).toEqual({ coins: 900, shards: 30 });
       const [count] = await prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM daily_double WHERE account_id = ${me}::uuid`;
       expect(count?.n).toBe(1);
     },
@@ -291,8 +291,8 @@ describe.skipIf(DATABASE_URL === "")("награда дня ×2 на живом 
       const sessionId = await watched(me);
       const results = await Promise.all(Array.from({ length: 6 }, () => double.double(player(me), sessionId, at(NOON, 2))));
 
-      for (const result of results) expect(result.credited).toEqual({ coins: 300, shards: 10 });
-      expect(await balances(me)).toEqual({ coins: 600, shards: 20 });
+      for (const result of results) expect(result.credited).toEqual({ coins: 450, shards: 15 });
+      expect(await balances(me)).toEqual({ coins: 900, shards: 30 });
     },
     RACE_TIMEOUT_MS,
   );

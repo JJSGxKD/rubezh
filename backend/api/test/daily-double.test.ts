@@ -22,10 +22,11 @@ import { AdsService } from "../src/modules/ads/ads.service.js";
 import { dailyReward } from "../src/modules/daily/daily-rules.js";
 import { DailyAlreadyDoubledError, DailyNotClaimedError } from "../src/modules/daily/daily-double-errors.js";
 import { DailyDoubleService, type DailyDoublePlayer } from "../src/modules/daily/daily-double.service.js";
-import type { DailyDoubleRecord, DailyDoubleRepository, DailyDoubleRow, DailyRepository, DailyState, RecordOutcome } from "../src/modules/daily/daily.repository.js";
+import type { DailyDoubleRecord, DailyDoubleRepository, DailyDoubleRow, RecordOutcome } from "../src/modules/daily/daily.repository.js";
 import type { ProgressService } from "../src/modules/progress/progress.service.js";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
+import { MemoryDaily, moscowDay } from "./helpers/memory-daily.js";
 import { FakeCreatives, MemoryAds, adBlock, interstitialGate } from "./helpers/memory-ads.js";
 import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { panelSettings } from "./helpers/settings.js";
@@ -47,33 +48,6 @@ const MINUTE = 60_000;
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 const NEXT_NOON = new Date(NOON.getTime() + 24 * HOUR);
 const at = (base: Date, minutes: number) => new Date(base.getTime() + minutes * MINUTE);
-
-/** Московские сутки без перехода на летнее время: UTC+3. */
-function moscowDay(time: Date): number {
-  return Math.floor((time.getTime() + 3 * HOUR) / (24 * HOUR));
-}
-
-/** Награда дня в памяти: сколько дней забрано и в какие сутки забран последний. */
-class MemoryDaily implements DailyRepository {
-  claimedDays = 0;
-  lastDay: number | null = null;
-
-  /** забрать день `claimedDays + 1` в сутки `time` */
-  claim(time: Date): void {
-    this.claimedDays++;
-    this.lastDay = moscowDay(time);
-  }
-
-  async state(_accountId: string, time: Date): Promise<DailyState> {
-    return { claimedDays: this.claimedDays, claimedToday: this.lastDay === moscowDay(time) };
-  }
-
-  async advance(_accountId: string, expected: number, time: Date): Promise<boolean> {
-    if (this.claimedDays !== expected || this.lastDay === moscowDay(time)) return false;
-    this.claim(time);
-    return true;
-  }
-}
 
 /** Таблица `daily_double` в памяти: ключ — игрок и сутки, сессия уникальна; запись атомарна, как `ON CONFLICT DO NOTHING`. */
 class MemoryDoubles implements DailyDoubleRepository {
@@ -197,6 +171,18 @@ describe("награда дня ×2 на экране", () => {
     claimedSeventh(env);
     expect(dailyReward(7, 21)).toEqual({ coins: 420, shards: 10 });
     expect(await env.service.view(PLAYER, NOON)).toMatchObject({ status: "available", coins: 420, shards: 10 });
+  });
+
+  it("серия дней (T-0262): удвоение удваивает уже умноженное на серию", async () => {
+    const env = setup();
+    env.daily.claimedDays = 6;
+    env.daily.claim(NOON, 10);
+    const expected = dailyReward(7, 1, undefined, 10);
+    expect(expected).toEqual({ coins: 450, shards: 15 });
+    expect(await env.service.view(PLAYER, NOON)).toMatchObject({ status: "available", coins: 450, shards: 15 });
+    const result = await env.service.double(PLAYER, await watched(env), NOON);
+    expect(result.credited).toEqual({ coins: 450, shards: 15 });
+    expect(env.doubles.rows[0]).toMatchObject({ dayNumber: 7, coins: 450, shards: 15 });
   });
 
   it("вчерашний забор сегодня не удваивается", async () => {
@@ -488,14 +474,14 @@ describe("награда дня ×2 по HTTP", () => {
 
     const claimed = await server.inject({ method: "POST", url: "/api/v1/daily/claim", headers });
     expect(claimed.statusCode).toBe(200);
-    expect(claimed.json<{ data: { claimed: boolean; view: { double: unknown } } }>().data).toMatchObject({ claimed: true, view: { double: { status: "available", coins: 60, shards: 0 } } });
+    expect(claimed.json<{ data: { claimed: boolean; view: { double: unknown } } }>().data).toMatchObject({ claimed: true, view: { double: { status: "available", coins: 63, shards: 0 } } });
 
     const first = await session();
     const result = await double({ sessionId: first });
     expect(result.statusCode).toBe(200);
-    expect(result.json<{ data: unknown }>().data).toEqual({ credited: { coins: 60, shards: 0 }, view: { status: "doubled", coins: 60, shards: 0 } });
+    expect(result.json<{ data: unknown }>().data).toEqual({ credited: { coins: 63, shards: 0 }, view: { status: "doubled", coins: 63, shards: 0 } });
     const after = await server.inject({ method: "GET", url: "/api/v1/daily", headers });
-    expect(after.json<{ data: { double: unknown } }>().data.double).toEqual({ status: "doubled", coins: 60, shards: 0 });
+    expect(after.json<{ data: { double: unknown } }>().data.double).toEqual({ status: "doubled", coins: 63, shards: 0 });
 
     const second = await double({ sessionId: await session() });
     expect(second.statusCode).toBe(409);
